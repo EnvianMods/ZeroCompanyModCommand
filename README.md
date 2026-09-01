@@ -124,7 +124,12 @@ Shipping structure (v1.0.0 onward):
   (the exe filename stays constant across versions so nxm:// registrations survive updates)
 - mod-page art: `src/assets/nexus-banner.png` (header) and `mod-placeholder@2x.png`
 
-## Releasing via GitHub
+## Releasing
+
+**Distribution policy (2026-09-01, until otherwise stated):** users download from
+NEXUS — update announcements always point at the Nexus mod page, so update traffic
+counts toward download stats, rankings, and Donation Points. GitHub gets a silent
+mirror release (source + zip) for backup and transparency, with no announcement.
 
 The project is a git repo with `origin` set to
 `github.com/EnvianMods/ZeroCompanyModCommand`. Full release flow:
@@ -132,10 +137,12 @@ The project is a git repo with `origin` set to
 1. Bump `version` in package.json, add a CHANGELOG entry, commit
 2. `npm run dist`, zip exe + README.txt + CHANGELOG.md as
    `ZeroCompanyModCommand-v<version>.zip`
-3. `git push` the source
-4. `owner-tools\...\"Publish Release.bat" <version> <path-to-zip> --notes "..."`
-   — creates the GitHub Release, uploads the zip, and announces the version to
-   every installed launcher (the in-app update banner points at the release page)
+3. Upload the zip to the Nexus mod page (new file version + changelog)
+4. `git push` the source, then
+   `owner-tools\...\"Publish Release.bat" <version> <path-to-zip> --notes "..."`
+   — mirrors the release to GitHub silently
+5. `"Update Launcher Version.bat" <version> "https://www.nexusmods.com/starwarszerocompany/mods/<id>?tab=files" --notes "..."`
+   — announces to every installed launcher, pointing at Nexus
 
 ## Owner tools (not shipped)
 

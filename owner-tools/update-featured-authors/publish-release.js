@@ -1,15 +1,21 @@
 'use strict';
-// OWNER TOOL — one-command launcher release to GitHub:
+// OWNER TOOL — mirrors a launcher release to GitHub:
 //   1. creates a GitHub Release (tag vX.Y.Z) on the launcher repo
 //   2. uploads the shipping zip as a release asset
-//   3. announces the version to every installed launcher (launcher-version.json)
 //
-// Usage (run after `npm run dist` and zipping, or point at the archive copy):
+// RELEASE POLICY (2026-09-01, until otherwise stated): GitHub releases are a
+// silent mirror/backup only. The update announcement that installed launchers
+// see must point at NEXUS MODS (downloads there drive mod-page popularity and
+// Donation Points). This tool therefore does NOT announce by default — it
+// prints the Nexus announcement command to run next. Pass --announce-github
+// only if the distribution strategy changes.
+//
+// Usage (run after `npm run dist` and zipping):
 //   node publish-release.js 1.2.0 "G:\...\release\ZeroCompanyModCommand-v1.2.0.zip" --notes "What's new"
 //   node publish-release.js --show          (list existing releases)
 //
 // Requirements: the GitHub token (token.txt / GITHUB_TOKEN) needs Contents
-// read/write on BOTH repos below.
+// read/write on the launcher repo.
 
 const fs = require('fs');
 const path = require('path');
@@ -92,15 +98,19 @@ async function gh(url, options = {}) {
     console.error(`Asset upload failed (${uploadRes.status}):`, (await uploadRes.text()).slice(0, 400));
     process.exit(1);
   }
-  console.log('Release published:', release.html_url);
+  console.log('GitHub release mirrored (no announcement):', release.html_url);
 
-  // 3. announce to installed launchers
-  console.log('Announcing to installed launchers…');
-  const { spawnSync } = require('child_process');
-  const announce = spawnSync(process.execPath, [
-    path.join(__dirname, 'update-launcher-version.js'),
-    version, release.html_url,
-    ...(notes ? ['--notes', notes] : []),
-  ], { stdio: 'inherit' });
-  process.exit(announce.status || 0);
+  if (args.includes('--announce-github')) {
+    // Only for a deliberate strategy change — normally announce Nexus instead.
+    const { spawnSync } = require('child_process');
+    const announce = spawnSync(process.execPath, [
+      path.join(__dirname, 'update-launcher-version.js'),
+      version, release.html_url,
+      ...(notes ? ['--notes', notes] : []),
+    ], { stdio: 'inherit' });
+    process.exit(announce.status || 0);
+  }
+
+  console.log('\nPOLICY: announce the NEXUS page so update downloads count there. Next step:');
+  console.log(`  node update-launcher-version.js ${version} "https://www.nexusmods.com/starwarszerocompany/mods/<your-mod-id>?tab=files"${notes ? ` --notes "${notes}"` : ''}`);
 })().catch((e) => { console.error('FAIL:', e.message); process.exit(1); });

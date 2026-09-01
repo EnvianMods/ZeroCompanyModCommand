@@ -630,6 +630,9 @@ body.reduced-motion * { transition: none !important; animation: none !important;
 .zc-modal-sub { font-size: 12px; line-height: 1.5; margin-bottom: 14px; }
 .zc-modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
 
+.prompt-box { width: 420px; }
+.prompt-input { width: 100%; margin-bottom: 4px; font-family: var(--sans); }
+
 .import-list { display: flex; flex-direction: column; gap: 6px; }
 .import-row {
   display: flex; align-items: center; gap: 12px; cursor: pointer;

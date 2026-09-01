@@ -17,6 +17,33 @@ function toast(msg, kind = 'info', ms = 4500) {
   setTimeout(() => el.remove(), ms);
 }
 
+// Electron has no window.prompt — this modal replaces it. Resolves the entered
+// string, or null on cancel/Escape.
+function zcPrompt(title, initial = '') {
+  return new Promise((resolve) => {
+    const modal = $('#prompt-modal');
+    const input = $('#prompt-input');
+    $('#prompt-title').textContent = title;
+    input.value = initial;
+    modal.classList.remove('hidden');
+    input.focus();
+    input.select();
+    const done = (value) => {
+      modal.classList.add('hidden');
+      $('#prompt-ok').onclick = null;
+      $('#prompt-cancel').onclick = null;
+      input.onkeydown = null;
+      resolve(value);
+    };
+    $('#prompt-ok').onclick = () => done(input.value.trim() || null);
+    $('#prompt-cancel').onclick = () => done(null);
+    input.onkeydown = (e) => {
+      if (e.key === 'Enter') done(input.value.trim() || null);
+      if (e.key === 'Escape') done(null);
+    };
+  });
+}
+
 async function call(fn, ...args) {
   const res = await window.zc[fn](...args);
   if (!res.ok) {
@@ -170,7 +197,7 @@ function renderMods() {
     renameBtn.className = 'btn ghost tiny';
     renameBtn.textContent = 'Rename';
     renameBtn.addEventListener('click', async () => {
-      const name2 = window.prompt('New designation:', mod.name);
+      const name2 = await zcPrompt('NEW DESIGNATION', mod.name);
       if (!name2 || name2 === mod.name) return;
       const data = await call('renameMod', mod.id, name2);
       if (data) { state = data; render(); toast(`Renamed to “${name2}”`); }
@@ -627,7 +654,7 @@ function renderProfiles() {
 }
 
 $('#btn-profile-save').addEventListener('click', async () => {
-  const name = window.prompt('Profile designation:', '');
+  const name = await zcPrompt('PROFILE DESIGNATION');
   if (!name) return;
   const data = await call('saveProfile', name);
   if (data) { state = data; render(); toast(`Profile “${name}” saved (current mods + order).`); }

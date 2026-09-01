@@ -658,6 +658,19 @@ function diagnostics() {
   } else {
     add('good', 'Deployed files', 'All enabled mods are fully deployed.');
   }
+  const duplicates = store.settings.gamePath ? engine.scanDuplicateMods() : [];
+  if (duplicates.length) {
+    for (const dup of duplicates) {
+      const list = dup.members
+        .map((m) => `"${m.folder}" (${m.managed ? 'managed' : 'unmanaged'})`)
+        .join(' and ');
+      add('warning', 'Duplicate mod',
+        `The same mod is active under ${dup.members.length} folders: ${list}. ` +
+        `Both load at once (double hooks/loops) and can cause frame stutter — keep one and disable/delete the rest.`);
+    }
+  } else if (store.settings.gamePath) {
+    add('good', 'Duplicate mods', 'No mod is installed under more than one active folder.');
+  }
   const hookReport = store.settings.gamePath ? engine.scanUe4ssHooks() : { entries: [], conflicts: [] };
   const conflicts = store.settings.gamePath ? engine.conflicts(hookReport) : [];
   const confirmed = conflicts.filter((c) => c.certainty === 'confirmed').length;

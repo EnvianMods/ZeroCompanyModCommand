@@ -7,6 +7,11 @@
   Bay, instead of the sanitized folder name (e.g. `Envian's Movement Patch`
   instead of `Envian_s_Movement_Patch`). Opt-in; the deployed folder stays
   filesystem-safe. See README → *Mod metadata*.
+- **Duplicate-mod detection** — Diagnostics now flags when the same UE4SS mod is
+  active under two folders (e.g. a manager install plus a leftover from a manual
+  or one-click install under a different name). Two copies run at once and cause
+  frame stutter; the report names the folders and which is managed so you can
+  remove the stray. Matches by `modinfo.json` title or identical entry script.
 
 ## v1.2.0 (2026-09-01)
 

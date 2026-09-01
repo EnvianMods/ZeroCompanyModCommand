@@ -89,6 +89,12 @@ automatically for IoStore package inspection; a different copy can be selected i
   IoStore mods installed while retoc was unavailable.
 - **Diagnostics** — installation health scan: game layout, Steam manifest/build,
   `~mods` presence, UE4SS layout, retoc/7-Zip availability, deployed-file audit, conflicts.
+  Also flags **duplicate mods** — the same UE4SS mod active under two folders in
+  `ue4ss/Mods` (e.g. a manager install plus a leftover from a manual/one-click
+  install under a different name). Two active copies run at once (double
+  hooks/loops) and cause frame stutter; folders are matched by `modinfo.json`
+  title or identical entry script, so a copy with a manifest and one without
+  still pair up. The report names each folder and whether it's managed.
 - **Settings** — game/retoc/7z paths, close-on-launch, reduced motion.
 
 ## Mod metadata (`modinfo.json`)

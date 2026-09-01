@@ -1,5 +1,13 @@
 # Zero Company Mod Command — Changelog
 
+## v1.3.0 (2026-09-01)
+
+- **Friendly mod titles** — a UE4SS mod can ship a `modinfo.json`
+  (`{"title": "..."}`) in its folder to set the display name shown in the Hangar
+  Bay, instead of the sanitized folder name (e.g. `Envian's Movement Patch`
+  instead of `Envian_s_Movement_Patch`). Opt-in; the deployed folder stays
+  filesystem-safe. See README → *Mod metadata*.
+
 ## v1.2.0 (2026-09-01)
 
 - **Launcher update banner** — the launcher now announces when a newer launcher

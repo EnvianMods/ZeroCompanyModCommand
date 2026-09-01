@@ -27,7 +27,9 @@ automatically for IoStore package inspection; a different copy can be selected i
     `pakchunk99-P###_Name` priority naming (matched basenames across pak/utoc/ucas).
   - `logicmods` → `SWZeroCompany/Content/Paks/LogicMods`.
   - UE4SS Lua/DLL mods (folders with `Scripts/main.lua` or `dlls/main.dll`) →
-    `SWZeroCompany/Binaries/Win64/ue4ss/Mods/<Name>` with `enabled.txt`.
+    `SWZeroCompany/Binaries/Win64/ue4ss/Mods/<Name>` with `enabled.txt`. The
+    display name defaults to the folder name; a `modinfo.json` in the mod folder
+    can override it with a friendly title (see **Mod metadata** below).
   - UE4SS runtime archives (dwmapi.dll + ue4ss folder) → installed into `Binaries/Win64`.
 - **Load Order** — drag to reorder pak/IoStore mods; applying renumbers the deployed
   `P###` prefixes (later = wins conflicts). **Suggest order** proposes an ordering
@@ -88,6 +90,29 @@ automatically for IoStore package inspection; a different copy can be selected i
 - **Diagnostics** — installation health scan: game layout, Steam manifest/build,
   `~mods` presence, UE4SS layout, retoc/7-Zip availability, deployed-file audit, conflicts.
 - **Settings** — game/retoc/7z paths, close-on-launch, reduced motion.
+
+## Mod metadata (`modinfo.json`)
+
+A UE4SS Lua/DLL mod can ship an optional `modinfo.json` in its mod folder (next
+to `Scripts/` or `dlls/`) to control how it appears in the manager:
+
+```json
+{
+  "title": "Envian's Movement Patch"
+}
+```
+
+- `title` — the display name shown in the Hangar Bay (1–120 chars; spaces and
+  punctuation are fine). Without it, the mod falls back to its folder name run
+  through the filesystem sanitizer (so `My Cool Mod` would show as `My_Cool_Mod`).
+- The **deployed folder** on disk is always the sanitized name regardless of
+  `title`, so the on-disk layout stays filesystem-safe. `title` is display-only.
+- The convention is opt-in: mods without a `modinfo.json` behave exactly as before.
+- Read at install/import time (`classifyFolder` in `lib/mods.js`); a malformed
+  manifest is ignored and the folder name is used.
+
+Only `title` is consumed today; unknown keys are ignored, so the file is a safe
+place to stash other metadata (author, version, notes) for future use.
 
 ## Layout
 

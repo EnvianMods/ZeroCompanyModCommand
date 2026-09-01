@@ -124,6 +124,19 @@ Shipping structure (v1.0.0 onward):
   (the exe filename stays constant across versions so nxm:// registrations survive updates)
 - mod-page art: `src/assets/nexus-banner.png` (header) and `mod-placeholder@2x.png`
 
+## Releasing via GitHub
+
+The project is a git repo with `origin` set to
+`github.com/EnvianMods/ZeroCompanyModCommand`. Full release flow:
+
+1. Bump `version` in package.json, add a CHANGELOG entry, commit
+2. `npm run dist`, zip exe + README.txt + CHANGELOG.md as
+   `ZeroCompanyModCommand-v<version>.zip`
+3. `git push` the source
+4. `owner-tools\...\"Publish Release.bat" <version> <path-to-zip> --notes "..."`
+   — creates the GitHub Release, uploads the zip, and announces the version to
+   every installed launcher (the in-app update banner points at the release page)
+
 ## Owner tools (not shipped)
 
 `owner-tools/update-featured-authors/` pushes `featured.json` to the

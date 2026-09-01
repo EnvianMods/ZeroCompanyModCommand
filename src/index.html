@@ -102,6 +102,7 @@
             <button id="btn-check-updates" class="btn ghost">⟳ Check updates</button>
             <button class="btn" data-action="install-archive">⊕ Install archive</button>
             <button class="btn ghost" data-action="install-folder">⊞ Install folder</button>
+            <button id="btn-import" class="btn ghost">⇲ Import existing</button>
           </div>
         </header>
         <div class="profile-bar">
@@ -362,6 +363,49 @@
 
   <div id="drop-overlay" class="drop-overlay hidden">
     <div class="drop-box">⊕ RELEASE TO INSTALL</div>
+  </div>
+
+  <div id="import-modal" class="zc-modal hidden">
+    <div class="zc-modal-box">
+      <div class="zc-modal-title">IMPORT EXISTING MODS</div>
+      <p class="zc-modal-sub dim">Mod files found in the game that no managed mod owns. Adopting copies them into the
+        library and brings them under full management — nothing in the game folder moves. Files that match a Nexus
+        upload are identified automatically.</p>
+      <div id="import-list" class="import-list"></div>
+      <div class="zc-modal-actions">
+        <button id="btn-import-adopt" class="btn primary">Adopt selected</button>
+        <button class="btn ghost" data-close-modal="import-modal">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="link-modal" class="zc-modal hidden">
+    <div class="zc-modal-box">
+      <div class="zc-modal-title">LINK UPDATE SOURCE</div>
+      <p class="zc-modal-sub dim">Attach <span id="link-mod-name" class="link-mod-name"></span> to where it came from so
+        the manager can check it for updates.</p>
+      <div class="link-section">
+        <div class="link-section-title">◈ NEXUS MODS</div>
+        <div class="link-row">
+          <input type="search" id="link-nexus-search" class="text-input" placeholder="Search by mod name…" />
+        </div>
+        <div id="link-nexus-results" class="link-results"></div>
+        <div class="link-row">
+          <input type="text" id="link-nexus-ref" class="text-input" placeholder="…or paste mod page URL / ID" />
+          <button id="btn-link-nexus" class="btn tiny">Link</button>
+        </div>
+      </div>
+      <div class="link-section">
+        <div class="link-section-title">⎇ THE FORGE (GITHUB)</div>
+        <div class="link-row">
+          <select id="link-github-repo" class="profile-select"></select>
+          <button id="btn-link-github" class="btn tiny">Link</button>
+        </div>
+      </div>
+      <div class="zc-modal-actions">
+        <button class="btn ghost" data-close-modal="link-modal">Close</button>
+      </div>
+    </div>
   </div>
 
   <div id="toast-stack" class="toast-stack"></div>

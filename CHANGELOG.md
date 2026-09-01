@@ -10,6 +10,11 @@ First public release.
   canonical mod library, rename, uninstall
 - Friendly mod titles: a UE4SS mod can ship `modinfo.json` (`{"title": "..."}`)
   to set its display name in the Hangar Bay
+- Import existing mods: adopts manually-installed mods (paks in ~mods, LogicMods,
+  UE4SS folders) into full management without touching the game files. Adopted
+  files matching a Nexus upload are identified automatically (md5); anything else
+  can be linked by hand — click a mod's LOCAL badge to attach its Nexus page or
+  curated GitHub repo so updates get tracked
 - Squad profiles: save/apply/delete named mod sets with load order
 
 **Conflict & health detection**

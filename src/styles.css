@@ -611,6 +611,48 @@ body.reduced-motion * { transition: none !important; animation: none !important;
   clip-path: polygon(20px 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%, 0 20px);
 }
 
+/* ---------- modals (import / link) ---------- */
+.zc-modal {
+  position: fixed; inset: 0; z-index: 240;
+  background: rgba(5, 8, 15, 0.82);
+  display: flex; align-items: center; justify-content: center;
+}
+.zc-modal-box {
+  width: 640px; max-width: 92vw; max-height: 82vh; overflow-y: auto;
+  background: var(--bg-raise); border: 1px solid var(--panel-edge);
+  clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
+  padding: 20px 24px; box-shadow: 0 8px 40px rgba(0, 0, 0, 0.7);
+}
+.zc-modal-title {
+  font-size: 15px; font-weight: 800; letter-spacing: 4px; color: var(--holo);
+  text-shadow: 0 0 12px var(--holo-glow); margin-bottom: 8px;
+}
+.zc-modal-sub { font-size: 12px; line-height: 1.5; margin-bottom: 14px; }
+.zc-modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+
+.import-list { display: flex; flex-direction: column; gap: 6px; }
+.import-row {
+  display: flex; align-items: center; gap: 12px; cursor: pointer;
+  padding: 9px 12px; background: var(--panel); border: 1px solid var(--panel-edge);
+}
+.import-row:hover { border-color: rgba(79, 209, 255, 0.4); }
+.import-name { font-size: 13px; font-weight: 700; }
+.import-meta { font-size: 11px; color: var(--text-dim); font-family: var(--mono); }
+
+.link-mod-name { color: var(--amber); font-weight: 700; }
+.link-section { margin-bottom: 14px; padding-top: 8px; border-top: 1px solid rgba(79, 209, 255, 0.12); }
+.link-section-title { font-size: 11px; font-weight: 700; letter-spacing: 2px; color: var(--amber); margin-bottom: 8px; }
+.link-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.link-row .text-input { flex: 1; width: auto; }
+.link-row .profile-select { flex: 1; max-width: none; }
+.link-results { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.link-result {
+  text-align: left; padding: 7px 12px; cursor: pointer; font-size: 12px;
+  background: var(--panel); border: 1px solid var(--panel-edge); color: var(--text);
+  font-family: var(--sans);
+}
+.link-result:hover { border-color: var(--holo); color: var(--holo); }
+
 /* ---------- launcher update banner ---------- */
 .launcher-banner {
   position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 220;

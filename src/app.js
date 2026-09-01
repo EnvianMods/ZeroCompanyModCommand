@@ -113,9 +113,9 @@ function renderMods() {
       srcBadge.addEventListener('click', () =>
         call('openExternal', `https://github.com/${mod.origin.repo}`));
     } else {
-      srcBadge.textContent = 'LOCAL';
-      srcBadge.title = 'Installed from a local file — no update source';
-      srcBadge.disabled = true;
+      srcBadge.textContent = 'LOCAL · link?';
+      srcBadge.title = 'No update source — click to link this mod to its Nexus page or Forge repo so updates can be tracked';
+      srcBadge.addEventListener('click', () => openLinkModal(mod));
     }
 
     const main = document.createElement('div');
@@ -1375,6 +1375,131 @@ $('#btn-config-add').addEventListener('click', async () => {
 });
 $('.nav-item[data-view="configs"]').addEventListener('click', () => {
   if (!cfg.listLoaded) loadConfigList();
+});
+
+// ------------------------------------------------------------------ import existing mods
+
+$$('[data-close-modal]').forEach((b) =>
+  b.addEventListener('click', () => $(`#${b.dataset.closeModal}`).classList.add('hidden')));
+
+$('#btn-import').addEventListener('click', async () => {
+  const candidates = await call('scanUnmanaged');
+  if (!candidates) return;
+  const list = $('#import-list');
+  list.innerHTML = '';
+  if (!candidates.length) {
+    toast('No unmanaged mod files found — everything in the game is already under management.', 'info', 6000);
+    return;
+  }
+  for (const c of candidates) {
+    const row = document.createElement('label');
+    row.className = 'import-row';
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.checked = true;
+    check.dataset.candidateId = c.id;
+    const info = document.createElement('div');
+    info.className = 'import-info';
+    const name = document.createElement('div');
+    name.className = 'import-name';
+    name.textContent = c.name;
+    const meta = document.createElement('div');
+    meta.className = 'import-meta';
+    meta.textContent = `${TYPE_LABEL[c.modType] || c.modType} · ${c.files.length} file${c.files.length === 1 ? '' : 's'} · ${c.location}${c.active ? '' : ' · currently inactive'}`;
+    info.append(name, meta);
+    row.append(check, info);
+    list.appendChild(row);
+  }
+  $('#import-modal').classList.remove('hidden');
+});
+
+$('#btn-import-adopt').addEventListener('click', async () => {
+  const ids = $$('#import-list input:checked').map((c) => c.dataset.candidateId);
+  if (!ids.length) { toast('Select at least one mod to adopt.', 'warn'); return; }
+  const btn = $('#btn-import-adopt');
+  btn.disabled = true;
+  try {
+    const res = await call('adoptMods', ids);
+    if (!res) return;
+    state = res.state;
+    render();
+    $('#import-modal').classList.add('hidden');
+    const ok = res.results.filter((r) => r.ok);
+    const identified = ok.filter((r) => r.identified);
+    toast(`Adopted ${ok.length} mod${ok.length === 1 ? '' : 's'}.${identified.length ? ` ${identified.length} identified on Nexus (updates now tracked).` : ''}`, 'info', 8000);
+    for (const r of res.results.filter((x) => !x.ok)) toast(`${r.name}: ${r.error}`, 'error', 7000);
+    const unlinked = ok.length - identified.length;
+    if (unlinked > 0) toast(`${unlinked} adopted mod(s) have no update source — click their LOCAL badge to link one.`, 'info', 9000);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ------------------------------------------------------------------ link update source
+
+let linkTarget = null;
+let linkSearchTimer = null;
+
+async function openLinkModal(mod) {
+  linkTarget = mod;
+  $('#link-mod-name').textContent = `“${mod.name}”`;
+  $('#link-nexus-search').value = '';
+  $('#link-nexus-ref').value = '';
+  $('#link-nexus-results').innerHTML = '';
+  const sel = $('#link-github-repo');
+  sel.innerHTML = '<option value="">— curated repos —</option>';
+  $('#link-modal').classList.remove('hidden');
+  try {
+    const res = await window.zc.browseGithub({});
+    if (res.ok) {
+      for (const r of res.data.mods) {
+        const opt = document.createElement('option');
+        opt.value = r.fullName;
+        opt.textContent = r.fullName;
+        sel.appendChild(opt);
+      }
+    }
+  } catch (_) {}
+}
+
+$('#link-nexus-search').addEventListener('input', () => {
+  clearTimeout(linkSearchTimer);
+  linkSearchTimer = setTimeout(async () => {
+    const q = $('#link-nexus-search').value.trim();
+    const box = $('#link-nexus-results');
+    box.innerHTML = '';
+    if (q.length < 2) return;
+    const res = await window.zc.browseNexus({ query: q, sort: 'downloads', count: 5 });
+    if (!res.ok) return;
+    for (const m of res.data.mods) {
+      const row = document.createElement('button');
+      row.className = 'link-result';
+      row.textContent = `${m.name} — ${m.author}${m.version ? ` · v${m.version}` : ''}`;
+      row.addEventListener('click', () => doLink('nexus', String(m.modId)));
+      box.appendChild(row);
+    }
+  }, 350);
+});
+
+async function doLink(type, ref) {
+  if (!linkTarget) return;
+  const res = await call('linkOrigin', linkTarget.id, type, ref);
+  if (!res) return;
+  state = res.state;
+  render();
+  $('#link-modal').classList.add('hidden');
+  toast(`Linked to ${res.linked} — updates are now tracked.`);
+}
+
+$('#btn-link-nexus').addEventListener('click', () => {
+  const ref = $('#link-nexus-ref').value.trim();
+  if (!ref) { toast('Paste a Nexus mod URL or ID first.', 'warn'); return; }
+  doLink('nexus', ref);
+});
+$('#btn-link-github').addEventListener('click', () => {
+  const ref = $('#link-github-repo').value;
+  if (!ref) { toast('Pick a curated repo first.', 'warn'); return; }
+  doLink('github', ref);
 });
 
 // ------------------------------------------------------------------ push events (nxm installs, download progress)

@@ -509,6 +509,69 @@ const handlers = {
     return true;
   },
 
+  'scan-unmanaged': async () => engine.scanUnmanaged(),
+
+  'adopt-mods': async (_e, { ids }) => {
+    const candidates = engine.scanUnmanaged().filter((c) => ids.includes(c.id));
+    const results = [];
+    for (const candidate of candidates) {
+      try {
+        const mod = engine.adopt(candidate);
+        let identified = null;
+        // Try to reattach a Nexus identity via md5 (only matches files that were
+        // uploaded to Nexus as-is; extracted contents usually won't).
+        if (store.settings.nexusApiKey && mod.modType !== 'ue4ss-mod') {
+          for (const f of mod.files.slice(0, 4)) {
+            try {
+              const hit = await nexus.md5Lookup(
+                path.join(store.modLibraryDir(mod.id), f.libraryRelative), store.settings.nexusApiKey);
+              if (hit) {
+                engine.setOrigin(mod.id, { type: 'nexus', modId: hit.modId, fileId: hit.fileId, version: hit.version, adopted: true });
+                const stored = store.getMod(mod.id);
+                stored.version = hit.version;
+                if (hit.modName) { try { engine.rename(mod.id, hit.modName); } catch (_) {} }
+                store.save();
+                identified = hit;
+                break;
+              }
+            } catch (_) {}
+          }
+        }
+        results.push({ ok: true, name: store.getMod(mod.id).name, identified: identified ? identified.modName : null });
+      } catch (err) {
+        results.push({ ok: false, name: candidate.name, error: err.message });
+      }
+    }
+    return { results, state: fullState() };
+  },
+
+  'link-origin': async (_e, { id, type, ref }) => {
+    const mod = store.getMod(id);
+    if (!mod) throw new Error('That mod is no longer installed.');
+    if (type === 'nexus') {
+      const m = String(ref).match(/mods\/(\d+)/) || String(ref).match(/^(\d+)$/);
+      if (!m) throw new Error('Enter a Nexus mod ID or mod page URL.');
+      const modId = Number(m[1]);
+      if (!store.settings.nexusApiKey) throw new Error('A Nexus Mods API key is required. Add one in Settings.');
+      const info = await nexus.modInfo(modId, store.settings.nexusApiKey);
+      // Assume the installed copy is current; future version bumps get flagged.
+      engine.setOrigin(id, { type: 'nexus', modId, fileId: null, version: info.version || null, linked: true });
+      const stored = store.getMod(id);
+      stored.version = info.version || null;
+      store.save();
+      return { linked: info.name || `mod ${modId}`, state: fullState() };
+    }
+    if (type === 'github') {
+      if (!/^[\w.-]+\/[\w.-]+$/.test(String(ref))) throw new Error('Pick a repository from the curated list.');
+      const release = await github.latestReleaseFor(String(ref));
+      engine.setOrigin(id, { type: 'github', repo: String(ref), tag: release ? release.tag : null, linked: true });
+      const stored = store.getMod(id);
+      if (release) { stored.version = release.tag; store.save(); }
+      return { linked: String(ref), state: fullState() };
+    }
+    throw new Error('Unknown source type.');
+  },
+
   'github-browse': async (_e, opts) => github.listCurated(opts || {}),
 
   'github-install': async (_e, { fullName }) => {

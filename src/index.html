@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://staticdelivery.nexusmods.com;" />
+  <title>Zero Company Mod Command</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="starfield"></div>
+  <div id="scanlines"></div>
+
+  <div class="frame">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-sigil">⬡</div>
+        <div class="brand-text">
+          <span class="brand-top">ZERO COMPANY</span>
+          <span class="brand-bottom">MOD COMMAND</span>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-item active" data-view="dashboard"><span class="nav-glyph">◈</span> Command Deck</button>
+        <button class="nav-item" data-view="mods"><span class="nav-glyph">▤</span> Hangar Bay <span id="nav-update-count" class="nav-badge warn" title="Mod updates available"></span><span id="nav-mod-count" class="nav-badge"></span></button>
+        <button class="nav-item" data-view="browse"><span class="nav-glyph">◍</span> Holonet</button>
+        <button class="nav-item" data-view="order"><span class="nav-glyph">≡</span> Load Order</button>
+        <button class="nav-item" data-view="configs"><span class="nav-glyph">⌸</span> Datapad</button>
+        <button class="nav-item" data-view="diagnostics"><span class="nav-glyph">✚</span> Diagnostics <span id="nav-conflict-count" class="nav-badge warn"></span></button>
+        <button class="nav-item" data-view="settings"><span class="nav-glyph">⚙</span> Settings</button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button id="btn-launch" class="launch-btn">
+          <span class="launch-label">LAUNCH GAME</span>
+          <span class="launch-sub">via Steam</span>
+        </button>
+        <div id="game-status-pip" class="status-pip">
+          <span class="pip"></span><span id="game-status-text">Scanning…</span>
+        </div>
+      </div>
+    </aside>
+
+    <main class="content" id="content">
+
+      <!-- ======================= DASHBOARD ======================= -->
+      <section class="view active" id="view-dashboard">
+        <header class="view-header">
+          <h1>COMMAND DECK</h1>
+          <p class="view-sub">Operational overview — Star Wars: Zero Company</p>
+        </header>
+
+        <div class="card-grid">
+          <div class="card holo">
+            <div class="card-title">GAME INSTALLATION</div>
+            <div class="card-body">
+              <div class="stat-row"><span class="stat-label">Status</span><span id="dash-game-status" class="stat-value">—</span></div>
+              <div class="stat-row"><span class="stat-label">Build ID</span><span id="dash-build" class="stat-value mono">—</span></div>
+              <div class="stat-row"><span class="stat-label">Path</span><span id="dash-path" class="stat-value mono small">—</span></div>
+            </div>
+          </div>
+
+          <div class="card holo">
+            <div class="card-title">MOD ROSTER</div>
+            <div class="card-body">
+              <div class="big-stat"><span id="dash-enabled">0</span><span class="big-stat-label">ACTIVE</span></div>
+              <div class="stat-row"><span class="stat-label">Installed</span><span id="dash-installed" class="stat-value">0</span></div>
+              <div class="stat-row"><span class="stat-label">Conflicts</span><span id="dash-conflicts" class="stat-value">0</span></div>
+              <div class="stat-row"><span class="stat-label">Updates</span><span id="dash-updates" class="stat-value">0</span></div>
+            </div>
+          </div>
+
+          <div class="card holo">
+            <div class="card-title">SUPPORT SYSTEMS</div>
+            <div class="card-body">
+              <div class="stat-row"><span class="stat-label">UE4SS runtime</span><span id="dash-ue4ss" class="stat-value">—</span></div>
+              <div class="stat-row"><span class="stat-label">retoc</span><span id="dash-retoc" class="stat-value">—</span></div>
+              <div class="stat-row"><span class="stat-label">7-Zip</span><span id="dash-7z" class="stat-value">—</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card holo wide">
+          <div class="card-title">QUICK ACTIONS</div>
+          <div class="card-body actions-row">
+            <button class="btn" data-action="install-archive">⊕ Install mod archive</button>
+            <button class="btn" data-action="install-folder">⊞ Install mod folder</button>
+            <button class="btn ghost" data-open="mods">Open ~mods folder</button>
+            <button class="btn ghost" data-open="game">Open game folder</button>
+            <button class="btn ghost" data-url="https://www.nexusmods.com/games/starwarszerocompany/mods">Browse Nexus Mods ↗</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================= MODS ======================= -->
+      <section class="view" id="view-mods">
+        <header class="view-header">
+          <h1>HANGAR BAY</h1>
+          <p class="view-sub">Installed modifications — drop archives anywhere to install</p>
+          <div class="header-actions">
+            <button id="btn-update-all" class="btn primary hidden">⬆ Update all</button>
+            <button id="btn-check-updates" class="btn ghost">⟳ Check updates</button>
+            <button class="btn" data-action="install-archive">⊕ Install archive</button>
+            <button class="btn ghost" data-action="install-folder">⊞ Install folder</button>
+          </div>
+        </header>
+        <div class="profile-bar">
+          <span class="profile-label">SQUAD PROFILE</span>
+          <select id="profile-select" class="profile-select"><option value="">— select —</option></select>
+          <button id="btn-profile-apply" class="btn tiny">Apply</button>
+          <button id="btn-profile-save" class="btn tiny primary">Save current as…</button>
+          <button id="btn-profile-delete" class="btn tiny danger">Delete</button>
+        </div>
+        <div id="mod-list" class="mod-list"></div>
+        <div id="mods-empty" class="empty-state hidden">
+          <div class="empty-glyph">◌</div>
+          <p>No mods in the hangar yet.</p>
+          <p class="dim">Install an archive, or drag &amp; drop .zip / .7z / .rar / .pak files onto this window.</p>
+        </div>
+      </section>
+
+      <!-- ======================= BROWSE (Nexus) ======================= -->
+      <section class="view" id="view-browse">
+        <header class="view-header">
+          <h1>HOLONET</h1>
+          <p class="view-sub">Nexus Mods — Star Wars: Zero Company</p>
+        </header>
+        <div class="source-tabs">
+          <button id="tab-nexus" class="source-tab nexus active">◈ NEXUS MODS <span id="tab-nexus-count" class="tab-count"></span></button>
+          <button id="tab-forge" class="source-tab forge">⎇ THE FORGE <span id="tab-forge-count" class="tab-count"></span></button>
+        </div>
+
+        <div id="featured-strip" class="featured-strip hidden">
+          <div class="featured-header">
+            <span class="featured-title">◆ FEATURED TRANSMISSIONS</span>
+            <span id="featured-authors" class="featured-sub dim"></span>
+          </div>
+          <div id="featured-slots" class="featured-slots"></div>
+        </div>
+        <div id="nexus-pane">
+          <div class="browse-controls">
+            <input type="search" id="browse-search" class="text-input browse-search" placeholder="Search the holonet…" />
+            <select id="browse-category" class="profile-select">
+              <option value="">All categories</option>
+            </select>
+            <select id="browse-sort" class="profile-select">
+              <option value="downloads">Most downloaded</option>
+              <option value="endorsements">Most endorsed</option>
+              <option value="newest">Newest</option>
+              <option value="updated">Recently updated</option>
+              <option value="name">Name A–Z</option>
+            </select>
+            <button id="browse-refresh" class="btn tiny">⟳ Refresh</button>
+            <span id="browse-count" class="browse-count dim"></span>
+          </div>
+          <div id="browse-status" class="browse-status hidden"></div>
+          <div id="browse-grid" class="browse-grid"></div>
+          <div class="browse-footer">
+            <button id="browse-more" class="btn ghost hidden">Load more</button>
+          </div>
+        </div>
+
+        <div id="forge-pane" class="hidden">
+          <div class="browse-controls">
+            <input type="search" id="forge-search" class="text-input browse-search" placeholder="Search curated repos…" />
+            <select id="forge-sort" class="profile-select">
+              <option value="stars">Most stars</option>
+              <option value="updated">Recently updated</option>
+            </select>
+            <button id="forge-refresh" class="btn tiny">⟳ Refresh</button>
+            <span class="curated-chip" title="Only repositories vetted by Envian Mods appear here. The list updates live.">🛡 Curated by Envian Mods</span>
+            <span id="forge-count" class="browse-count dim"></span>
+          </div>
+          <div id="forge-status" class="browse-status hidden"></div>
+          <div id="forge-grid" class="browse-grid"></div>
+        </div>
+      </section>
+
+      <!-- ======================= LOAD ORDER ======================= -->
+      <section class="view" id="view-order">
+        <header class="view-header">
+          <h1>LOAD ORDER</h1>
+          <p class="view-sub">Drag to reorder pak &amp; IoStore mods — lower entries load later and win conflicts</p>
+          <div class="header-actions">
+            <button id="btn-suggest-order" class="btn">◈ Suggest order</button>
+            <button id="btn-apply-order" class="btn primary" disabled>Apply order</button>
+          </div>
+        </header>
+        <div id="order-list" class="order-list"></div>
+        <div id="order-empty" class="empty-state hidden">
+          <div class="empty-glyph">≡</div>
+          <p>No orderable mods installed.</p>
+          <p class="dim">UE4SS and game-folder mods use fixed paths and are not ordered here.</p>
+        </div>
+      </section>
+
+      <!-- ======================= DATAPAD (config editor) ======================= -->
+      <section class="view" id="view-configs">
+        <header class="view-header">
+          <h1>DATAPAD</h1>
+          <p class="view-sub">Configuration editor — game, UE4SS and mod config files</p>
+          <div class="header-actions">
+            <button id="btn-config-add" class="btn ghost">⊕ Add file…</button>
+          </div>
+        </header>
+        <div class="config-layout">
+          <div id="config-list" class="config-list"></div>
+          <div class="config-editor">
+            <div id="config-toolbar" class="config-toolbar hidden">
+              <div class="config-fileinfo">
+                <span id="config-filename" class="config-filename"></span>
+                <span id="config-dirty" class="config-dirty hidden">●</span>
+                <span id="config-filepath" class="config-filepath mono"></span>
+              </div>
+              <div class="config-actions">
+                <button id="btn-config-mode" class="btn ghost tiny">Raw view</button>
+                <button id="btn-config-folder" class="btn ghost tiny">Folder</button>
+                <button id="btn-config-reload" class="btn ghost tiny">Reload</button>
+                <button id="btn-config-save" class="btn primary tiny" disabled>Save</button>
+              </div>
+            </div>
+            <div id="config-placeholder" class="config-placeholder">
+              <div class="empty-glyph">⌸</div>
+              <p>Select a configuration file to edit.</p>
+              <p class="dim">Files marked “create” don’t exist yet — saving creates them. Originals are backed up to .zcbak on first save.</p>
+            </div>
+            <div id="config-structured" class="config-structured hidden"></div>
+            <textarea id="config-raw" class="config-raw hidden" spellcheck="false"></textarea>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================= DIAGNOSTICS ======================= -->
+      <section class="view" id="view-diagnostics">
+        <header class="view-header">
+          <h1>DIAGNOSTICS</h1>
+          <p class="view-sub">System scan — installation health and conflict report</p>
+          <div class="header-actions">
+            <button id="btn-run-diag" class="btn primary">Run scan</button>
+          </div>
+        </header>
+        <div id="diag-list" class="diag-list"></div>
+        <div id="conflict-matrix" class="conflict-matrix"></div>
+        <div id="conflict-detail" class="conflict-detail"></div>
+        <div id="ue4ss-hook-report" class="conflict-detail"></div>
+      </section>
+
+      <!-- ======================= SETTINGS ======================= -->
+      <section class="view" id="view-settings">
+        <header class="view-header">
+          <h1>SETTINGS</h1>
+          <p class="view-sub">Manager configuration</p>
+        </header>
+
+        <div class="card holo wide">
+          <div class="card-title">PATHS</div>
+          <div class="card-body settings-body">
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-name">Game folder</span>
+                <span id="set-game-path" class="setting-value mono">Not set</span>
+              </div>
+              <button class="btn" id="btn-browse-game">Browse…</button>
+            </div>
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-name">retoc.exe <span class="dim">(optional — IoStore package inspection)</span></span>
+                <span id="set-retoc-path" class="setting-value mono">Auto-detect</span>
+              </div>
+              <button class="btn" id="btn-browse-retoc">Browse…</button>
+            </div>
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-name">7z.exe <span class="dim">(optional — .7z/.rar support)</span></span>
+                <span id="set-7z-path" class="setting-value mono">Auto-detect</span>
+              </div>
+              <button class="btn" id="btn-browse-7z">Browse…</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card holo wide">
+          <div class="card-title">BEHAVIOR</div>
+          <div class="card-body settings-body">
+            <label class="setting-row toggle-row">
+              <div class="setting-info">
+                <span class="setting-name">Close manager after launching the game</span>
+              </div>
+              <input type="checkbox" id="chk-close-on-launch" class="switch" />
+            </label>
+            <label class="setting-row toggle-row">
+              <div class="setting-info">
+                <span class="setting-name">Reduced motion <span class="dim">(disable starfield &amp; glow animations)</span></span>
+              </div>
+              <input type="checkbox" id="chk-reduced-motion" class="switch" />
+            </label>
+          </div>
+        </div>
+
+        <div class="card holo wide">
+          <div class="card-title">NEXUS MODS</div>
+          <div class="card-body settings-body">
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-name">API key <span class="dim">(from nexusmods.com → Site preferences → API keys)</span></span>
+                <span id="nexus-status" class="setting-value">No key stored</span>
+              </div>
+              <div class="nexus-key-controls">
+                <input type="password" id="nexus-key-input" class="text-input" placeholder="Paste personal API key" />
+                <button class="btn tiny" id="btn-nexus-save">Save</button>
+                <button class="btn ghost tiny" id="btn-nexus-clear">Clear</button>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-name">nxm:// one-click downloads</span>
+                <span id="nxm-status" class="setting-value">Not registered</span>
+              </div>
+              <button class="btn" id="btn-nxm-register">Register handler</button>
+            </div>
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-name">Browse mods <span class="dim">(use “Mod Manager Download” buttons once registered)</span></span>
+              </div>
+              <button class="btn ghost" data-url="https://www.nexusmods.com/games/starwarszerocompany/mods">Open Nexus Mods ↗</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card holo wide">
+          <div class="card-title">UE4SS RUNTIME</div>
+          <div class="card-body settings-body">
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-name">Script/DLL mod loader <span class="dim">(needed for Lua &amp; DLL mods)</span></span>
+                <span id="ue4ss-settings-status" class="setting-value">—</span>
+              </div>
+              <button class="btn" id="btn-install-ue4ss">Download &amp; install</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card holo wide">
+          <div class="card-title">SHORTCUTS</div>
+          <div class="card-body actions-row">
+            <button class="btn ghost" data-open="library">Open mod library</button>
+            <button class="btn ghost" data-open="data">Open manager data</button>
+            <button class="btn ghost" data-open="ue4ssMods">Open UE4SS mods</button>
+            <button class="btn ghost" id="btn-launch-direct">Launch game directly (no Steam)</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="launcher-banner" class="launcher-banner hidden">
+    <span class="launcher-banner-glyph">⬆</span>
+    <span id="launcher-banner-text" class="launcher-banner-text"></span>
+    <button id="launcher-banner-get" class="btn primary tiny">Get update ↗</button>
+    <button id="launcher-banner-dismiss" class="btn ghost tiny">Later</button>
+  </div>
+
+  <div id="drop-overlay" class="drop-overlay hidden">
+    <div class="drop-box">⊕ RELEASE TO INSTALL</div>
+  </div>
+
+  <div id="toast-stack" class="toast-stack"></div>
+
+  <div id="progress-toast" class="progress-toast hidden">
+    <div id="progress-label" class="progress-label">Downloading…</div>
+    <div class="progress-track"><div id="progress-fill" class="progress-fill"></div></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

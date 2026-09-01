@@ -1,0 +1,154 @@
+ZERO COMPANY MOD COMMAND
+A dedicated mod manager & launcher for STAR WARS: Zero Company
+Install · Organize · Detect conflicts · Launch
+
+=====================================================================
+
+WHAT IS IT?
+
+Zero Company Mod Command is a standalone, portable mod manager and
+launcher built specifically for STAR WARS: Zero Company, wrapped in a
+Star Wars holo-terminal interface. It handles every common mod format
+for this game, keeps your load order under control, tells you exactly
+which mods are incompatible with each other, and launches the game —
+all from one window.
+
+No installation, no dependencies. Download, run the exe, and it finds
+your game through Steam automatically.
+
+=====================================================================
+
+NEW: YOUR MODS STAY UP TO DATE
+
+The launcher tracks every mod you install and tells you the moment an
+update is out — GitHub mods update in place with one click, Nexus mods
+flag with a direct link. The launcher itself announces new versions
+too, so you never mod on an outdated build.
+
+=====================================================================
+
+KEY FEATURES
+
+Updates, handled
+- Mod update checks — every Nexus and GitHub install is tracked;
+  outdated mods get flagged in the Hangar Bay (checked automatically,
+  or on demand)
+- One-click updates — GitHub mods (and Nexus premium) update in place,
+  keeping your load order, custom names, and enabled state; free Nexus
+  accounts get a direct link and the returning download replaces the
+  old version automatically
+- Launcher updates — the app announces new launcher versions with a
+  banner, so you always know when a better build is out
+
+Two mod sources built in
+- Holonet browser — browse this game's entire Nexus catalogue inside
+  the app: thumbnails, search, category filters, and sorting
+- The Forge — a second tab of curated GitHub mods, hand-vetted by
+  Envian Mods (the list updates live). Installs come only from release
+  archives, behind a confirmation naming the exact repo and file
+- nxm:// one-click downloads — press "Mod Manager Download" on the
+  website and the mod installs straight into the manager
+
+Mod management
+- One-window installs — drag & drop .zip / .7z / .rar archives, loose
+  .pak / .utoc / .ucas files, or extracted folders anywhere onto the app
+- Every format auto-detected — pak, IoStore, LogicMods, UE4SS Lua/DLL
+  mods, even the UE4SS runtime itself
+- Clean enable/disable — canonical copies are kept in the manager's
+  library, so toggling a mod never loses files
+- Squad profiles — save named sets of enabled mods + load order and
+  swap between them in two clicks
+
+Conflict detection that actually proves it
+- CONFIRMED conflicts — the manager reads the asset list inside each
+  IoStore mod and flags mods that modify the same game assets, showing
+  you the exact overlapping files
+- SUSPECTED conflicts — matching file names across mods that can't be
+  deep-scanned
+- UE4SS hook scan — Lua mods are scanned for RegisterHook /
+  RegisterKeyBind targets; two mods hooking the same function or
+  binding the same key get reported, including mods you installed by hand
+- Compatibility matrix — one grid showing every enabled mod against
+  every other: compatible / suspected / confirmed
+
+Load order
+- Drag-to-reorder pak/IoStore mods — later loads win conflicts
+- Suggest order — one click proposes an order (broad overhauls first,
+  targeted patches later) and tells you which conflicts it decides
+
+Nexus Mods built in
+- Holonet browser — browse this game's entire Nexus catalogue inside
+  the app: thumbnails, search, category filters, and sorting by
+  downloads / endorsements / newest / updated
+- nxm:// one-click downloads — press "Mod Manager Download" on the
+  website and the mod downloads and installs straight into the manager
+- Works with free accounts (via the website button) and premium
+  accounts (fully in-app)
+
+Quality of life
+- Datapad — built-in config editor for Engine.ini, GameUserSettings.ini,
+  Input.ini, UE4SS-settings.ini and mod config files, with a structured
+  key/value view that preserves comments and formatting, plus automatic
+  first-save backups
+- UE4SS one-click install — downloads and installs the latest
+  experimental UE4SS runtime for Lua/DLL mod support
+- Diagnostics — full health scan: game detection, Steam build,
+  deployed-file audit, tool availability, conflict report
+- Launch via Steam (overlay + cloud saves) or directly
+
+=====================================================================
+
+GETTING STARTED
+
+1. Download and run ZeroCompanyModCommand.exe — portable, keeps its
+   data in a folder next to the exe
+2. The game is auto-detected through Steam (or set the folder in
+   Settings)
+3. In Settings -> Nexus Mods, paste your personal API key and press
+   "Register handler" to enable one-click downloads
+4. Install mods from the Holonet tab, or drag archives onto the window
+
+Requirements: Windows 10/11 · STAR WARS: Zero Company (Steam) ·
+optional: 7-Zip for .7z/.rar archives
+
+=====================================================================
+
+FAQ
+
+Q: Windows SmartScreen warns about the exe.
+A: The exe is unsigned (code-signing certificates are expensive).
+   Click "More info -> Run anyway". The app is fully self-contained
+   and only writes inside its own folder, your game folder, and the
+   game's config folder.
+
+Q: Does it work with mods I installed manually?
+A: Manually placed UE4SS mods are picked up by the hook scanner and
+   config editor. Paks placed manually in ~mods aren't managed, but
+   they coexist fine — install them through the manager to get
+   conflict detection and load ordering.
+
+Q: Can it break my game?
+A: Mods are deployed only to the standard mod locations (~mods,
+   LogicMods, ue4ss/Mods). Disabling or uninstalling a mod removes
+   exactly the files it deployed. Config files are backed up
+   automatically on first save.
+
+=====================================================================
+
+CREDITS
+
+- Bundles retoc by trumank for IoStore container inspection
+  (https://github.com/trumank/retoc)
+- UE4SS by the UE4SS team (https://github.com/UE4SS-RE/RE-UE4SS)
+- Built with Electron
+
+=====================================================================
+
+SUPPORT
+
+Join Smexy's Mods Discord — requests, bug reports, mod submissions:
+https://discord.gg/YNPCA6qRq3
+
+Support my modding — every donation helps support the creation of
+new mods (PayPal):
+https://paypal.me/Envian707

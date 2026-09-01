@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360">
+  <defs>
+    <radialGradient id="space" cx="50%" cy="42%" r="75%">
+      <stop offset="0%" stop-color="#0d1a2e"/>
+      <stop offset="55%" stop-color="#081020"/>
+      <stop offset="100%" stop-color="#04070e"/>
+    </radialGradient>
+    <radialGradient id="holoGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#4fd1ff" stop-opacity="0.30"/>
+      <stop offset="60%" stop-color="#4fd1ff" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#4fd1ff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="beam" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#4fd1ff" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#4fd1ff" stop-opacity="0"/>
+    </linearGradient>
+    <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse">
+      <rect width="4" height="4" fill="none"/>
+      <rect y="2" width="4" height="1" fill="#000000" opacity="0.22"/>
+    </pattern>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#4fd1ff" stroke-opacity="0.05" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <!-- deep space -->
+  <rect width="640" height="360" fill="url(#space)"/>
+  <rect width="640" height="360" fill="url(#grid)"/>
+
+  <!-- stars -->
+  <g fill="#cfe9f7">
+    <circle cx="62" cy="48" r="1.3" opacity="0.8"/>
+    <circle cx="132" cy="212" r="1" opacity="0.5"/>
+    <circle cx="200" cy="84" r="1.1" opacity="0.65"/>
+    <circle cx="94" cy="300" r="1" opacity="0.45"/>
+    <circle cx="286" cy="40" r="1" opacity="0.55"/>
+    <circle cx="388" cy="66" r="1.4" opacity="0.75"/>
+    <circle cx="470" cy="120" r="1" opacity="0.5"/>
+    <circle cx="540" cy="52" r="1.2" opacity="0.7"/>
+    <circle cx="590" cy="180" r="1" opacity="0.5"/>
+    <circle cx="556" cy="296" r="1.3" opacity="0.65"/>
+    <circle cx="430" cy="322" r="1" opacity="0.45"/>
+    <circle cx="330" cy="290" r="1" opacity="0.4"/>
+    <circle cx="30" cy="150" r="1.1" opacity="0.6"/>
+    <circle cx="612" cy="238" r="1" opacity="0.55"/>
+  </g>
+
+  <!-- projector beam + glow behind emblem -->
+  <polygon points="290,320 350,320 402,150 238,150" fill="url(#beam)"/>
+  <circle cx="320" cy="150" r="120" fill="url(#holoGlow)"/>
+
+  <!-- holo emblem: hexagon sigil -->
+  <g transform="translate(320 150)">
+    <polygon points="0,-64 55.4,-32 55.4,32 0,64 -55.4,32 -55.4,-32"
+             fill="none" stroke="#4fd1ff" stroke-width="3" stroke-opacity="0.9"/>
+    <polygon points="0,-48 41.6,-24 41.6,24 0,48 -41.6,24 -41.6,-24"
+             fill="#4fd1ff" fill-opacity="0.06" stroke="#4fd1ff" stroke-width="1.2" stroke-opacity="0.55"/>
+    <!-- inner starburst -->
+    <g stroke="#ffc857" stroke-opacity="0.9" stroke-width="2.4" stroke-linecap="round">
+      <line x1="0" y1="-26" x2="0" y2="-8"/>
+      <line x1="0" y1="8" x2="0" y2="26"/>
+      <line x1="-22.5" y1="-13" x2="-7" y2="-4"/>
+      <line x1="7" y1="4" x2="22.5" y2="13"/>
+      <line x1="-22.5" y1="13" x2="-7" y2="4"/>
+      <line x1="7" y1="-4" x2="22.5" y2="-13"/>
+    </g>
+    <circle r="4.5" fill="#ffc857" opacity="0.95"/>
+    <!-- glitch slices -->
+    <rect x="-70" y="-14" width="140" height="2.5" fill="#4fd1ff" opacity="0.18"/>
+    <rect x="-70" y="22" width="140" height="1.5" fill="#4fd1ff" opacity="0.12"/>
+  </g>
+
+  <!-- HUD corner brackets -->
+  <g stroke="#4fd1ff" stroke-width="2.5" stroke-opacity="0.65" fill="none">
+    <path d="M24 52 V24 H52"/>
+    <path d="M588 24 H616 V52"/>
+    <path d="M616 308 V336 H588"/>
+    <path d="M52 336 H24 V308"/>
+  </g>
+
+  <!-- caption -->
+  <text x="320" y="258" text-anchor="middle" fill="#4fd1ff" fill-opacity="0.92"
+        font-family="Consolas, 'Cascadia Mono', monospace" font-size="19" letter-spacing="7" font-weight="bold">NO VISUAL TRANSMISSION</text>
+  <text x="320" y="284" text-anchor="middle" fill="#6f8ba0"
+        font-family="Consolas, 'Cascadia Mono', monospace" font-size="11" letter-spacing="4">HOLONET ARCHIVE · ZERO COMPANY</text>
+
+  <!-- signal bar -->
+  <g transform="translate(276 306)" fill="#ffc857">
+    <rect x="0" y="8" width="6" height="6" opacity="0.9"/>
+    <rect x="12" y="5" width="6" height="9" opacity="0.7"/>
+    <rect x="24" y="2" width="6" height="12" opacity="0.45"/>
+    <rect x="36" y="-1" width="6" height="15" opacity="0.25"/>
+    <rect x="48" y="-4" width="6" height="18" opacity="0.12"/>
+    <rect x="60" y="-7" width="6" height="21" opacity="0.06"/>
+    <rect x="72" y="-10" width="6" height="24" opacity="0.03"/>
+  </g>
+
+  <!-- scanline overlay -->
+  <rect width="640" height="360" fill="url(#scan)"/>
+</svg>

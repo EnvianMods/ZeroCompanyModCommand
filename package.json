@@ -1,0 +1,49 @@
+{
+  "name": "zero-company-mod-command",
+  "productName": "Zero Company Mod Command",
+  "version": "1.2.0",
+  "description": "A Star Wars themed mod manager and launcher for STAR WARS: Zero Company",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable"
+  },
+  "author": "Fulme",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "dependencies": {
+    "extract-zip": "^2.0.1"
+  },
+  "build": {
+    "appId": "com.zerocompany.modcommand",
+    "productName": "Zero Company Mod Command",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "lib/**/*",
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "tools",
+        "to": "tools"
+      }
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "signAndEditExecutable": false
+    },
+    "portable": {
+      "artifactName": "ZeroCompanyModCommand.exe"
+    }
+  }
+}

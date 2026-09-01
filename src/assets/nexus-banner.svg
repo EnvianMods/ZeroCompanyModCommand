@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <defs>
+    <radialGradient id="space" cx="50%" cy="38%" r="85%">
+      <stop offset="0%" stop-color="#0e1c33"/>
+      <stop offset="50%" stop-color="#081220"/>
+      <stop offset="100%" stop-color="#03060c"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#4fd1ff" stop-opacity="0.35"/>
+      <stop offset="60%" stop-color="#4fd1ff" stop-opacity="0.09"/>
+      <stop offset="100%" stop-color="#4fd1ff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="beam" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#4fd1ff" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#4fd1ff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="amberline" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ffc857" stop-opacity="0"/>
+      <stop offset="50%" stop-color="#ffc857" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#ffc857" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="cyanline" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#4fd1ff" stop-opacity="0"/>
+      <stop offset="50%" stop-color="#4fd1ff" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#4fd1ff" stop-opacity="0"/>
+    </linearGradient>
+    <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse">
+      <rect y="2" width="4" height="1" fill="#000000" opacity="0.16"/>
+    </pattern>
+    <pattern id="grid" width="52" height="52" patternUnits="userSpaceOnUse">
+      <path d="M52 0H0V52" fill="none" stroke="#4fd1ff" stroke-opacity="0.045" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="1280" height="720" fill="url(#space)"/>
+  <rect width="1280" height="720" fill="url(#grid)"/>
+
+  <!-- stars -->
+  <g fill="#cfe9f7">
+    <circle cx="96" cy="88" r="1.6" opacity="0.85"/><circle cx="212" cy="410" r="1.2" opacity="0.5"/>
+    <circle cx="318" cy="132" r="1.4" opacity="0.7"/><circle cx="150" cy="600" r="1.2" opacity="0.45"/>
+    <circle cx="452" cy="74" r="1.2" opacity="0.55"/><circle cx="610" cy="106" r="1.7" opacity="0.8"/>
+    <circle cx="742" cy="196" r="1.2" opacity="0.5"/><circle cx="864" cy="84" r="1.5" opacity="0.75"/>
+    <circle cx="944" cy="290" r="1.2" opacity="0.5"/><circle cx="1088" cy="120" r="1.6" opacity="0.7"/>
+    <circle cx="1190" cy="340" r="1.2" opacity="0.55"/><circle cx="1122" cy="560" r="1.6" opacity="0.65"/>
+    <circle cx="988" cy="640" r="1.2" opacity="0.45"/><circle cx="700" cy="622" r="1.2" opacity="0.4"/>
+    <circle cx="60" cy="300" r="1.4" opacity="0.6"/><circle cx="392" cy="656" r="1.3" opacity="0.5"/>
+    <circle cx="540" cy="560" r="1" opacity="0.4"/><circle cx="1246" cy="80" r="1.2" opacity="0.6"/>
+  </g>
+
+  <!-- emblem -->
+  <g transform="translate(640 236)">
+    <polygon points="300,110 -300,110 -390,150 390,150" fill="url(#beam)"/>
+    <circle r="190" fill="url(#glow)"/>
+    <polygon points="0,-118 102.2,-59 102.2,59 0,118 -102.2,59 -102.2,-59"
+             fill="none" stroke="#4fd1ff" stroke-width="4.5" stroke-opacity="0.95"/>
+    <polygon points="0,-88 76.2,-44 76.2,44 0,88 -76.2,44 -76.2,-44"
+             fill="#4fd1ff" fill-opacity="0.06" stroke="#4fd1ff" stroke-width="1.6" stroke-opacity="0.55"/>
+    <g stroke="#ffc857" stroke-opacity="0.95" stroke-width="4.4" stroke-linecap="round">
+      <line x1="0" y1="-48" x2="0" y2="-15"/><line x1="0" y1="15" x2="0" y2="48"/>
+      <line x1="-41.6" y1="-24" x2="-13" y2="-7.5"/><line x1="13" y1="7.5" x2="41.6" y2="24"/>
+      <line x1="-41.6" y1="24" x2="-13" y2="7.5"/><line x1="13" y1="-7.5" x2="41.6" y2="-24"/>
+    </g>
+    <circle r="8" fill="#ffc857"/>
+    <rect x="-130" y="-26" width="260" height="4" fill="#4fd1ff" opacity="0.16"/>
+    <rect x="-130" y="40" width="260" height="2.5" fill="#4fd1ff" opacity="0.12"/>
+  </g>
+
+  <!-- title -->
+  <text x="640" y="452" text-anchor="middle" fill="#4fd1ff"
+        font-family="Consolas, 'Cascadia Mono', monospace" font-size="64" font-weight="bold" letter-spacing="18">ZERO COMPANY</text>
+  <rect x="340" y="474" width="600" height="2" fill="url(#cyanline)"/>
+  <text x="640" y="524" text-anchor="middle" fill="#ffc857"
+        font-family="Consolas, 'Cascadia Mono', monospace" font-size="34" font-weight="bold" letter-spacing="30">MOD COMMAND</text>
+
+  <!-- tagline -->
+  <text x="640" y="576" text-anchor="middle" fill="#8fb3c9"
+        font-family="Consolas, 'Cascadia Mono', monospace" font-size="17" letter-spacing="4">A DEDICATED MOD MANAGER &amp; LAUNCHER FOR STAR WARS: ZERO COMPANY</text>
+
+  <!-- feature chips -->
+  <g font-family="Consolas, 'Cascadia Mono', monospace" font-size="14" fill="#4fd1ff" fill-opacity="0.85" text-anchor="middle">
+    <text x="640" y="632" letter-spacing="2">ONE-CLICK NEXUS INSTALLS  ·  CONFLICT DETECTION  ·  LOAD ORDER  ·  UE4SS  ·  CONFIG EDITOR</text>
+  </g>
+  <rect x="240" y="652" width="800" height="2" fill="url(#amberline)"/>
+  <text x="640" y="684" text-anchor="middle" fill="#6f8ba0"
+        font-family="Consolas, 'Cascadia Mono', monospace" font-size="13" letter-spacing="6">VERSION 1.0  ·  PORTABLE  ·  BY ENVIAN MODS</text>
+
+  <!-- HUD brackets -->
+  <g stroke="#4fd1ff" stroke-width="3" stroke-opacity="0.6" fill="none">
+    <path d="M40 104 V40 H104"/><path d="M1176 40 H1240 V104"/>
+    <path d="M1240 616 V680 H1176"/><path d="M104 680 H40 V616"/>
+  </g>
+
+  <rect width="1280" height="720" fill="url(#scan)"/>
+</svg>

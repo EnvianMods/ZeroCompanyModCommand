@@ -1,0 +1,14 @@
+# Dependencies and build output
+node_modules/
+release/
+
+# Local user data (settings, Nexus API key, installed mod library)
+data/
+
+# Secrets — never commit tokens
+owner-tools/**/token.txt
+token.txt
+
+# Backups and temp
+*.zcbak
+*.log

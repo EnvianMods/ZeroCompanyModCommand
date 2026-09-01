@@ -1,0 +1,51 @@
+'use strict';
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
+
+const invoke = (channel, payload) => ipcRenderer.invoke(channel, payload);
+
+contextBridge.exposeInMainWorld('zc', {
+  getState: () => invoke('get-state'),
+  browseGamePath: () => invoke('browse-game-path'),
+  browseToolPath: (opts) => invoke('browse-tool-path', opts),
+  saveSettings: (patch) => invoke('save-settings', patch),
+  installMods: () => invoke('install-mods'),
+  installFolder: () => invoke('install-folder'),
+  installDropped: (paths) => invoke('install-dropped', paths),
+  setModEnabled: (id, enabled) => invoke('set-mod-enabled', { id, enabled }),
+  uninstallMod: (id) => invoke('uninstall-mod', { id }),
+  renameMod: (id, name) => invoke('rename-mod', { id, name }),
+  applyLoadOrder: (orderedIds) => invoke('apply-load-order', { orderedIds }),
+  launchGame: () => invoke('launch-game'),
+  launchGameDirect: () => invoke('launch-game-direct'),
+  openManagedPath: (kind) => invoke('open-managed-path', { kind }),
+  openExternal: (url) => invoke('open-external', { url }),
+  runDiagnostics: () => invoke('run-diagnostics'),
+  suggestLoadOrder: () => invoke('suggest-load-order'),
+  saveProfile: (name) => invoke('save-profile', { name }),
+  applyProfile: (id) => invoke('apply-profile', { id }),
+  deleteProfile: (id) => invoke('delete-profile', { id }),
+  setNexusKey: (key) => invoke('set-nexus-key', { key }),
+  clearNexusKey: () => invoke('clear-nexus-key'),
+  validateNexusKey: () => invoke('validate-nexus-key'),
+  registerNxm: () => invoke('register-nxm'),
+  unregisterNxm: () => invoke('unregister-nxm'),
+  installUe4ss: () => invoke('install-ue4ss'),
+  browseNexus: (opts) => invoke('nexus-browse', opts),
+  browseGithub: (opts) => invoke('github-browse', opts),
+  installGithub: (fullName) => invoke('github-install', { fullName }),
+  checkUpdates: () => invoke('check-updates'),
+  launcherUpdateStatus: () => invoke('launcher-update-status'),
+  updateMod: (id) => invoke('update-mod', { id }),
+  promotedMods: () => invoke('nexus-promoted'),
+  installRemote: (modId, name) => invoke('nexus-install-remote', { modId, name }),
+  configList: () => invoke('config-list'),
+  configRead: (path) => invoke('config-read', { path }),
+  configSave: (path, content) => invoke('config-save', { path, content }),
+  configAddCustom: () => invoke('config-add-custom'),
+  configRemoveCustom: (path) => invoke('config-remove-custom', { path }),
+  configOpenFolder: (path) => invoke('config-open-folder', { path }),
+  onEvent: (cb) => ipcRenderer.on('zc-event', (_e, payload) => cb(payload)),
+  pathForFile: (file) => {
+    try { return webUtils.getPathForFile(file); } catch (_) { return null; }
+  },
+});

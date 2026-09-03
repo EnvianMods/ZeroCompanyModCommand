@@ -22,12 +22,24 @@ const path = require('path');
 const OWNER = 'EnvianMods';
 const REPO = 'ZeroCompanyModCommandArchive';
 const API = `https://api.github.com/repos/${OWNER}/${REPO}`;
-const PROJECT_ROOT = path.join(__dirname, '..', '..');
+// Project root: two levels up when running from the project's owner-tools,
+// else the known dev location (for the copy living in the archive utility folder).
+const PROJECT_ROOT = [
+  path.join(__dirname, '..', '..'),
+  'G:\\SteamLibrary\\steamapps\\common\\Star Wars Zero Company\\ZeroCompanyModManager',
+].find((p) => fs.existsSync(path.join(p, 'CHANGELOG.md'))) || path.join(__dirname, '..', '..');
 
 function getToken() {
+  // Prefer the dedicated archiving token (archive-token.txt), then the shared
+  // token.txt, then the environment.
+  for (const f of ['archive-token.txt', 'token.txt']) {
+    const tokenFile = path.join(__dirname, f);
+    if (fs.existsSync(tokenFile)) {
+      const t = fs.readFileSync(tokenFile, 'utf8').trim();
+      if (t) return t;
+    }
+  }
   if (process.env.GITHUB_TOKEN) return process.env.GITHUB_TOKEN.trim();
-  const tokenFile = path.join(__dirname, 'token.txt');
-  if (fs.existsSync(tokenFile)) return fs.readFileSync(tokenFile, 'utf8').trim();
   return null;
 }
 
@@ -128,8 +140,12 @@ async function putFile(repoPath, content, message) {
   }
 
   // 3. sync repo docs from the project
-  const changelog = fs.readFileSync(path.join(PROJECT_ROOT, 'CHANGELOG.md'), 'utf8');
-  await putFile('CHANGELOG.md', changelog, `Sync changelog for v${version}`);
+  const changelogPath = path.join(PROJECT_ROOT, 'CHANGELOG.md');
+  if (fs.existsSync(changelogPath)) {
+    await putFile('CHANGELOG.md', fs.readFileSync(changelogPath, 'utf8'), `Sync changelog for v${version}`);
+  } else {
+    console.log('CHANGELOG.md not found locally — skipped syncing it.');
+  }
   const readme = [
     '# Zero Company Mod Command — Version Archive',
     '',

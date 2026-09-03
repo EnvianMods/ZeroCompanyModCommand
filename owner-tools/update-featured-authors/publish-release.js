@@ -84,22 +84,34 @@ async function gh(url, options = {}) {
     process.exit(1);
   }
 
-  // 1. create the release
-  console.log(`Creating release v${version} on ${REPO_FULL}…`);
-  const createRes = await gh(`${API}/releases`, {
-    method: 'POST',
-    body: JSON.stringify({
-      tag_name: `v${version}`,
-      name: `${REPO_FULL === DEFAULT_REPO ? 'Zero Company Mod Command' : REPO_FULL.split('/')[1].replace(/([a-z])([A-Z])/g, '$1 $2')} v${version}`,
-      body: notes || `Release v${version}. See CHANGELOG.md for details.`,
-    }),
-  });
-  if (!createRes.ok) {
-    console.error(`Release creation failed (${createRes.status}):`, (await createRes.text()).slice(0, 400));
-    console.error(`Is the repo created (github.com/${REPO_FULL}) and the token scoped to it?`);
-    process.exit(1);
+  // 1. create the release (or reuse it, so re-runs can refresh assets)
+  let release;
+  const existingRes = await gh(`${API}/releases/tags/v${version}`);
+  if (existingRes.status === 200) {
+    release = await existingRes.json();
+    console.log(`Release v${version} already exists on ${REPO_FULL} — adding assets to it.`);
+  } else {
+    console.log(`Creating release v${version} on ${REPO_FULL}…`);
+    const createRes = await gh(`${API}/releases`, {
+      method: 'POST',
+      body: JSON.stringify({
+        tag_name: `v${version}`,
+        name: `${REPO_FULL === DEFAULT_REPO ? 'Zero Company Mod Command' : REPO_FULL.split('/')[1].replace(/([a-z])([A-Z])/g, '$1 $2')} v${version}`,
+        body: notes || `Release v${version}. See CHANGELOG.md for details.`,
+      }),
+    });
+    if (!createRes.ok) {
+      console.error(`Release creation failed (${createRes.status}):`, (await createRes.text()).slice(0, 400));
+      console.error(`Is the repo created (github.com/${REPO_FULL}) and the token scoped to it?`);
+      process.exit(1);
+    }
+    release = await createRes.json();
   }
-  const release = await createRes.json();
+  if ((release.assets || []).some((a) => a.name === path.basename(zipPath))) {
+    console.log(`skip ${path.basename(zipPath)} (already uploaded)`);
+    console.log('GitHub release:', release.html_url);
+    return;
+  }
 
   // 2. upload the zip asset
   const assetName = path.basename(zipPath);

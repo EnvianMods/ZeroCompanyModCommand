@@ -399,9 +399,16 @@ const handlers = {
     // FriendlyAppName value before falling back to exe metadata).
     try {
       const { execFileSync } = require('child_process');
-      execFileSync('reg', ['add', 'HKCU\\Software\\Classes\\nxm', '/ve', '/d', 'URL:Mod Command Link', '/f'], { stdio: 'ignore' });
-      execFileSync('reg', ['add', 'HKCU\\Software\\Classes\\nxm', '/v', 'FriendlyTypeName', '/d', 'Mod Command', '/f'], { stdio: 'ignore' });
-      execFileSync('reg', ['add', 'HKCU\\Software\\Classes\\nxm\\shell\\open\\command', '/v', 'FriendlyAppName', '/d', 'Mod Command', '/f'], { stdio: 'ignore' });
+      const set = (key, value, data) => execFileSync('reg',
+        ['add', key, ...(value ? ['/v', value] : ['/ve']), '/d', data, '/f'], { stdio: 'ignore' });
+      // Browser "Open …?" dialogs pull the name from these (which one varies by
+      // browser/version) or from the exe's FileDescription.
+      set('HKCU\\Software\\Classes\\nxm', null, 'URL:Mod Command Link');
+      set('HKCU\\Software\\Classes\\nxm', 'FriendlyTypeName', 'in Mod Command');
+      set('HKCU\\Software\\Classes\\nxm\\shell\\open', 'FriendlyAppName', 'in Mod Command');
+      set('HKCU\\Software\\Classes\\nxm\\shell\\open\\command', 'FriendlyAppName', 'in Mod Command');
+      set('HKCU\\Software\\Classes\\nxm\\Application', 'ApplicationName', 'in Mod Command');
+      set('HKCU\\Software\\Classes\\nxm\\Application', 'ApplicationDescription', 'Zero Company Mod Command');
     } catch (_) { /* cosmetic only */ }
     return fullState();
   },

@@ -167,12 +167,17 @@ The project is a git repo with `origin` set to
 
 1. Bump `version` in package.json, add a CHANGELOG entry, commit
 2. `npm run dist`, zip exe + README.txt + CHANGELOG.md as
-   `ZeroCompanyModCommand-v<version>.zip`
+   `ZeroCompanyModCommand-v<version>.zip`; snapshot the source (no
+   node_modules/release/data/.git) as `...-source-v<version>.zip`
 3. Upload the zip to the Nexus mod page (new file version + changelog)
-4. `git push` the source, then
-   `owner-tools\...\"Publish Release.bat" <version> <path-to-zip> --notes "..."`
-   — mirrors the release to GitHub silently
-5. `"Update Launcher Version.bat" <version> "https://www.nexusmods.com/starwarszerocompany/mods/<id>?tab=files" --notes "..."`
+4. `"Archive Release.bat" <version> <build-zip> <source-zip> --notes "..."`
+   — pushes the version archive (both zips as Release assets + synced changelog)
+   to github.com/EnvianMods/ZeroCompanyModCommandArchive. This replaces the old
+   local copy into "Envian Mods and Projects" (that folder is now legacy).
+5. `git push` the source, then optionally
+   `"Publish Release.bat" <version> <path-to-zip>` — silent GitHub mirror on the
+   source repo
+6. `"Update Launcher Version.bat" <version> "https://www.nexusmods.com/starwarszerocompany/mods/<id>?tab=files" --notes "..."`
    — announces to every installed launcher, pointing at Nexus
 
 ## Owner tools (not shipped)

@@ -68,8 +68,11 @@ async function handleNxm(rawUrl) {
     sendEvent({ type: 'toast', message: `Nexus download requested (mod ${link.modId})…` });
     let info = null;
     try { info = await nexus.modInfo(link.modId, apiKey); } catch (_) {}
+    // Authoritative filename from the file API — CDN URLs aren't reliable for it.
+    let fileName = null;
+    try { fileName = (await nexus.fileInfo(link.modId, link.fileId, apiKey)).file_name || null; } catch (_) {}
     const uri = await nexus.downloadLink(link, apiKey);
-    const dest = await nexus.downloadToFile(uri, store.stagingDir, null, (got, total) => {
+    const dest = await nexus.downloadToFile(uri, store.stagingDir, fileName, (got, total) => {
       sendEvent({ type: 'progress', label: info ? info.name : `mod ${link.modId}`, received: got, total });
     });
     try {
@@ -392,6 +395,14 @@ const handlers = {
     const { exe, args } = protocolArgs();
     const okReg = app.setAsDefaultProtocolClient('nxm', exe, args);
     if (!okReg) throw new Error('Windows refused the nxm:// handler registration.');
+    // Friendly name for browser "Open …?" dialogs (AssocQueryString checks the
+    // FriendlyAppName value before falling back to exe metadata).
+    try {
+      const { execFileSync } = require('child_process');
+      execFileSync('reg', ['add', 'HKCU\\Software\\Classes\\nxm', '/ve', '/d', 'URL:Mod Command Link', '/f'], { stdio: 'ignore' });
+      execFileSync('reg', ['add', 'HKCU\\Software\\Classes\\nxm', '/v', 'FriendlyTypeName', '/d', 'Mod Command', '/f'], { stdio: 'ignore' });
+      execFileSync('reg', ['add', 'HKCU\\Software\\Classes\\nxm\\shell\\open\\command', '/v', 'FriendlyAppName', '/d', 'Mod Command', '/f'], { stdio: 'ignore' });
+    } catch (_) { /* cosmetic only */ }
     return fullState();
   },
   'unregister-nxm': async () => {

@@ -8,8 +8,9 @@ First public release.
 - Archive/folder/loose-pak installs (drag & drop), auto-classification
   (pak / IoStore / LogicMods / UE4SS mods / UE4SS runtime), enable/disable with a
   canonical mod library, rename, uninstall
-- Friendly mod titles: a UE4SS mod can ship `modinfo.json` (`{"title": "..."}`)
-  to set its display name in the Hangar Bay
+- Friendly mod metadata: any mod (UE4SS or pak/IoStore) can ship a `modinfo.json`
+  (`{"title", "version", "author", "description"}`) to control its display name
+  and details in the Hangar Bay
 - Import existing mods: adopts manually-installed mods (paks in ~mods, LogicMods,
   UE4SS folders) into full management without touching the game files. Adopted
   files matching a Nexus upload are identified automatically (md5); anything else

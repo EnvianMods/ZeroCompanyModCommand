@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -17,6 +17,7 @@ const { checkLauncherUpdate } = require('./lib/launcher-update');
 
 // Data lives next to the portable exe, or in ./data when running from source.
 function resolveDataDir() {
+  if (process.env.ZC_DATA_DIR) return process.env.ZC_DATA_DIR; // test harness override
   if (process.env.PORTABLE_EXECUTABLE_DIR) {
     return path.join(process.env.PORTABLE_EXECUTABLE_DIR, 'ZeroCompanyModCommand-data');
   }
@@ -27,6 +28,42 @@ function resolveDataDir() {
 const store = new Store(resolveDataDir());
 const engine = new ModEngine(store);
 let win = null;
+
+// ---------------------------------------------------------- Nexus API key at rest
+// The key is kept encrypted with the OS user's credentials (DPAPI on Windows)
+// via Electron safeStorage. Plaintext is only the fallback when the OS store is
+// unavailable; a legacy plaintext key is migrated on startup.
+
+function nexusKey() {
+  const s = store.settings;
+  if (s.nexusApiKeyEncrypted) {
+    try {
+      if (safeStorage.isEncryptionAvailable()) {
+        return safeStorage.decryptString(Buffer.from(s.nexusApiKeyEncrypted, 'base64'));
+      }
+    } catch (_) { /* wrong OS user / corrupted blob — treat as no key */ }
+    return null;
+  }
+  return s.nexusApiKey || null;
+}
+
+function storeNexusKey(key) {
+  if (key && safeStorage.isEncryptionAvailable()) {
+    store.settings.nexusApiKeyEncrypted = safeStorage.encryptString(key).toString('base64');
+    store.settings.nexusApiKey = null;
+  } else {
+    store.settings.nexusApiKeyEncrypted = null;
+    store.settings.nexusApiKey = key || null;
+  }
+  store.save();
+}
+
+function migrateNexusKey() {
+  const s = store.settings;
+  if (s.nexusApiKey && !s.nexusApiKeyEncrypted && safeStorage.isEncryptionAvailable()) {
+    storeNexusKey(s.nexusApiKey);
+  }
+}
 
 // ---------------------------------------------------------- single instance / nxm
 
@@ -63,7 +100,7 @@ const protocolArgs = () => {
 async function handleNxm(rawUrl) {
   try {
     const link = nexus.parseNxm(rawUrl);
-    const apiKey = store.settings.nexusApiKey;
+    const apiKey = nexusKey();
     if (!apiKey) throw new Error('A Nexus Mods API key is required. Add one in Settings.');
     sendEvent({ type: 'toast', message: `Nexus download requested (mod ${link.modId})…` });
     let info = null;
@@ -119,8 +156,8 @@ async function checkForUpdates() {
     if (!origin || origin.type === 'local') continue;
     results.checked += 1;
     try {
-      if (origin.type === 'nexus' && store.settings.nexusApiKey) {
-        const info = await nexus.modInfo(origin.modId, store.settings.nexusApiKey);
+      if (origin.type === 'nexus' && nexusKey()) {
+        const info = await nexus.modInfo(origin.modId, nexusKey());
         const latest = info.version || null;
         if (latest && origin.version && latest !== origin.version) {
           mod.updateInfo = {
@@ -173,6 +210,8 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Move a legacy plaintext Nexus key into the OS-encrypted store.
+  try { migrateNexusKey(); } catch (_) {}
   // Auto-detect game on first run.
   if (!store.settings.gamePath) {
     const det = steam.detectGame(null);
@@ -189,6 +228,17 @@ app.whenReady().then(() => {
   win.webContents.once('did-finish-load', async () => {
     const info = await checkLauncherUpdate();
     if (info.available) sendEvent({ type: 'launcher-update', info });
+  });
+  // Startup recovery: redeploy enabled mods whose deployed files went missing.
+  win.webContents.once('did-finish-load', () => {
+    if (!store.settings.gamePath) return;
+    try {
+      const repaired = engine.repairDeployments();
+      if (repaired.length) {
+        sendEvent({ type: 'state', state: fullState() });
+        sendEvent({ type: 'toast', kind: 'warn', message: `Recovered missing deployed files for: ${repaired.join(', ')}.` });
+      }
+    } catch (_) {}
   });
   // Background update check, at most once per 12 hours.
   win.webContents.once('did-finish-load', async () => {
@@ -218,10 +268,14 @@ function fullState() {
   const conflicts = store.settings.gamePath ? engine.conflicts(ue4ssHooks) : [];
   const { exe, args } = protocolArgs();
   return {
-    settings: { ...store.settings, nexusApiKey: undefined, hasNexusKey: !!store.settings.nexusApiKey },
+    settings: { ...store.settings, nexusApiKey: undefined, nexusApiKeyEncrypted: undefined, hasNexusKey: !!nexusKey() },
     profiles: store.profiles,
+    lastOrderBackup: store.data.lastOrderBackup
+      ? { at: store.data.lastOrderBackup.at }
+      : null,
     nexus: {
-      hasKey: !!store.settings.nexusApiKey,
+      hasKey: !!nexusKey(),
+      keyEncrypted: !!store.settings.nexusApiKeyEncrypted,
       user: nexusUser,
       nxmRegistered: app.isDefaultProtocolClient('nxm', exe, args),
     },
@@ -314,10 +368,23 @@ const handlers = {
 
   'install-dropped': async (_e, paths) => installPaths(paths),
 
-  'set-mod-enabled': async (_e, { id, enabled }) => { engine.setEnabled(id, enabled); return fullState(); },
-  'uninstall-mod': async (_e, { id }) => { engine.uninstall(id); return fullState(); },
+  'set-mod-enabled': async (_e, { id, enabled, force }) => { engine.setEnabled(id, enabled, force); return fullState(); },
+  'uninstall-mod': async (_e, { id, force }) => { engine.uninstall(id, force); return fullState(); },
   'rename-mod': async (_e, { id, name }) => { engine.rename(id, name); return fullState(); },
   'apply-load-order': async (_e, { orderedIds }) => { engine.applyLoadOrder(orderedIds); return fullState(); },
+  'preview-load-order': async (_e, { orderedIds }) => engine.previewLoadOrder(orderedIds),
+  'rollback-load-order': async () => { engine.rollbackLoadOrder(); return fullState(); },
+
+  'fomod-complete': async (_e, { sessionId, selections }) => {
+    const mod = await engine.completeFomod(sessionId, selections);
+    return { state: fullState(), name: mod.name, modType: mod.modType, warnings: mod.warnings || [] };
+  },
+  'fomod-cancel': async (_e, { sessionId }) => { engine.cancelFomod(sessionId); return true; },
+  'fomod-image': async (_e, { sessionId, path: rel }) => {
+    const session = engine.fomodSession(sessionId);
+    const fomod = require('./lib/fomod');
+    return fomod.readImage(session.root, session.fomodBase, rel);
+  },
 
   'launch-game': async () => {
     const detection = steam.detectGame(store.settings.gamePath);
@@ -375,20 +442,20 @@ const handlers = {
     const trimmed = (key || '').trim();
     if (!trimmed) throw new Error('The API key is empty.');
     const user = await nexus.validateKey(trimmed); // throws on a bad key
-    store.settings.nexusApiKey = trimmed;
-    store.save();
+    storeNexusKey(trimmed);
     nexusUser = user;
     return fullState();
   },
   'clear-nexus-key': async () => {
     store.settings.nexusApiKey = null;
+    store.settings.nexusApiKeyEncrypted = null;
     store.save();
     nexusUser = null;
     return fullState();
   },
   'validate-nexus-key': async () => {
-    if (!store.settings.nexusApiKey) throw new Error('A Nexus Mods API key is required. Add one in Settings.');
-    nexusUser = await nexus.validateKey(store.settings.nexusApiKey);
+    if (!nexusKey()) throw new Error('A Nexus Mods API key is required. Add one in Settings.');
+    nexusUser = await nexus.validateKey(nexusKey());
     return fullState();
   },
   'register-nxm': async () => {
@@ -421,10 +488,10 @@ const handlers = {
   'nexus-browse': async (_e, opts) => {
     const result = await nexus.browseMods(opts || {});
     // Premium accounts can pull download links straight from the API.
-    if (store.settings.nexusApiKey && !nexusUser) {
-      try { nexusUser = await nexus.validateKey(store.settings.nexusApiKey); } catch (_) {}
+    if (nexusKey() && !nexusUser) {
+      try { nexusUser = await nexus.validateKey(nexusKey()); } catch (_) {}
     }
-    return { ...result, hasKey: !!store.settings.nexusApiKey, isPremium: !!(nexusUser && nexusUser.isPremium) };
+    return { ...result, hasKey: !!nexusKey(), isPremium: !!(nexusUser && nexusUser.isPremium) };
   },
 
   'nexus-promoted': async () => {
@@ -447,7 +514,7 @@ const handlers = {
   },
 
   'nexus-install-remote': async (_e, { modId, name }) => {
-    const apiKey = store.settings.nexusApiKey;
+    const apiKey = nexusKey();
     if (!apiKey) throw new Error('A Nexus Mods API key is required. Add one in Settings.');
     if (!nexusUser) {
       try { nexusUser = await nexus.validateKey(apiKey); } catch (err) { throw new Error(err.message); }
@@ -538,11 +605,11 @@ const handlers = {
         let identified = null;
         // Try to reattach a Nexus identity via md5 (only matches files that were
         // uploaded to Nexus as-is; extracted contents usually won't).
-        if (store.settings.nexusApiKey && mod.modType !== 'ue4ss-mod') {
+        if (nexusKey() && mod.modType !== 'ue4ss-mod') {
           for (const f of mod.files.slice(0, 4)) {
             try {
               const hit = await nexus.md5Lookup(
-                path.join(store.modLibraryDir(mod.id), f.libraryRelative), store.settings.nexusApiKey);
+                path.join(store.modLibraryDir(mod.id), f.libraryRelative), nexusKey());
               if (hit) {
                 engine.setOrigin(mod.id, { type: 'nexus', modId: hit.modId, fileId: hit.fileId, version: hit.version, adopted: true });
                 const stored = store.getMod(mod.id);
@@ -570,8 +637,8 @@ const handlers = {
       const m = String(ref).match(/mods\/(\d+)/) || String(ref).match(/^(\d+)$/);
       if (!m) throw new Error('Enter a Nexus mod ID or mod page URL.');
       const modId = Number(m[1]);
-      if (!store.settings.nexusApiKey) throw new Error('A Nexus Mods API key is required. Add one in Settings.');
-      const info = await nexus.modInfo(modId, store.settings.nexusApiKey);
+      if (!nexusKey()) throw new Error('A Nexus Mods API key is required. Add one in Settings.');
+      const info = await nexus.modInfo(modId, nexusKey());
       // Assume the installed copy is current; future version bumps get flagged.
       engine.setOrigin(id, { type: 'nexus', modId, fileId: null, version: info.version || null, linked: true });
       const stored = store.getMod(id);
@@ -650,10 +717,10 @@ const handlers = {
     }
     if (origin.type === 'nexus') {
       if (nexusUser && nexusUser.isPremium) {
-        const files = await nexus.filesList(origin.modId, store.settings.nexusApiKey);
+        const files = await nexus.filesList(origin.modId, nexusKey());
         const file = nexus.pickPrimaryFile(files);
         if (!file) throw new Error('The updated mod has no downloadable main file.');
-        const uri = await nexus.downloadLink({ modId: origin.modId, fileId: file.file_id }, store.settings.nexusApiKey);
+        const uri = await nexus.downloadLink({ modId: origin.modId, fileId: file.file_id }, nexusKey());
         const dest = await nexus.downloadToFile(uri, store.stagingDir, file.file_name, (got, total) => {
           sendEvent({ type: 'progress', label: mod.name, received: got, total });
         });
@@ -699,6 +766,14 @@ async function installPaths(paths) {
   for (const p of paths) {
     try {
       const mod = await engine.install(p);
+      if (mod.pendingFomod) {
+        // The renderer runs the guided steps and finishes via fomod-complete.
+        results.push({
+          source: path.basename(p), ok: true, pendingFomod: true,
+          sessionId: mod.sessionId, moduleXml: mod.moduleXml, info: mod.info, name: mod.name,
+        });
+        continue;
+      }
       results.push({ source: path.basename(p), ok: true, name: mod.name, modType: mod.modType, warnings: mod.warnings || [] });
     } catch (err) {
       results.push({ source: path.basename(p), ok: false, error: err.message });

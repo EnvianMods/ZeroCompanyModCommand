@@ -1,5 +1,46 @@
 # Zero Company Mod Command — Changelog
 
+## v1.1.0 (2026-09-04)
+
+**Guided installers (FOMOD)**
+- Archives that ship a FOMOD installer script now install by answering the
+  author's own questions — option groups with descriptions, images and
+  recommended answers, conditional steps driven by earlier choices, and a Back
+  button that returns a step exactly as you left it
+- Only the files your answers select are installed; they go through the same
+  classification, library, and deploy pipeline as any other mod, and the
+  download's update tracking keeps working
+- The mod's title/version/author/description come from `fomod/info.xml`
+- Installer scripts are read, never executed; every path in them is
+  re-validated outside the UI before anything is written. Conditions on other
+  game plugins or tool versions don't apply to Zero Company — they're shown as
+  a warning and treated as unmet
+
+**Game-folder replacement mods**
+- New GAMEFILES mod type: archives laid out against the game root
+  (`SWZeroCompany/...`, `Engine/...` — e.g. replacement movies) now install as
+  managed mods. The original of every game file a mod replaces is backed up
+  first and restored when the mod is disabled or uninstalled
+- Two game-folder mods replacing the same file are flagged as a conflict on the
+  exact path they both touch
+
+**Safety**
+- SHA-256 ownership: every installed and deployed file's hash is recorded.
+  Disable/uninstall verifies the deployed files first — a file changed outside
+  the manager stops the operation and asks before anything is deleted
+- The Nexus API key is now stored encrypted with your OS user credentials
+  (Windows DPAPI via Electron safeStorage); an existing plaintext key is
+  migrated automatically on first start
+- Archive extraction rejects path traversal and strips symbolic links
+
+**Load order pipeline**
+- Review before apply: applying a drafted order first shows every conflict pair
+  and which winners change, for confirmation
+- One-step rollback: “Undo last apply” restores the previous order (and undoes
+  the undo if pressed again)
+- Startup recovery: enabled mods whose deployed files went missing (game
+  update, manual cleanup) are redeployed automatically from the library
+
 ## v1.0.0 (2026-09-01)
 
 First public release.

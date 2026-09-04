@@ -53,6 +53,27 @@ async function call(fn, ...args) {
   return res.data;
 }
 
+// Wraps calls that can hit the SHA-256 ownership check (disable/uninstall).
+// A changed-outside-the-manager file stops the operation; the user decides.
+async function verifiedCall(fn, args, actionLabel) {
+  let res = await window.zc[fn](...args);
+  if (!res.ok && typeof res.error === 'string' && res.error.startsWith('VERIFY_CHANGED::')) {
+    const [, name, fileList] = res.error.split('::');
+    const files = (fileList || '').split('|');
+    const proceed = window.confirm(
+      `${files.length} deployed file(s) of “${name}” were changed outside the manager:\n\n` +
+      `${files.slice(0, 6).join('\n')}${files.length > 6 ? `\n… and ${files.length - 6} more` : ''}\n\n` +
+      `${actionLabel} anyway? The changed files will be removed.`);
+    if (!proceed) return null;
+    res = await window.zc[fn](...args, true); // force
+  }
+  if (!res.ok) {
+    toast(res.error, 'error', 6000);
+    return null;
+  }
+  return res.data;
+}
+
 // ------------------------------------------------------------------ nav
 
 $$('.nav-item').forEach((btn) => {
@@ -68,6 +89,7 @@ $$('.nav-item').forEach((btn) => {
 
 const TYPE_LABEL = {
   pak: 'PAK', iostore: 'IOSTORE', logicmods: 'LOGICMODS', 'ue4ss-mod': 'UE4SS',
+  gamefolder: 'GAMEFILES',
 };
 
 function render() {
@@ -186,7 +208,9 @@ function renderMods() {
     toggle.checked = mod.enabled;
     toggle.title = mod.enabled ? 'Disable (undeploy)' : 'Enable (deploy)';
     toggle.addEventListener('change', async () => {
-      const data = await call('setModEnabled', mod.id, toggle.checked);
+      const data = toggle.checked
+        ? await call('setModEnabled', mod.id, true)
+        : await verifiedCall('setModEnabled', [mod.id, false], 'Disable');
       if (data) { state = data; render(); }
       else toggle.checked = !toggle.checked;
     });
@@ -206,8 +230,11 @@ function renderMods() {
     delBtn.className = 'btn danger tiny';
     delBtn.textContent = 'Uninstall';
     delBtn.addEventListener('click', async () => {
-      if (!window.confirm(`Uninstall “${mod.name}”? Its files are removed from the game and the library.`)) return;
-      const data = await call('uninstallMod', mod.id);
+      const note = mod.modType === 'gamefolder'
+        ? ' Replaced game files are restored from backup.'
+        : '';
+      if (!window.confirm(`Uninstall “${mod.name}”? Its files are removed from the game and the library.${note}`)) return;
+      const data = await verifiedCall('uninstallMod', [mod.id], 'Uninstall');
       if (data) { state = data; render(); toast(`“${mod.name}” uninstalled`); }
     });
     actions.append(renameBtn, delBtn);
@@ -328,6 +355,7 @@ function renderOrder() {
   });
 
   $('#btn-apply-order').disabled = !pendingOrder;
+  $('#btn-rollback-order').disabled = !(state && state.lastOrderBackup);
 }
 
 $('#order-list').addEventListener('dragover', onOrderDragOver);
@@ -367,14 +395,61 @@ $('#btn-suggest-order').addEventListener('click', async () => {
   toast('Review the suggested order, then press Apply.', 'info', 7000);
 });
 
+// Review-before-apply: show which conflict winners the drafted order changes,
+// then apply only on confirmation. The old order stays available for rollback.
 $('#btn-apply-order').addEventListener('click', async () => {
+  if (!pendingOrder) return;
+  const preview = await call('previewLoadOrder', pendingOrder);
+  if (!preview) return;
+  const sub = $('#order-review-sub');
+  sub.textContent = `${preview.movedCount} mod(s) move.` + (preview.pairs.length
+    ? ` ${preview.changedCount ? `${preview.changedCount} conflict winner(s) change:` : 'No conflict winners change.'}`
+    : ' No conflicts between orderable mods.');
+  const list = $('#order-review-list');
+  list.innerHTML = '';
+  for (const p of preview.pairs) {
+    const row = document.createElement('div');
+    row.className = 'import-row order-review-row';
+    const info = document.createElement('div');
+    info.className = 'import-info';
+    const name = document.createElement('div');
+    name.className = 'import-name';
+    name.textContent = `${p.aName} ↔ ${p.bName}`;
+    const meta = document.createElement('div');
+    meta.className = 'import-meta';
+    const overlap = p.packageCount
+      ? `${p.packageCount} shared asset${p.packageCount === 1 ? '' : 's'}`
+      : `${p.fileCount} matching file${p.fileCount === 1 ? '' : 's'}`;
+    meta.textContent = p.changed
+      ? `${overlap} · winner changes: ${p.oldWinnerName} → ${p.newWinnerName}`
+      : `${overlap} · winner stays: ${p.newWinnerName}`;
+    if (p.changed) row.classList.add('winner-changes');
+    info.append(name, meta);
+    row.appendChild(info);
+    list.appendChild(row);
+  }
+  $('#order-review-modal').classList.remove('hidden');
+});
+
+$('#btn-order-review-apply').addEventListener('click', async () => {
+  $('#order-review-modal').classList.add('hidden');
   if (!pendingOrder) return;
   const data = await call('applyLoadOrder', pendingOrder);
   if (data) {
     state = data;
     pendingOrder = null;
     render();
-    toast('Load order applied — deployed paks renumbered.');
+    toast('Load order applied — deployed paks renumbered. “Undo last apply” restores the old order.');
+  }
+});
+
+$('#btn-rollback-order').addEventListener('click', async () => {
+  const data = await call('rollbackLoadOrder');
+  if (data) {
+    state = data;
+    pendingOrder = null;
+    render();
+    toast('Previous load order restored. Pressing again re-applies the undone order.');
   }
 });
 
@@ -685,8 +760,9 @@ function renderSettings() {
   renderProfiles();
   // Nexus
   const nx = state.nexus || {};
+  const keyStorage = nx.keyEncrypted ? ' · encrypted at rest' : '';
   $('#nexus-status').textContent = nx.hasKey
-    ? (nx.user ? `Key valid — ${nx.user.name}${nx.user.isPremium ? ' (premium)' : ''}` : 'Key stored')
+    ? (nx.user ? `Key valid — ${nx.user.name}${nx.user.isPremium ? ' (premium)' : ''}${keyStorage}` : `Key stored${keyStorage}`)
     : 'No key stored';
   $('#nxm-status').textContent = nx.nxmRegistered
     ? 'Registered — “Mod Manager Download” buttons install here'
@@ -774,13 +850,16 @@ function installResultsToToasts(payload) {
   pendingOrder = null;
   render();
   for (const r of payload.results) {
-    if (r.ok) {
+    if (r.ok && r.pendingFomod) {
+      fomodQueue.push(r);
+    } else if (r.ok) {
       toast(`Installed “${r.name}” (${TYPE_LABEL[r.modType] || r.modType})`);
       for (const w of r.warnings) toast(`${r.name}: ${w}`, 'warn', 6000);
     } else {
       toast(`${r.source}: ${r.error}`, 'error', 8000);
     }
   }
+  processFomodQueue();
 }
 
 $$('[data-action="install-archive"]').forEach((b) =>
@@ -1527,6 +1606,422 @@ $('#btn-link-github').addEventListener('click', () => {
   const ref = $('#link-github-repo').value;
   if (!ref) { toast('Pick a curated repo first.', 'warn'); return; }
   doLink('github', ref);
+});
+
+// ------------------------------------------------------------------ FOMOD guided installer
+// The installer script arrives as raw XML; it is parsed here (DOMParser), shown
+// as the author's own steps, and only a source→destination copy list goes back.
+
+const fomodQueue = [];
+let fomodWiz = null; // active wizard state
+
+function fomodParseFiles(el) {
+  const out = [];
+  for (const child of el.children) {
+    const tag = child.tagName.toLowerCase();
+    if (tag !== 'file' && tag !== 'folder') continue;
+    out.push({
+      source: child.getAttribute('source') || '',
+      destination: child.getAttribute('destination'),
+      priority: parseInt(child.getAttribute('priority') || '0', 10) || 0,
+    });
+  }
+  return out;
+}
+
+function fomodParseDep(el) {
+  const tag = el.tagName.toLowerCase();
+  if (tag === 'dependencies' || tag === 'visible' || tag === 'moduledependencies') {
+    const children = [...el.children].map(fomodParseDep).filter(Boolean);
+    return { op: (el.getAttribute('operator') || 'And').toLowerCase(), children };
+  }
+  if (tag === 'flagdependency') {
+    return { flag: el.getAttribute('flag') || '', value: el.getAttribute('value') || '' };
+  }
+  // File/game/tool version conditions have no meaning for Zero Company (no
+  // plugin system) — reported and treated as unmet, mirroring what the page says.
+  return { unsupported: tag };
+}
+
+function fomodEvalDep(dep, flags, warnings) {
+  if (!dep) return true;
+  if (dep.unsupported) {
+    warnings.add(`Condition type "${dep.unsupported}" does not apply to Zero Company — treated as unmet.`);
+    return false;
+  }
+  if (dep.children) {
+    if (!dep.children.length) return true;
+    return dep.op === 'or'
+      ? dep.children.some((c) => fomodEvalDep(c, flags, warnings))
+      : dep.children.every((c) => fomodEvalDep(c, flags, warnings));
+  }
+  return (flags.get(dep.flag) || '') === dep.value;
+}
+
+// Plugin type under current flags: Required | Recommended | Optional | NotUsable | CouldBeUsable
+function fomodPluginType(plugin, flags, warnings) {
+  const td = plugin.typeDescriptor;
+  if (!td) return 'Optional';
+  if (td.type) return td.type;
+  for (const p of td.patterns || []) {
+    if (fomodEvalDep(p.dep, flags, warnings)) return p.type;
+  }
+  return td.defaultType || 'Optional';
+}
+
+function fomodParseConfig(xmlText) {
+  const doc = new DOMParser().parseFromString(xmlText, 'text/xml');
+  if (doc.querySelector('parsererror')) throw new Error('The installer script is not valid XML.');
+  const q = (root, sel) => root ? [...root.querySelectorAll(sel)] : [];
+  const cfg = { moduleName: '', requiredFiles: [], steps: [], conditionalInstalls: [] };
+  const nameEl = doc.querySelector('config > moduleName');
+  cfg.moduleName = nameEl ? nameEl.textContent.trim() : '';
+
+  const reqEl = doc.querySelector('config > requiredInstallFiles');
+  if (reqEl) cfg.requiredFiles = fomodParseFiles(reqEl);
+
+  for (const stepEl of q(doc, 'config > installSteps > installStep')) {
+    const step = { name: stepEl.getAttribute('name') || '', visible: null, groups: [] };
+    const visEl = stepEl.querySelector(':scope > visible');
+    if (visEl) {
+      // <visible> either wraps a <dependencies> block or holds conditions directly.
+      const inner = visEl.querySelector(':scope > dependencies');
+      step.visible = fomodParseDep(inner || visEl);
+    }
+    for (const groupEl of q(stepEl, ':scope > optionalFileGroups > group')) {
+      const group = {
+        name: groupEl.getAttribute('name') || '',
+        type: groupEl.getAttribute('type') || 'SelectAny',
+        plugins: [],
+      };
+      for (const plugEl of q(groupEl, ':scope > plugins > plugin')) {
+        const imageEl = plugEl.querySelector(':scope > image');
+        const plugin = {
+          name: plugEl.getAttribute('name') || '',
+          description: (plugEl.querySelector(':scope > description') || {}).textContent || '',
+          image: imageEl ? imageEl.getAttribute('path') : null,
+          files: [],
+          conditionFlags: [],
+          typeDescriptor: null,
+        };
+        const filesEl = plugEl.querySelector(':scope > files');
+        if (filesEl) plugin.files = fomodParseFiles(filesEl);
+        for (const flagEl of q(plugEl, ':scope > conditionFlags > flag')) {
+          plugin.conditionFlags.push({ name: flagEl.getAttribute('name') || '', value: flagEl.textContent.trim() });
+        }
+        const tdEl = plugEl.querySelector(':scope > typeDescriptor');
+        if (tdEl) {
+          const typeEl = tdEl.querySelector(':scope > type');
+          const depTypeEl = tdEl.querySelector(':scope > dependencyType');
+          if (typeEl) plugin.typeDescriptor = { type: typeEl.getAttribute('name') || 'Optional' };
+          else if (depTypeEl) {
+            const dt = {
+              defaultType: (depTypeEl.querySelector(':scope > defaultType') || { getAttribute: () => 'Optional' }).getAttribute('name') || 'Optional',
+              patterns: [],
+            };
+            for (const patEl of q(depTypeEl, ':scope > patterns > pattern')) {
+              const depEl = patEl.querySelector(':scope > dependencies');
+              const tEl = patEl.querySelector(':scope > type');
+              dt.patterns.push({
+                dep: depEl ? fomodParseDep(depEl) : null,
+                type: tEl ? (tEl.getAttribute('name') || 'Optional') : 'Optional',
+              });
+            }
+            plugin.typeDescriptor = dt;
+          }
+        }
+        group.plugins.push(plugin);
+      }
+      step.groups.push(group);
+    }
+    cfg.steps.push(step);
+  }
+
+  for (const patEl of q(doc, 'config > conditionalFileInstalls > patterns > pattern')) {
+    const depEl = patEl.querySelector(':scope > dependencies');
+    const filesEl = patEl.querySelector(':scope > files');
+    cfg.conditionalInstalls.push({
+      dep: depEl ? fomodParseDep(depEl) : null,
+      files: filesEl ? fomodParseFiles(filesEl) : [],
+    });
+  }
+  return cfg;
+}
+
+function processFomodQueue() {
+  if (fomodWiz || !fomodQueue.length) return;
+  const job = fomodQueue.shift();
+  try {
+    const cfg = fomodParseConfig(job.moduleXml);
+    fomodWiz = {
+      sessionId: job.sessionId,
+      name: (job.info && job.info.name) || cfg.moduleName || job.name,
+      cfg,
+      answers: new Map(),   // stepIdx -> [Set(pluginIdx) per group]
+      history: [],          // visited step indexes, in order
+      warnings: new Set(),
+      imageCache: new Map(),
+    };
+    const first = fomodNextStep(-1);
+    if (first === -1) {
+      // A script with no visible steps still installs its required files.
+      fomodFinish();
+      return;
+    }
+    fomodWiz.history.push(first);
+    fomodRenderStep();
+    $('#fomod-modal').classList.remove('hidden');
+  } catch (err) {
+    toast(`${job.source}: ${err.message} Falling back is not possible — install the archive folders manually.`, 'error', 9000);
+    call('fomodCancel', job.sessionId);
+    fomodWiz = null;
+    processFomodQueue();
+  }
+}
+
+// Flags produced by the selections on every step up to (not including) history position n.
+function fomodFlagsUpTo(n) {
+  const flags = new Map();
+  for (let i = 0; i < n; i++) {
+    const stepIdx = fomodWiz.history[i];
+    const step = fomodWiz.cfg.steps[stepIdx];
+    const sel = fomodWiz.answers.get(stepIdx);
+    if (!sel) continue;
+    step.groups.forEach((g, gi) => {
+      for (const pi of sel[gi] || []) {
+        for (const f of g.plugins[pi].conditionFlags) flags.set(f.name, f.value);
+      }
+    });
+  }
+  return flags;
+}
+
+function fomodNextStep(fromIdx) {
+  const flags = fomodFlagsUpTo(fomodWiz ? fomodWiz.history.length : 0);
+  for (let i = fromIdx + 1; i < fomodWiz.cfg.steps.length; i++) {
+    if (fomodEvalDep(fomodWiz.cfg.steps[i].visible, flags, fomodWiz.warnings)) return i;
+  }
+  return -1;
+}
+
+function fomodShowDetail(plugin) {
+  $('#fomod-detail-name').textContent = plugin ? plugin.name : '';
+  $('#fomod-detail-desc').textContent = plugin ? (plugin.description || '').trim() : '';
+  const imgBox = $('#fomod-detail-image');
+  if (!plugin || !plugin.image) { imgBox.classList.add('hidden'); return; }
+  const key = plugin.image;
+  const cached = fomodWiz.imageCache.get(key);
+  if (cached !== undefined) {
+    if (cached) { $('#fomod-image').src = cached; imgBox.classList.remove('hidden'); }
+    else imgBox.classList.add('hidden');
+    return;
+  }
+  imgBox.classList.add('hidden');
+  window.zc.fomodImage(fomodWiz.sessionId, key).then((res) => {
+    const dataUrl = res.ok ? res.data : null;
+    fomodWiz.imageCache.set(key, dataUrl);
+    // Only show if this plugin is still the one under the cursor/selection.
+    if (dataUrl && $('#fomod-detail-name').textContent === plugin.name) {
+      $('#fomod-image').src = dataUrl;
+      imgBox.classList.remove('hidden');
+    }
+  });
+}
+
+function fomodRenderStep() {
+  const stepIdx = fomodWiz.history[fomodWiz.history.length - 1];
+  const step = fomodWiz.cfg.steps[stepIdx];
+  const flags = fomodFlagsUpTo(fomodWiz.history.length - 1);
+  $('#fomod-title').textContent = `GUIDED INSTALL — ${fomodWiz.name.toUpperCase()}`;
+  $('#fomod-stepname').textContent = step.name || `Step ${fomodWiz.history.length}`;
+  $('#fomod-progress').textContent = `step ${fomodWiz.history.length}`;
+  $('#btn-fomod-back').disabled = fomodWiz.history.length < 2;
+  fomodShowDetail(null);
+
+  // Restore this step's selections if the user has been here before; otherwise defaults.
+  let saved = fomodWiz.answers.get(stepIdx);
+  if (!saved) {
+    saved = step.groups.map((g) => {
+      const sel = new Set();
+      const types = g.plugins.map((p) => fomodPluginType(p, flags, fomodWiz.warnings));
+      if (g.type === 'SelectAll') {
+        g.plugins.forEach((_, i) => sel.add(i));
+      } else {
+        types.forEach((t, i) => { if (t === 'Required' || t === 'Recommended') sel.add(i); });
+        if ((g.type === 'SelectExactlyOne') && !sel.size) {
+          const firstUsable = types.findIndex((t) => t !== 'NotUsable');
+          if (firstUsable !== -1) sel.add(firstUsable);
+        }
+        if (g.type === 'SelectExactlyOne' || g.type === 'SelectAtMostOne') {
+          // Radio semantics — keep only the first default.
+          const first = [...sel][0];
+          sel.clear();
+          if (first !== undefined) sel.add(first);
+        }
+      }
+      return sel;
+    });
+    fomodWiz.answers.set(stepIdx, saved);
+  }
+
+  const box = $('#fomod-groups');
+  box.innerHTML = '';
+  const TYPE_HINT = {
+    SelectExactlyOne: 'choose one',
+    SelectAtMostOne: 'choose one or none',
+    SelectAtLeastOne: 'choose at least one',
+    SelectAll: 'all required',
+    SelectAny: 'choose any',
+  };
+  step.groups.forEach((g, gi) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'fomod-group';
+    const title = document.createElement('div');
+    title.className = 'fomod-group-title';
+    title.textContent = g.name;
+    const hint = document.createElement('span');
+    hint.className = 'fomod-group-hint dim';
+    hint.textContent = ` — ${TYPE_HINT[g.type] || g.type}`;
+    title.appendChild(hint);
+    wrap.appendChild(title);
+
+    const radio = g.type === 'SelectExactlyOne' || g.type === 'SelectAtMostOne';
+    g.plugins.forEach((p, pi) => {
+      const type = fomodPluginType(p, flags, fomodWiz.warnings);
+      const row = document.createElement('label');
+      row.className = 'fomod-option';
+      const input = document.createElement('input');
+      input.type = radio ? 'radio' : 'checkbox';
+      if (radio) input.name = `fomod-g${gi}`;
+      input.checked = saved[gi].has(pi);
+      const locked = type === 'Required' || type === 'NotUsable' || g.type === 'SelectAll';
+      input.disabled = locked;
+      if (type === 'NotUsable') {
+        row.classList.add('notusable');
+        row.title = 'Unavailable — a condition this option needs is not met.';
+        input.checked = false;
+        saved[gi].delete(pi);
+      }
+      input.addEventListener('change', () => {
+        if (radio) {
+          saved[gi].clear();
+          if (input.checked) saved[gi].add(pi);
+          // Uncheck siblings visually (radio handles it, sets need syncing).
+        } else if (input.checked) saved[gi].add(pi);
+        else saved[gi].delete(pi);
+        fomodShowDetail(p);
+        // A changed answer can hide or reveal later steps — refresh the button.
+        const last = fomodNextStep(stepIdx) === -1;
+        $('#btn-fomod-next').textContent = last ? '⊕ Install' : 'Next →';
+      });
+      row.addEventListener('mouseenter', () => fomodShowDetail(p));
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'fomod-option-name';
+      nameSpan.textContent = p.name;
+      const typeTag = document.createElement('span');
+      typeTag.className = `fomod-option-type t-${type.toLowerCase()}`;
+      typeTag.textContent = type === 'Optional' ? '' : type.toUpperCase();
+      row.append(input, nameSpan, typeTag);
+      wrap.appendChild(row);
+    });
+    box.appendChild(wrap);
+  });
+
+  const warnBox = $('#fomod-warnings');
+  if (fomodWiz.warnings.size) {
+    warnBox.textContent = [...fomodWiz.warnings].join(' ');
+    warnBox.classList.remove('hidden');
+  } else {
+    warnBox.classList.add('hidden');
+  }
+
+  const isLast = fomodNextStep(stepIdx) === -1;
+  $('#btn-fomod-next').textContent = isLast ? '⊕ Install' : 'Next →';
+
+  // Open with the first selected (or first) option's description showing,
+  // instead of an empty pane waiting for a hover.
+  const firstGroup = step.groups[0];
+  if (firstGroup && firstGroup.plugins.length) {
+    const sel = [...(saved[0] || [])][0];
+    fomodShowDetail(firstGroup.plugins[sel !== undefined ? sel : 0]);
+  }
+}
+
+function fomodValidateStep() {
+  const stepIdx = fomodWiz.history[fomodWiz.history.length - 1];
+  const step = fomodWiz.cfg.steps[stepIdx];
+  const saved = fomodWiz.answers.get(stepIdx);
+  for (let gi = 0; gi < step.groups.length; gi++) {
+    const g = step.groups[gi];
+    const n = saved[gi].size;
+    if (g.type === 'SelectExactlyOne' && n !== 1) return `“${g.name}”: choose exactly one option.`;
+    if (g.type === 'SelectAtMostOne' && n > 1) return `“${g.name}”: choose at most one option.`;
+    if (g.type === 'SelectAtLeastOne' && n < 1) return `“${g.name}”: choose at least one option.`;
+  }
+  return null;
+}
+
+async function fomodFinish() {
+  const files = [...fomodWiz.cfg.requiredFiles];
+  for (const stepIdx of fomodWiz.history) {
+    const step = fomodWiz.cfg.steps[stepIdx];
+    const saved = fomodWiz.answers.get(stepIdx);
+    if (!saved) continue;
+    step.groups.forEach((g, gi) => {
+      for (const pi of saved[gi] || []) files.push(...g.plugins[pi].files);
+    });
+  }
+  const finalFlags = fomodFlagsUpTo(fomodWiz.history.length);
+  for (const ci of fomodWiz.cfg.conditionalInstalls) {
+    if (fomodEvalDep(ci.dep, finalFlags, fomodWiz.warnings)) files.push(...ci.files);
+  }
+  // Priority order: low first, so higher-priority copies land last and win.
+  files.sort((a, b) => a.priority - b.priority);
+  const selections = files.map((f) => ({ source: f.source, destination: f.destination }));
+  const sessionId = fomodWiz.sessionId;
+  const name = fomodWiz.name;
+  $('#fomod-modal').classList.add('hidden');
+  fomodWiz = null;
+  const res = await call('fomodComplete', sessionId, selections);
+  if (res) {
+    state = res.state;
+    pendingOrder = null;
+    render();
+    toast(`Installed “${res.name}” (${TYPE_LABEL[res.modType] || res.modType}) via guided install.`);
+    for (const w of res.warnings || []) toast(`${res.name}: ${w}`, 'warn', 6000);
+  } else {
+    toast(`Guided install of “${name}” failed — nothing was deployed.`, 'error', 8000);
+  }
+  processFomodQueue();
+}
+
+$('#btn-fomod-next').addEventListener('click', () => {
+  if (!fomodWiz) return;
+  const problem = fomodValidateStep();
+  if (problem) { toast(problem, 'warn', 6000); return; }
+  const current = fomodWiz.history[fomodWiz.history.length - 1];
+  const next = fomodNextStep(current);
+  if (next === -1) { fomodFinish(); return; }
+  fomodWiz.history.push(next);
+  fomodRenderStep();
+});
+
+$('#btn-fomod-back').addEventListener('click', () => {
+  if (!fomodWiz || fomodWiz.history.length < 2) return;
+  // Back takes the newest answer away along with everything it decided; the
+  // step returned to keeps its selections exactly as left.
+  fomodWiz.history.pop();
+  fomodRenderStep();
+});
+
+$('#btn-fomod-cancel').addEventListener('click', () => {
+  if (!fomodWiz) return;
+  const sessionId = fomodWiz.sessionId;
+  $('#fomod-modal').classList.add('hidden');
+  fomodWiz = null;
+  call('fomodCancel', sessionId);
+  toast('Guided install cancelled — nothing was installed.');
+  processFomodQueue();
 });
 
 // ------------------------------------------------------------------ push events (nxm installs, download progress)

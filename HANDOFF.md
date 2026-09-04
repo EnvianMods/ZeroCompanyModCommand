@@ -21,8 +21,11 @@ Built on the user's ask to close the remaining ZCOM gaps + go further:
 - **Linux/Proton/Steam Deck**: steam.js Linux roots (native/classic/flatpak),
   proton compatdata detection, .desktop+xdg-mime nxm registration, p7zip,
   Diagnostics WINEDLLOVERRIDES guidance, AppImage target. AppImage CANNOT be
-  cross-built on Windows (symlink privilege) — .github/workflows/build-linux.yml
-  builds it on ubuntu-latest (tags + manual) and attaches to the tag's release.
+  cross-built on Windows (symlink privilege) — a CI workflow builds it on
+  ubuntu-latest (tags + manual) and attaches it to the tag's release. The
+  workflow is STAGED at owner-tools/ci/build-linux.yml because the release
+  token lacks the `workflow` scope: move it to .github/workflows/ via the
+  GitHub web UI, or grant the token Workflows read/write and push it.
   Linux paths are code-reviewed but UNTESTED on real Linux — say so in notes.
 - Engine tests: scratchpad engine-test-v12.js (31 checks) + v1.1.0 suite rerun;
   UI verified through real clicks (EA chip, build chips, start-order apply).

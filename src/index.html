@@ -55,6 +55,7 @@
             <div class="card-title">GAME INSTALLATION</div>
             <div class="card-body">
               <div class="stat-row"><span class="stat-label">Status</span><span id="dash-game-status" class="stat-value">—</span></div>
+              <div class="stat-row"><span class="stat-label">Launcher</span><span id="dash-launcher" class="stat-value">—</span></div>
               <div class="stat-row"><span class="stat-label">Build ID</span><span id="dash-build" class="stat-value mono">—</span></div>
               <div class="stat-row"><span class="stat-label">Path</span><span id="dash-path" class="stat-value mono small">—</span></div>
             </div>
@@ -191,8 +192,20 @@
         <div id="order-list" class="order-list"></div>
         <div id="order-empty" class="empty-state hidden">
           <div class="empty-glyph">≡</div>
-          <p>No orderable mods installed.</p>
-          <p class="dim">UE4SS and game-folder mods use fixed paths and are not ordered here.</p>
+          <p>No orderable pak mods installed.</p>
+          <p class="dim">Game-folder mods use fixed paths and are not ordered here.</p>
+        </div>
+
+        <div id="ue4ss-order-section" class="ue4ss-order-section hidden">
+          <div class="ue4ss-order-head">
+            <div>
+              <h2 class="ue4ss-order-title">UE4SS START ORDER</h2>
+              <p class="view-sub">mods.txt is read top-down in two passes — DLL mods start as the runtime boots, Lua mods once scripting exists. Order matters within each pass.</p>
+            </div>
+            <button id="btn-apply-ue4ss-order" class="btn primary" disabled>Apply start order</button>
+          </div>
+          <div id="ue4ss-order-list" class="order-list"></div>
+          <div id="ue4ss-order-note" class="ue4ss-order-note dim"></div>
         </div>
       </section>
 

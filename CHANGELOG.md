@@ -1,5 +1,45 @@
 # Zero Company Mod Command — Changelog
 
+## v1.2.0 (2026-09-04)
+
+**EA App support — bridging the Steam and EA mod communities**
+- The EA App edition of the game is now detected (registry + EA Games library
+  scan, `__Installer` signature) alongside Steam installs; every mod format
+  deploys identically for EA players
+- Launch works for the EA edition (direct exe launch; the Launch button and
+  Command Deck show which launcher owns the install)
+- Per-mod EA compatibility: a mod's `modinfo.json` can declare
+  `"eaCompatible": false` or `"launchers": ["steam"]`, and an owner-curated
+  community list (ea-compat.json, updates live like the featured roster) flags
+  known Steam-only mods by Nexus id. EA users see a red warning chip and a
+  confirm before enabling; Steam users see an FYI chip so shared setups don't
+  surprise EA friends. Diagnostics reports both directions
+
+**Game-build incompatibility warnings**
+- Every install/adoption records the game build it happened under (Steam
+  manifest build id, or an exe fingerprint for EA/manual installs)
+- When the game updates, affected mods get a "game updated" chip and a
+  Diagnostics warning; after testing a mod, one click marks it verified on the
+  current build
+
+**UE4SS start order**
+- New start-order panel in Load Order: drag enabled UE4SS mods; entries are
+  written as one managed block in mods.txt placed just before the runtime's
+  Keybinds entry, with its "do not move up" warning kept attached
+- DLL-pass / Lua-pass tags reflect UE4SS's two start passes (every DLL mod
+  starts before any Lua mod; order applies within each pass)
+- Everything else in mods.txt — runtime entries, comments, hand-added mods —
+  is preserved untouched; a managed mod hand-placed elsewhere moves into the
+  block; enabled.txt markers are retired once the block is authoritative
+
+**Linux / Proton / Steam Deck**
+- Steam library discovery on Linux (native, classic, and flatpak locations),
+  Proton compat-prefix detection, and an AppImage build target
+- nxm:// one-click downloads register via a .desktop entry + xdg-mime
+- Diagnostics gains Proton guidance (the WINEDLLOVERRIDES line UE4SS needs —
+  never applied automatically) and Steam Deck notes; 7-Zip is found via p7zip
+- The Launch button routes through Steam so Proton and launch options apply
+
 ## v1.1.0 (2026-09-04)
 
 **Guided installers (FOMOD)**

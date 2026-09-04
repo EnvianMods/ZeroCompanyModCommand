@@ -31,10 +31,28 @@ automatically for IoStore package inspection; a different copy can be selected i
     display name defaults to the folder name; a `modinfo.json` in the mod folder
     can override it with a friendly title (see **Mod metadata** below).
   - UE4SS runtime archives (dwmapi.dll + ue4ss folder) → installed into `Binaries/Win64`.
+  - `gamefolder` (GAMEFILES) — archives laid out against the game root
+    (`SWZeroCompany/...`, `Engine/...`, e.g. replacement movies) deploy over the
+    game's own files. The original of every replaced file is backed up to
+    `data/backups/gamefiles/<id>/` first and restored on disable/uninstall.
+- **Guided installers (FOMOD)** — an archive shipping `fomod/ModuleConfig.xml`
+  installs by answering the author's own steps: option groups with descriptions,
+  images and recommended answers, flags/conditional steps, and a Back button.
+  Scripts are read, never executed; every source/destination path is re-validated
+  in the main process (no traversal, no absolute paths). Titles/versions come from
+  `fomod/info.xml`. Conditions on other game plugins or tool versions don't exist
+  for Zero Company — they're surfaced as a warning and treated as unmet.
 - **Load Order** — drag to reorder pak/IoStore mods; applying renumbers the deployed
   `P###` prefixes (later = wins conflicts). **Suggest order** proposes an ordering
   (broad mods first, targeted patches later so the focused mod wins) and lists which
-  confirmed conflicts the ordering decides; review then Apply.
+  confirmed conflicts the ordering decides. **Review & apply** previews every
+  conflict pair and which winners change before anything moves; **Undo last apply**
+  rolls back to the pre-apply order (press again to redo). On startup, enabled mods
+  whose deployed files went missing are redeployed automatically from the library.
+- **SHA-256 ownership** — every installed and deployed file's hash is recorded.
+  Disable/uninstall/reorder verify the deployed files first: a file changed outside
+  the manager stops the operation and asks before anything is deleted. Archive
+  extraction rejects path traversal and strips symlinks.
 - **Compatibility matrix** — Diagnostics shows an N×N grid of enabled mods:
   ✔ compatible, ▲ suspected overlap, ✖ confirmed asset overlap (hover for details).
 - **UE4SS hook scan** — statically scans the Lua scripts of every *active* UE4SS mod
@@ -72,8 +90,9 @@ automatically for IoStore package inspection; a different copy can be selected i
   accounts get the mod's Files page opened — pressing "Mod Manager Download" there
   sends the nxm:// link back into the manager, which installs it automatically.
 - **Nexus Mods integration** — paste your personal API key in Settings (validated
-  against the Nexus API; stored locally in `data/manager-data.json`, never shown to
-  the UI). Register the `nxm://` handler and "Mod Manager Download" buttons on
+  against the Nexus API; stored encrypted with your OS user credentials — Windows
+  DPAPI via Electron safeStorage — and never shown to the UI; a legacy plaintext
+  key is migrated automatically). Register the `nxm://` handler and "Mod Manager Download" buttons on
   nexusmods.com install straight into the manager, with download progress, auto
   naming/version from Nexus mod info. Non-premium accounts must start downloads from
   the website button (the nxm link carries the required key/expires).
@@ -192,5 +211,5 @@ write access to that repo. `--dry-run` previews, `--show` prints the published r
 ## Ideas for later
 
 - Conflict-aware profile switching (warn when a profile enables a confirmed-conflicting pair)
-- Mod update checks against Nexus (md5/version polling)
-- Backup/restore of game-folder files overwritten by runtime installs
+- Linux/Proton/Steam Deck support (Electron builds cross-platform, but deploy paths,
+  nxm registration, and 7-Zip/tar handling are Windows-specific today)

@@ -1,19 +1,19 @@
 [center][size=6][b]ZERO COMPANY MOD COMMAND[/b][/size]
-[size=3][color=#4fd1ff]A dedicated mod manager & launcher for STAR WARS: Zero Company[/color][/size]
-[size=2]Install · Organize · Detect conflicts · Launch[/size][/center]
+[size=3][color=#4fd1ff]The dedicated mod manager & launcher for STAR WARS: Zero Company[/color][/size]
+[size=2]Steam & EA App · Windows & Linux/Steam Deck · Install · Organize · Detect conflicts · Launch[/size][/center]
 
 [line]
 
 [size=5][b]WHAT IS IT?[/b][/size]
 
-Zero Company Mod Command is a standalone, portable mod manager and launcher built specifically for [b]STAR WARS: Zero Company[/b], wrapped in a Star Wars holo-terminal interface. It handles every common mod format for this game, keeps your load order under control, tells you [i]exactly[/i] which mods are incompatible with each other, and launches the game — all from one window.
+Zero Company Mod Command is a standalone mod manager and launcher built specifically for [b]STAR WARS: Zero Company[/b], wrapped in a Star Wars holo-terminal interface. It installs every mod format this game has, runs guided installers, keeps your load order under control, proves [i]exactly[/i] which mods conflict with each other, protects your game files with backups and checksums, and launches the game — all from one window.
 
-No installation, no dependencies. Download, run the exe, and it finds your game through Steam automatically.
+It finds your game automatically whether you bought it on [b]Steam or the EA App[/b], and it runs on [b]Windows or Linux/Steam Deck[/b]. No installation, no dependencies: download, run, mod.
 
-[center][size=4][color=#6dffb0][b]★ NEW: YOUR MODS STAY UP TO DATE[/b][/color][/size]
-[size=2]The launcher tracks every mod you install and tells you the moment an update is out —
-GitHub mods update in place with one click, Nexus mods flag with a direct link.
-The launcher itself announces new versions too, so you never mod on an outdated build.[/size][/center]
+[center][size=4][color=#6dffb0][b]★ ONE COMMUNITY, EVERY PLATFORM[/b][/color][/size]
+[size=2]Steam and EA App players install the same mods from the same page — the manager detects your edition,
+deploys identically on both, and warns EA players when a mod is Steam-only (and vice versa).
+Windows gets the portable exe; Linux and Steam Deck get the AppImage.[/size][/center]
 
 [size=5][b]KEY FEATURES[/b][/size]
 
@@ -23,6 +23,7 @@ The launcher itself announces new versions too, so you never mod on an outdated 
 [*][b]Every format auto-detected[/b] — pak, IoStore, LogicMods, UE4SS Lua/DLL mods, game-folder replacement mods (e.g. movies), even the UE4SS runtime itself
 [*][b]Guided installers (FOMOD)[/b] — mods that ship an installer script are installed by answering the author's own questions, with descriptions, images, recommended answers and conditional steps. Scripts are read, never executed
 [*][b]Multi-mod archives[/b] — an archive holding several mods installs each as its own entry, so you can enable, order, update and remove them separately; updates replace every entry from the same download
+[*][b]Bring your existing setup aboard[/b] — Import existing scans ~mods, LogicMods and ue4ss/Mods for mods you installed by hand (or with another tool) and adopts them in place without touching a single game file; anything matching a Nexus upload is identified automatically so its updates get tracked
 [*][b]Game files protected[/b] — a replacement-style mod backs up the original of every game file it overwrites and restores it on disable/uninstall
 [*][b]Clean enable/disable[/b] — canonical copies are kept in the manager's library, so toggling a mod never loses files. Every deployed file's SHA-256 is recorded; a file you edited by hand is never silently deleted
 [*][b]Squad profiles[/b] — save named sets of enabled mods + load order and swap between them in two clicks
@@ -50,7 +51,7 @@ The launcher itself announces new versions too, so you never mod on an outdated 
 [*][b]EA App edition detected and supported[/b] — the manager finds the EA install, deploys every mod format identically, and launches the EA edition directly
 [*][b]EA compatibility flags[/b] — mods can declare Steam-only in their modinfo.json, and a live community list flags known cases: EA players get a clear warning before enabling, Steam players see which of their mods EA friends can't run
 [*][b]Game-build warnings[/b] — every mod remembers which game build it was installed under; after a game update, possibly-broken mods are flagged until you mark them verified
-[*][b]Linux / Steam Deck[/b] — Steam library discovery on Linux (native and flatpak), Proton prefix detection, UE4SS DLL-override guidance, and an AppImage build
+[*][b]Linux / Steam Deck[/b] — Steam library discovery on Linux (native and flatpak), Proton prefix detection, UE4SS DLL-override guidance, and a ready-to-run AppImage in the Files tab
 [/list]
 
 [b][color=#ffc857]Updates, handled[/color][/b]
@@ -72,32 +73,53 @@ The launcher itself announces new versions too, so you never mod on an outdated 
 [list]
 [*][b]Datapad[/b] — built-in config editor for Engine.ini, GameUserSettings.ini, Input.ini, UE4SS-settings.ini and mod config files, with a structured key/value view that preserves comments and formatting, plus automatic first-save backups
 [*][b]UE4SS one-click install[/b] — downloads and installs the latest experimental UE4SS runtime for Lua/DLL mod support
-[*][b]Diagnostics[/b] — full health scan: game detection, Steam build, deployed-file audit, tool availability, conflict report
+[*][b]Diagnostics[/b] — full health scan: game detection, launcher & build, deployed-file audit, tool availability, conflict report
 [*][b]Support reports[/b] — one click copies a complete, [i]sanitized[/i] bug report (mod list, conflicts, health scan, session log) with your paths, username and machine name scrubbed — paste it straight into a Posts-tab report
-[*]Launch via Steam (overlay + cloud saves) or directly
+[*]Your Nexus API key is stored encrypted with your OS account — never in plain text
+[*]Launch via Steam (overlay + cloud saves), the EA edition directly, or a direct exe launch
 [/list]
 
 [size=5][b]GETTING STARTED[/b][/size]
 
 [list=1]
-[*]Download and run [b]ZeroCompanyModCommand.exe[/b] — portable, keeps its data in a folder next to the exe
-[*]The game is auto-detected through Steam (or set the folder in Settings)
-[*]In Settings → Nexus Mods, paste your personal API key (stored encrypted with your Windows account, never in plain text) and press [b]Register handler[/b] to enable one-click downloads
+[*]Grab your build from the Files tab: [b]Windows[/b] → the portable zip (extract anywhere, run ZeroCompanyModCommand.exe) · [b]Linux / Steam Deck[/b] → the AppImage (make it executable and run it, Desktop Mode on Deck)
+[*]The game is auto-detected — Steam and EA App installs both (or set the folder in Settings)
+[*]Already modded? [b]Hangar Bay → Import existing[/b] adopts your current mods without moving a file
+[*]In Settings → Nexus Mods, paste your personal API key and press [b]Register handler[/b] to enable one-click downloads
 [*]Install mods from the Holonet tab, or drag archives onto the window
 [/list]
 
 [b]Requirements:[/b] Windows 10/11 (portable exe) or Linux/Steam Deck (AppImage) · STAR WARS: Zero Company (Steam or EA App) · optional: 7-Zip / p7zip for .7z/.rar archives
 
+[size=5][b]FOR MOD AUTHORS[/b][/size]
+
+Make your mod first-class in the manager with a tiny [b]modinfo.json[/b] next to your files:
+[code]{ "title": "My Cool Mod", "version": "1.2", "author": "You",
+  "description": "One line about it", "eaCompatible": true }[/code]
+[list]
+[*][b]title / version / author / description[/b] — shown in the Hangar Bay instead of the archive filename, and per entry in multi-mod archives
+[*][b]eaCompatible[/b] (or [b]"launchers": ["steam"][/b]) — tells EA App players up front whether your mod works for them; works for Steam-only declarations too
+[*][b]FOMOD installers[/b] are fully supported — ship ModuleConfig.xml/info.xml and users get your guided steps, images and conditional options
+[*][b]Multi-mod archives[/b] — put each mod in its own folder and every one installs as a separate, individually-updatable entry
+[*]Want your GitHub-hosted mod in [b]The Forge[/b]? Suggest it on the Discord below
+[/list]
+
 [size=5][b]FAQ[/b][/size]
+
+[b]Q: I bought the game on the EA App — does this work for me?[/b]
+A: Yes. The manager detects the EA edition automatically, every mod format deploys exactly as on Steam, and the Launch button starts the EA edition directly. Mods flagged as Steam-only show a clear warning before you enable them.
+
+[b]Q: Does it run on Steam Deck?[/b]
+A: Yes — download the AppImage, run it in Desktop Mode, and mods you deploy work in Gaming Mode. Diagnostics walks you through the one UE4SS launch-option line Proton needs (the manager never edits your launch options itself).
+
+[b]Q: Does it work with mods I installed manually?[/b]
+A: Yes — [b]Hangar Bay → Import existing[/b] adopts paks in ~mods, LogicMods and UE4SS mod folders in place, without moving or renaming anything. Adopted files that match a Nexus upload are identified automatically so updates get tracked; the rest can be linked by hand from their LOCAL badge.
 
 [b]Q: Windows SmartScreen warns about the exe.[/b]
 A: The exe is unsigned (code-signing certificates are expensive). Click "More info → Run anyway". The app is fully self-contained and only writes inside its own folder, your game folder, and the game's config folder.
 
-[b]Q: Does it work with mods I installed manually?[/b]
-A: Manually placed UE4SS mods are picked up by the hook scanner and config editor. Paks placed manually in ~mods aren't managed, but they coexist fine — install them through the manager to get conflict detection and load ordering.
-
 [b]Q: Can it break my game?[/b]
-A: Mods are deployed only to the standard mod locations (~mods, LogicMods, ue4ss/Mods). Disabling or uninstalling a mod removes exactly the files it deployed. Config files are backed up automatically on first save.
+A: Mods deploy only to the standard mod locations, game-folder mods back up every original file they replace and restore them on disable, and every deployed file's checksum is tracked — a file you changed by hand is never silently deleted. Disabling or uninstalling a mod removes exactly what it deployed, and config files are backed up automatically on first save.
 
 [size=5][b]CREDITS[/b][/size]
 

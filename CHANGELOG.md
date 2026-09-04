@@ -1,5 +1,21 @@
 # Zero Company Mod Command — Changelog
 
+## v1.4.0 (2026-09-04)
+
+**Support reports & sanitized logs**
+- Diagnostics gains **Copy support report** and **Save report…**: one text
+  block with everything a bug report needs — app/game/launcher/build info,
+  tool status, the full mod list (type, version, origin, priorities, install
+  build, EA status, pending updates), conflict pairs, UE4SS hook collisions,
+  duplicates, missing deployed files, the health scan, and the session log
+- Everything is sanitized before it reaches the clipboard or a file: the game
+  path, the manager's data folder, your user-profile path, username, and
+  machine name are replaced with placeholders; the Nexus API key is never
+  included at all
+- New session log: the manager records installs, enables/disables, order
+  applies, update checks, guided installs, startup recovery, and every error
+  in memory (nothing written to disk) — the report carries the recent tail
+
 ## v1.3.0 (2026-09-04)
 
 **Multi-mod archives: every mod becomes its own entry**

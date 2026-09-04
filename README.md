@@ -141,6 +141,11 @@ automatically for IoStore package inspection; a different copy can be selected i
   expands to the opposing mod, the overlapping asset paths, and which mod wins (loads
   later). The full report also appears in Diagnostics, which additionally rescans any
   IoStore mods installed while retoc was unavailable.
+- **Support reports** — Diagnostics → Copy support report / Save report…:
+  a single sanitized text block (game/launcher/build, tools, full mod list
+  with origins and priorities, conflicts, hook collisions, duplicates, health
+  scan, session log). Paths, usernames and machine names are scrubbed by
+  `lib/report.js`; the in-memory session log lives in `lib/log.js`.
 - **Diagnostics** — installation health scan: game layout, Steam manifest/build,
   `~mods` presence, UE4SS layout, retoc/7-Zip availability, deployed-file audit, conflicts.
   Also flags **duplicate mods** — the same UE4SS mod active under two folders in

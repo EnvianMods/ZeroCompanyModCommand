@@ -11,6 +11,9 @@ on:
 jobs:
   appimage:
     runs-on: ubuntu-latest
+    # The attach step uploads a release asset with the workflow token.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

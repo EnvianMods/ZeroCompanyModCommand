@@ -13,6 +13,7 @@ const ue4ssDl = require('./lib/ue4ss');
 const configs = require('./lib/configs');
 const { getPromotedAuthors } = require('./lib/featured');
 const github = require('./lib/github');
+const ea = require('./lib/ea');
 const { checkLauncherUpdate } = require('./lib/launcher-update');
 
 // Data lives next to the portable exe, or in ./data when running from source.
@@ -212,6 +213,12 @@ function createWindow() {
 app.whenReady().then(() => {
   // Move a legacy plaintext Nexus key into the OS-encrypted store.
   try { migrateNexusKey(); } catch (_) {}
+  try { eaAppDetected = ea.eaAppPresent(); } catch (_) {}
+  // EA-compat community list: fetch now and refresh every 30 minutes; a state
+  // push follows so freshly flagged mods surface without a restart.
+  const refreshCompat = () => ea.refreshCompat().then(() => sendEvent({ type: 'state', state: fullState() })).catch(() => {});
+  setTimeout(refreshCompat, 3000);
+  setInterval(() => refreshCompat(), 30 * 60 * 1000);
   // Auto-detect game on first run.
   if (!store.settings.gamePath) {
     const det = steam.detectGame(null);
@@ -260,6 +267,7 @@ app.on('window-all-closed', () => app.quit());
 // ------------------------------------------------------------------ helpers
 
 let nexusUser = null; // cached result of the last successful key validation
+let eaAppDetected = false; // probed once at startup (reg.exe is too slow per-state)
 const promotedCache = { mods: null, at: 0, authors: [] };
 
 function fullState() {
@@ -267,6 +275,10 @@ function fullState() {
   const ue4ssHooks = store.settings.gamePath ? engine.scanUe4ssHooks() : { entries: [], conflicts: [] };
   const conflicts = store.settings.gamePath ? engine.conflicts(ue4ssHooks) : [];
   const { exe, args } = protocolArgs();
+  // Per-mod EA-compat verdicts from the last-fetched community list + modinfo.
+  const compat = ea.compatSync();
+  const modCompat = {};
+  for (const m of store.mods) modCompat[m.id] = ea.evaluateMod(m, compat);
   return {
     settings: { ...store.settings, nexusApiKey: undefined, nexusApiKeyEncrypted: undefined, hasNexusKey: !!nexusKey() },
     profiles: store.profiles,
@@ -284,7 +296,13 @@ function fullState() {
       gamePath: detection.gamePath,
       buildId: detection.buildId,
       source: detection.source,
+      launcher: detection.launcher,
+      proton: detection.proton,
     },
+    platform: process.platform,
+    eaAppPresent: eaAppDetected,
+    modCompat,
+    ue4ssOrder: store.settings.gamePath ? engine.ue4ssOrderState() : { managed: [], others: [], applied: false },
     mods: store.mods,
     conflicts,
     ue4ssHooks,
@@ -374,6 +392,8 @@ const handlers = {
   'apply-load-order': async (_e, { orderedIds }) => { engine.applyLoadOrder(orderedIds); return fullState(); },
   'preview-load-order': async (_e, { orderedIds }) => engine.previewLoadOrder(orderedIds),
   'rollback-load-order': async () => { engine.rollbackLoadOrder(); return fullState(); },
+  'apply-ue4ss-order': async (_e, { orderedIds }) => { engine.applyUe4ssOrder(orderedIds); return fullState(); },
+  'confirm-mod-build': async (_e, { id }) => { engine.confirmBuild(id); return fullState(); },
 
   'fomod-complete': async (_e, { sessionId, selections }) => {
     const mod = await engine.completeFomod(sessionId, selections);
@@ -389,8 +409,17 @@ const handlers = {
   'launch-game': async () => {
     const detection = steam.detectGame(store.settings.gamePath);
     if (!detection.found) throw new Error('Game not located. Set the game folder in Settings.');
-    // Prefer a Steam launch so overlay/cloud saves work.
-    await shell.openExternal(`steam://run/${steam.APP_ID}`);
+    if (detection.launcher === 'ea') {
+      // EA App edition: no steam:// route. Launch the exe directly (the EA App
+      // background service handles online features when it is running).
+      if (process.platform !== 'win32') throw new Error('The EA App edition can only be launched on Windows.');
+      const child = spawn(detection.exePath, [], { detached: true, stdio: 'ignore', cwd: path.dirname(detection.exePath) });
+      child.unref();
+    } else {
+      // Prefer a Steam launch so overlay/cloud saves work (also correct under
+      // Proton on Linux/Steam Deck — Steam applies the configured launch options).
+      await shell.openExternal(`steam://run/${steam.APP_ID}`);
+    }
     if (store.settings.closeOnLaunch) setTimeout(() => app.quit(), 1500);
     return fullState();
   },
@@ -398,6 +427,9 @@ const handlers = {
   'launch-game-direct': async () => {
     const detection = steam.detectGame(store.settings.gamePath);
     if (!detection.found) throw new Error('Game not located. Set the game folder in Settings.');
+    if (process.platform === 'linux') {
+      throw new Error('The game is a Windows build — on Linux, launch it through Steam (Proton) instead.');
+    }
     const child = spawn(detection.exePath, [], { detached: true, stdio: 'ignore', cwd: path.dirname(detection.exePath) });
     child.unref();
     if (store.settings.closeOnLaunch) setTimeout(() => app.quit(), 1500);
@@ -460,6 +492,23 @@ const handlers = {
   },
   'register-nxm': async () => {
     const { exe, args } = protocolArgs();
+    if (process.platform === 'linux') {
+      // Linux: a .desktop entry with the nxm scheme handler, made default via xdg-mime.
+      const { execFileSync } = require('child_process');
+      const appsDir = path.join(app.getPath('home'), '.local', 'share', 'applications');
+      fs.mkdirSync(appsDir, { recursive: true });
+      const target = process.env.APPIMAGE || exe;
+      const desktop = [
+        '[Desktop Entry]', 'Type=Application', 'Name=Zero Company Mod Command',
+        `Exec="${target}" %u`, 'Terminal=false', 'NoDisplay=true',
+        'MimeType=x-scheme-handler/nxm;', '',
+      ].join('\n');
+      fs.writeFileSync(path.join(appsDir, 'zero-company-mod-command.desktop'), desktop);
+      try { execFileSync('xdg-mime', ['default', 'zero-company-mod-command.desktop', 'x-scheme-handler/nxm'], { stdio: 'ignore' }); } catch (_) {}
+      try { execFileSync('update-desktop-database', [appsDir], { stdio: 'ignore' }); } catch (_) {}
+      app.setAsDefaultProtocolClient('nxm');
+      return fullState();
+    }
     const okReg = app.setAsDefaultProtocolClient('nxm', exe, args);
     if (!okReg) throw new Error('Windows refused the nxm:// handler registration.');
     // Friendly name for browser "Open …?" dialogs (AssocQueryString checks the
@@ -793,13 +842,64 @@ function diagnostics() {
   const detection = steam.detectGame(store.settings.gamePath);
   if (detection.found) {
     add('good', 'Game installation', `Valid Zero Company layout at ${detection.gamePath}`);
-    add(detection.buildId ? 'good' : 'warning', 'Steam manifest',
-      detection.buildId ? `Build ID ${detection.buildId}` : 'Build ID unavailable — compatibility cannot be assessed.');
+    const launcherLabel = { steam: 'Steam', ea: 'EA App', manual: 'manual / unknown' }[detection.launcher] || 'unknown';
+    add(detection.launcher === 'manual' ? 'info' : 'good', 'Game launcher',
+      `${launcherLabel} edition${detection.launcher === 'ea' ? (eaAppDetected ? ' (EA App detected on this system)' : ' (EA App itself not detected — launches go directly to the exe)') : ''}`);
+    if (detection.manifest) {
+      add('good', 'Steam manifest', `Build ID ${detection.buildId}`);
+    } else {
+      add(detection.buildId ? 'info' : 'warning', 'Game build',
+        detection.buildId
+          ? `No Steam manifest — tracking the game build by exe fingerprint (${detection.buildId}).`
+          : 'Build identity unavailable — compatibility cannot be assessed.');
+    }
+    // Mods installed under a different game build than the one on disk now.
+    const stale = store.mods.filter((m) => m.installedBuild && detection.buildId && m.installedBuild !== detection.buildId);
+    if (stale.length) {
+      add('warning', 'Game build changed',
+        `${stale.length} mod(s) were installed under a different game build and may be incompatible: ` +
+        `${stale.map((m) => m.name).join(', ')}. If a mod still works, use its build chip in the Hangar Bay to mark it verified.`);
+    } else if (detection.buildId) {
+      add('good', 'Game build', 'Every mod was installed (or verified) under the current game build.');
+    }
+    // EA App compatibility flags.
+    const compat = ea.compatSync();
+    const flagged = store.mods
+      .map((m) => ({ m, v: ea.evaluateMod(m, compat) }))
+      .filter((x) => x.v.status === 'incompatible');
+    if (detection.launcher === 'ea') {
+      const active = flagged.filter((x) => x.m.enabled);
+      if (active.length) {
+        for (const { m, v } of active) {
+          add('warning', 'EA compatibility', `"${m.name}" is flagged as not working on the EA App edition (${v.source === 'modinfo' ? 'per its author' : 'community report'}${v.note ? `: ${v.note}` : ''}).`);
+        }
+      } else {
+        add('good', 'EA compatibility', flagged.length
+          ? `No enabled mod is flagged EA-incompatible (${flagged.length} disabled mod(s) are).`
+          : 'No installed mod is flagged as EA-incompatible.');
+      }
+    } else if (flagged.length) {
+      add('info', 'EA compatibility', `${flagged.length} installed mod(s) are flagged as Steam-only — relevant if you share your setup with EA App players: ${flagged.map((x) => x.m.name).join(', ')}.`);
+    }
     const modsDir = path.join(detection.gamePath, MODS_REL);
     add(fs.existsSync(modsDir) ? 'good' : 'info', '~mods folder',
       fs.existsSync(modsDir) ? 'Present' : 'Created on first packaged-mod install');
   } else {
-    add('error', 'Game installation', 'Not detected. Locate the game folder in Settings.');
+    add('error', 'Game installation', 'Not detected. Locate the game folder in Settings (Steam and EA App installs are both scanned).');
+  }
+  // Linux / Proton / Steam Deck.
+  if (process.platform === 'linux') {
+    const compatdata = detection.proton && detection.proton.compatdata;
+    add(compatdata ? 'good' : 'warning', 'Proton prefix',
+      compatdata
+        ? `Compat prefix present (${compatdata}).`
+        : 'No compatdata prefix for the game yet — run the game once through Steam to create it.');
+    const ue4ssState = engine.ue4ssStatus();
+    if (ue4ssState.installed) {
+      add('info', 'Proton DLL override',
+        'UE4SS needs its loader DLL to win over the built-in one under Proton. In Steam → Zero Company → Properties → Launch Options, set: WINEDLLOVERRIDES="dwmapi=n,b" %command% (the manager never edits launch options itself).');
+    }
+    add('info', 'Steam Deck', 'On Steam Deck, run the manager in Desktop Mode; mods deployed here work in Gaming Mode.');
   }
   const ue4ss = engine.ue4ssStatus();
   add(ue4ss.healthy ? 'good' : (ue4ss.installed ? 'warning' : 'info'), 'UE4SS runtime', ue4ss.message);

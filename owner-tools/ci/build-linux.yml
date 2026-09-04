@@ -1,0 +1,38 @@
+# STAGED WORKFLOW - copy this file to .github/workflows/build-linux.yml
+# (the release token lacks the workflow scope, so it cannot push there itself:
+#  either add it via the GitHub web UI, or grant the token Workflows write access)
+name: Build Linux AppImage
+
+# The Windows portable exe is built locally; the AppImage needs a Linux host
+# (electron-builder's AppImage packaging symlinks icons, which Windows blocks
+# without Developer Mode). Runs on version tags and on demand.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  appimage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npx electron-builder --linux AppImage
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZeroCompanyModCommand-AppImage
+          path: release/ZeroCompanyModCommand.AppImage
+          if-no-files-found: error
+      # On a version tag, attach the AppImage to that tag's GitHub release
+      # (created by the local release flow) as an extra asset.
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${GITHUB_REF_NAME}" release/ZeroCompanyModCommand.AppImage --clobber || \
+            echo "No release for ${GITHUB_REF_NAME} yet — artifact is still available from this workflow run."

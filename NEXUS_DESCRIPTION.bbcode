@@ -40,7 +40,16 @@ The launcher itself announces new versions too, so you never mod on an outdated 
 [*]Drag-to-reorder pak/IoStore mods — later loads win conflicts
 [*][b]Suggest order[/b] — one click proposes an order (broad overhauls first, targeted patches later) and tells you which conflicts it decides
 [*][b]Review before apply[/b] — applying first shows every conflict pair and which winners change; [b]Undo last apply[/b] rolls the order back in one click
+[*][b]UE4SS start order[/b] — drag your Lua/DLL mods; the manager writes one managed block into mods.txt (kept just before Keybinds, warning attached), preserves everything else, and tags each mod's DLL/Lua start pass
 [*][b]Startup recovery[/b] — enabled mods whose deployed files went missing (game update, manual cleanup) are redeployed automatically
+[/list]
+
+[b][color=#ffc857]Steam AND EA App — one mod community[/color][/b]
+[list]
+[*][b]EA App edition detected and supported[/b] — the manager finds the EA install, deploys every mod format identically, and launches the EA edition directly
+[*][b]EA compatibility flags[/b] — mods can declare Steam-only in their modinfo.json, and a live community list flags known cases: EA players get a clear warning before enabling, Steam players see which of their mods EA friends can't run
+[*][b]Game-build warnings[/b] — every mod remembers which game build it was installed under; after a game update, possibly-broken mods are flagged until you mark them verified
+[*][b]Linux / Steam Deck[/b] — Steam library discovery on Linux (native and flatpak), Proton prefix detection, UE4SS DLL-override guidance, and an AppImage build
 [/list]
 
 [b][color=#ffc857]Updates, handled[/color][/b]
@@ -75,7 +84,7 @@ The launcher itself announces new versions too, so you never mod on an outdated 
 [*]Install mods from the Holonet tab, or drag archives onto the window
 [/list]
 
-[b]Requirements:[/b] Windows 10/11 · STAR WARS: Zero Company (Steam) · optional: 7-Zip for .7z/.rar archives
+[b]Requirements:[/b] Windows 10/11 (portable exe) or Linux/Steam Deck (AppImage) · STAR WARS: Zero Company (Steam or EA App) · optional: 7-Zip / p7zip for .7z/.rar archives
 
 [size=5][b]FAQ[/b][/size]
 

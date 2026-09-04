@@ -2,6 +2,32 @@
 
 Context document for continuing work on this project. Last updated 2026-09-04.
 
+## v1.2.0 (2026-09-04, feat/steam-ea-linux branch) — cross-launcher release
+
+Built on the user's ask to close the remaining ZCOM gaps + go further:
+- **Build warnings**: mods record installedBuild (Steam buildid or `local-<hash>`
+  exe fingerprint via steam.buildFingerprint); "game updated" chip → confirmBuild.
+- **UE4SS start order**: managed block in mods.txt between the
+  `; === Zero Company Mod Command start order (managed block) ===` markers,
+  inserted before Keybinds keeping its warning attached; DLL/Lua pass tags;
+  enabled.txt retired + pruned from deploy records once block is authoritative;
+  auto-resync on enable/disable/uninstall/rename (engine._syncUe4ssModsTxt).
+- **EA App support**: lib/ea.js — detection (registry EA Games keys, EA Games
+  dirs, `__Installer` signature), launcher classification in steam.detectGame
+  (steam/ea/manual), direct-exe launch for EA, per-mod compat from modinfo
+  (`eaCompatible`, `launchers`) + community ea-compat.json (same remote-config
+  repo; owner tool update-ea-compat.js --bad/--good <nexusId>; NOT yet
+  published — baked fallback is empty). fullState.modCompat map drives chips.
+- **Linux/Proton/Steam Deck**: steam.js Linux roots (native/classic/flatpak),
+  proton compatdata detection, .desktop+xdg-mime nxm registration, p7zip,
+  Diagnostics WINEDLLOVERRIDES guidance, AppImage target. AppImage CANNOT be
+  cross-built on Windows (symlink privilege) — .github/workflows/build-linux.yml
+  builds it on ubuntu-latest (tags + manual) and attaches to the tag's release.
+  Linux paths are code-reviewed but UNTESTED on real Linux — say so in notes.
+- Engine tests: scratchpad engine-test-v12.js (31 checks) + v1.1.0 suite rerun;
+  UI verified through real clicks (EA chip, build chips, start-order apply).
+NOT released yet — awaiting the user's go for the Nexus/GitHub release flow.
+
 ## v1.1.0 (2026-09-04) — ZCOM-parity release
 
 Everything ZCOM Mod Manager (Nexus mod 29, the competing manager) listed as a

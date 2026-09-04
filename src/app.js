@@ -2,7 +2,8 @@
 /* global window, document */
 
 let state = null;
-let pendingOrder = null; // array of ids while user is dragging
+let pendingOrder = null; // array of ids while user is dragging (pak list)
+let pendingUe4ssOrder = null; // array of ids while dragging the UE4SS start list
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -105,6 +106,12 @@ function render() {
     ? `Game located${det.buildId ? ` · build ${det.buildId}` : ''}`
     : 'Game not located';
   $('#btn-launch').disabled = !det.found;
+  const launchSub = $('#btn-launch .launch-sub');
+  if (launchSub) {
+    launchSub.textContent = det.launcher === 'ea'
+      ? 'EA App edition'
+      : (state.platform === 'linux' ? 'via Steam · Proton' : 'via Steam');
+  }
   const enabledCount = state.mods.filter((m) => m.enabled).length;
   $('#nav-mod-count').textContent = state.mods.length || '';
   $('#nav-conflict-count').textContent = state.conflicts.length || '';
@@ -112,6 +119,10 @@ function render() {
   // dashboard
   $('#dash-game-status').textContent = det.found ? 'OPERATIONAL' : 'NOT DETECTED';
   $('#dash-game-status').className = `stat-value ${det.found ? 'good' : 'bad'}`;
+  const launcherName = { steam: 'STEAM', ea: 'EA APP', manual: 'MANUAL' }[det.launcher] || '—';
+  const platformTag = state.platform === 'linux' ? ' · LINUX/PROTON' : '';
+  $('#dash-launcher').textContent = det.found ? launcherName + platformTag : '—';
+  $('#dash-launcher').className = `stat-value ${det.launcher === 'ea' ? 'warn' : 'good'}`;
   $('#dash-build').textContent = det.buildId || '—';
   $('#dash-path').textContent = det.gamePath || 'Set the game folder in Settings';
   $('#dash-enabled').textContent = enabledCount;
@@ -131,6 +142,7 @@ function render() {
 
   renderMods();
   renderOrder();
+  renderUe4ssOrder();
   renderSettings();
 }
 
@@ -202,12 +214,52 @@ function renderMods() {
       flag.classList.add('hidden');
     }
 
+    // Build-compatibility chip: the game updated since this mod was installed/verified.
+    let buildChip = null;
+    const curBuild = state.detection && state.detection.buildId;
+    if (mod.installedBuild && curBuild && mod.installedBuild !== curBuild) {
+      buildChip = document.createElement('button');
+      buildChip.className = 'mod-conflict-flag build-chip';
+      buildChip.textContent = '⚠ game updated';
+      buildChip.title = `Installed under game build ${mod.installedBuild}; the game is now ${curBuild}. ` +
+        'The mod may be incompatible with the new build. Click to mark it verified on the current build.';
+      buildChip.addEventListener('click', async () => {
+        if (!window.confirm(`Mark “${mod.name}” as verified on the current game build (${curBuild})? Do this after testing that it still works.`)) return;
+        const data = await call('confirmModBuild', mod.id);
+        if (data) { state = data; render(); toast(`“${mod.name}” marked verified on build ${curBuild}.`); }
+      });
+    }
+
+    // EA App compatibility chip — shown to both audiences so Steam users see
+    // what their EA friends can't run, and EA users see it as a warning.
+    let eaChip = null;
+    const compat = (state.modCompat || {})[mod.id];
+    const onEA = state.detection && state.detection.launcher === 'ea';
+    if (compat && compat.status === 'incompatible') {
+      eaChip = document.createElement('span');
+      eaChip.className = `mod-badge ea-chip ${onEA ? 'ea-bad' : 'ea-note'}`;
+      eaChip.textContent = onEA ? '✖ NOT EA-COMPATIBLE' : 'EA: NOT COMPATIBLE';
+      eaChip.title = `${compat.note || 'Flagged as not working on the EA App edition of the game.'}` +
+        ` (source: ${compat.source === 'modinfo' ? 'the mod author' : 'community compatibility list'})`;
+    } else if (compat && compat.status === 'compatible' && onEA) {
+      eaChip = document.createElement('span');
+      eaChip.className = 'mod-badge ea-chip ea-ok';
+      eaChip.textContent = '✓ EA';
+      eaChip.title = compat.note || 'Confirmed working on the EA App edition.';
+    }
+
     const toggle = document.createElement('input');
     toggle.type = 'checkbox';
     toggle.className = 'switch';
     toggle.checked = mod.enabled;
     toggle.title = mod.enabled ? 'Disable (undeploy)' : 'Enable (deploy)';
     toggle.addEventListener('change', async () => {
+      if (toggle.checked && onEA && compat && compat.status === 'incompatible') {
+        const go = window.confirm(
+          `“${mod.name}” is flagged as not working on the EA App edition of the game` +
+          `${compat.note ? `:\n\n${compat.note}` : '.'}\n\nEnable it anyway?`);
+        if (!go) { toggle.checked = false; return; }
+      }
       const data = toggle.checked
         ? await call('setModEnabled', mod.id, true)
         : await verifiedCall('setModEnabled', [mod.id, false], 'Disable');
@@ -270,6 +322,8 @@ function renderMods() {
     }
 
     row.append(badge, srcBadge, main, flag);
+    if (eaChip) row.appendChild(eaChip);
+    if (buildChip) row.appendChild(buildChip);
     if (updateEl) row.appendChild(updateEl);
     row.append(toggle, actions);
     list.appendChild(row);
@@ -362,9 +416,9 @@ $('#order-list').addEventListener('dragover', onOrderDragOver);
 
 function onOrderDragOver(e) {
   e.preventDefault();
-  const dragging = $('.order-row.dragging');
+  const dragging = $('#order-list .order-row.dragging');
   if (!dragging) return;
-  const rows = $$('.order-row:not(.dragging)');
+  const rows = $$('#order-list .order-row:not(.dragging)');
   let after = null;
   for (const row of rows) {
     const box = row.getBoundingClientRect();
@@ -373,10 +427,10 @@ function onOrderDragOver(e) {
   const list = $('#order-list');
   if (after) list.insertBefore(dragging, after);
   else list.appendChild(dragging);
-  pendingOrder = $$('.order-row').map((r) => r.dataset.id);
-  $$('.order-row').forEach((r, i) => {
+  pendingOrder = $$('#order-list .order-row').map((r) => r.dataset.id);
+  $$('#order-list .order-row').forEach((r, i) => {
     r.querySelector('.order-num').textContent = String(i + 1).padStart(2, '0');
-    r.querySelector('.order-hint').textContent = i === $$('.order-row').length - 1 ? 'loads last — wins conflicts' : '';
+    r.querySelector('.order-hint').textContent = i === $$('#order-list .order-row').length - 1 ? 'loads last — wins conflicts' : '';
   });
   $('#btn-apply-order').disabled = false;
 }
@@ -450,6 +504,96 @@ $('#btn-rollback-order').addEventListener('click', async () => {
     pendingOrder = null;
     render();
     toast('Previous load order restored. Pressing again re-applies the undone order.');
+  }
+});
+
+// ------------------------------------------------------------------ UE4SS start order (mods.txt)
+
+function renderUe4ssOrder() {
+  const section = $('#ue4ss-order-section');
+  const st = state.ue4ssOrder || { managed: [], others: [], applied: false };
+  const show = st.managed.length > 0 || st.applied;
+  section.classList.toggle('hidden', !show);
+  if (!show) { pendingUe4ssOrder = null; return; }
+
+  const list = $('#ue4ss-order-list');
+  list.innerHTML = '';
+  const order = pendingUe4ssOrder
+    ? pendingUe4ssOrder.map((id) => st.managed.find((m) => m.id === id)).filter(Boolean)
+    : st.managed;
+
+  order.forEach((m, idx) => {
+    const row = document.createElement('div');
+    row.className = 'order-row ue4ss-row';
+    row.draggable = true;
+    row.dataset.id = m.id;
+    const grip = document.createElement('span');
+    grip.className = 'order-grip';
+    grip.textContent = '⣿';
+    const num = document.createElement('span');
+    num.className = 'order-num';
+    num.textContent = String(idx + 1).padStart(2, '0');
+    const name = document.createElement('span');
+    name.className = 'order-name';
+    name.textContent = m.name;
+    const pass = document.createElement('span');
+    pass.className = `ue4ss-pass pass-${m.pass}`;
+    pass.textContent = m.pass === 'dll' ? 'DLL PASS' : 'LUA PASS';
+    pass.title = m.pass === 'dll'
+      ? 'Starts while the UE4SS runtime initializes — before every Lua mod.'
+      : 'Starts once the Lua scripting runtime exists.';
+    row.append(grip, num, name, pass);
+    row.addEventListener('dragstart', (e) => {
+      row.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', m.id);
+    });
+    row.addEventListener('dragend', () => row.classList.remove('dragging'));
+    list.appendChild(row);
+  });
+
+  // First apply opts in even without reordering; afterwards only a change arms it.
+  $('#btn-apply-ue4ss-order').disabled = !(pendingUe4ssOrder || (!st.applied && st.managed.length));
+  const notes = [];
+  notes.push(st.applied
+    ? 'Managed block active in mods.txt — entries live just before Keybinds, its warning kept attached.'
+    : 'Applying writes a managed block into mods.txt (before the Keybinds entry) and retires the enabled.txt markers.');
+  if (st.others.length) {
+    notes.push(`Unmanaged entries preserved as-is: ${st.others.map((o) => `${o.name}${o.enabled ? '' : ' (off)'}`).join(', ')}.`);
+  }
+  $('#ue4ss-order-note').textContent = notes.join('  ');
+}
+
+$('#ue4ss-order-list').addEventListener('dragover', (e) => {
+  e.preventDefault();
+  const dragging = $('#ue4ss-order-list .order-row.dragging');
+  if (!dragging) return;
+  const rows = $$('#ue4ss-order-list .order-row:not(.dragging)');
+  let after = null;
+  for (const row of rows) {
+    const box = row.getBoundingClientRect();
+    if (e.clientY < box.top + box.height / 2) { after = row; break; }
+  }
+  const list = $('#ue4ss-order-list');
+  if (after) list.insertBefore(dragging, after);
+  else list.appendChild(dragging);
+  pendingUe4ssOrder = $$('#ue4ss-order-list .order-row').map((r) => r.dataset.id);
+  $$('#ue4ss-order-list .order-row').forEach((r, i) => {
+    r.querySelector('.order-num').textContent = String(i + 1).padStart(2, '0');
+  });
+  $('#btn-apply-ue4ss-order').disabled = false;
+});
+
+$('#btn-apply-ue4ss-order').addEventListener('click', async () => {
+  const st = state.ue4ssOrder || { managed: [] };
+  const ids = pendingUe4ssOrder || st.managed.map((m) => m.id);
+  if (!ids.length) return;
+  const data = await call('applyUe4ssOrder', ids);
+  if (data) {
+    state = data;
+    pendingUe4ssOrder = null;
+    render();
+    toast('UE4SS start order written to mods.txt (managed block, before Keybinds).');
   }
 });
 
@@ -848,6 +992,7 @@ function installResultsToToasts(payload) {
   if (!payload) return;
   state = payload.state;
   pendingOrder = null;
+  pendingUe4ssOrder = null;
   render();
   for (const r of payload.results) {
     if (r.ok && r.pendingFomod) {
@@ -2048,6 +2193,7 @@ window.zc.onEvent((payload) => {
   } else if (payload.type === 'state') {
     state = payload.state;
     pendingOrder = null;
+    pendingUe4ssOrder = null;
     render();
   } else if (payload.type === 'progress') {
     const box = $('#progress-toast');

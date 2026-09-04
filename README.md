@@ -53,6 +53,34 @@ automatically for IoStore package inspection; a different copy can be selected i
   Disable/uninstall/reorder verify the deployed files first: a file changed outside
   the manager stops the operation and asks before anything is deleted. Archive
   extraction rejects path traversal and strips symlinks.
+- **UE4SS start order** — a second panel in Load Order for enabled UE4SS mods.
+  Applying writes ONE managed block into `ue4ss/Mods/mods.txt`, placed just
+  before the runtime's `Keybinds` entry with its "do not move up" warning kept
+  attached; runtime entries, comments and hand-added mods are preserved, a
+  hand-placed managed entry moves into the block, and `enabled.txt` markers are
+  retired once the block is authoritative. Rows carry DLL PASS / LUA PASS tags —
+  UE4SS starts every DLL mod during runtime init and Lua mods once scripting
+  exists, so order applies within each pass.
+- **Game-build warnings** — each install/adoption records the game build it
+  happened under (Steam manifest buildid, or an exe fingerprint for EA/manual
+  installs). After a game update, affected mods show a "game updated" chip and
+  a Diagnostics warning; clicking the chip marks the mod verified on the
+  current build.
+- **EA App support** — the EA-launcher edition is detected (registry + EA Games
+  folder scan + `__Installer` signature) and mods deploy identically for EA
+  players; Launch starts the exe directly for EA installs. Per-mod EA
+  compatibility comes from the mod's `modinfo.json` (`"eaCompatible": false`
+  or `"launchers": ["steam"]`) and an owner-curated live list (`ea-compat.json`
+  in the remote-config repo, edited with `update-ea-compat.js`); EA users get a
+  red chip + enable-time confirm, Steam users an FYI chip, and Diagnostics
+  reports both directions.
+- **Linux / Proton / Steam Deck** — Steam library discovery covers native,
+  classic and flatpak Linux locations; Proton compat prefixes are detected and
+  Diagnostics carries the `WINEDLLOVERRIDES="dwmapi=n,b" %command%` guidance
+  UE4SS needs (never applied automatically). nxm:// registers via a .desktop
+  entry + xdg-mime; 7-Zip is found via p7zip. The AppImage is built by the
+  `build-linux.yml` GitHub workflow (Windows can't cross-build it — the
+  AppImage tooling needs symlinks).
 - **Compatibility matrix** — Diagnostics shows an N×N grid of enabled mods:
   ✔ compatible, ▲ suspected overlap, ✖ confirmed asset overlap (hover for details).
 - **UE4SS hook scan** — statically scans the Lua scripts of every *active* UE4SS mod

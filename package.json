@@ -1,7 +1,7 @@
 {
   "name": "zero-company-mod-command",
   "productName": "Zero Company Mod Command",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Mod Command",
   "main": "main.js",
   "scripts": {
@@ -44,6 +44,14 @@
     },
     "portable": {
       "artifactName": "ZeroCompanyModCommand.exe"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "artifactName": "ZeroCompanyModCommand.AppImage",
+      "category": "Utility",
+      "executableName": "zero-company-mod-command"
     }
   }
 }

@@ -737,3 +737,26 @@ body.reduced-motion * { transition: none !important; animation: none !important;
 .fomod-detail-image img { max-width: 100%; max-height: 220px; display: block; border: 1px solid var(--panel-edge); }
 .fomod-detail-name { font-size: 11px; letter-spacing: 1.5px; font-weight: 700; margin-bottom: 6px; }
 .fomod-detail-desc { font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* ---------- v1.2.0: EA support, build chips, UE4SS start order ---------- */
+
+.ea-chip { flex-shrink: 0; font-size: 10px; }
+.ea-chip.ea-bad { color: var(--danger); border-color: rgba(255, 92, 92, 0.55); }
+.ea-chip.ea-note { color: var(--amber); border-color: rgba(255, 200, 87, 0.45); }
+.ea-chip.ea-ok { color: var(--good); border-color: rgba(109, 255, 176, 0.5); }
+.build-chip { color: #ff9d7a; background: rgba(255, 157, 122, 0.08); border-color: rgba(255, 157, 122, 0.4); }
+
+.ue4ss-order-section { margin-top: 34px; border-top: 1px solid var(--panel-edge); padding-top: 18px; }
+.ue4ss-order-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.ue4ss-order-title {
+  font-size: 17px; font-weight: 800; letter-spacing: 4px; color: var(--amber);
+  margin: 0 0 4px;
+}
+.ue4ss-pass {
+  flex-shrink: 0; font-size: 9px; font-weight: 800; letter-spacing: 1.5px;
+  font-family: var(--mono); padding: 3px 8px; border: 1px solid;
+  clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
+}
+.ue4ss-pass.pass-dll { color: var(--amber); border-color: rgba(255, 200, 87, 0.5); }
+.ue4ss-pass.pass-lua { color: var(--holo); border-color: rgba(79, 209, 255, 0.5); }
+.ue4ss-order-note { font-size: 11.5px; margin-top: 10px; line-height: 1.5; }

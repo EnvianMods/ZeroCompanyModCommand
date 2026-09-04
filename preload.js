@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('zc', {
   applyLoadOrder: (orderedIds) => invoke('apply-load-order', { orderedIds }),
   previewLoadOrder: (orderedIds) => invoke('preview-load-order', { orderedIds }),
   rollbackLoadOrder: () => invoke('rollback-load-order'),
+  applyUe4ssOrder: (orderedIds) => invoke('apply-ue4ss-order', { orderedIds }),
+  confirmModBuild: (id) => invoke('confirm-mod-build', { id }),
   fomodComplete: (sessionId, selections) => invoke('fomod-complete', { sessionId, selections }),
   fomodCancel: (sessionId) => invoke('fomod-cancel', { sessionId }),
   fomodImage: (sessionId, path) => invoke('fomod-image', { sessionId, path }),

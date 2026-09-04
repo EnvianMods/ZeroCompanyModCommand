@@ -20,8 +20,10 @@ The launcher itself announces new versions too, so you never mod on an outdated 
 [b][color=#ffc857]Mod management[/color][/b]
 [list]
 [*][b]One-window installs[/b] — drag & drop .zip / .7z / .rar archives, loose .pak / .utoc / .ucas files, or extracted folders anywhere onto the app
-[*][b]Every format auto-detected[/b] — pak, IoStore, LogicMods, UE4SS Lua/DLL mods, even the UE4SS runtime itself
-[*][b]Clean enable/disable[/b] — canonical copies are kept in the manager's library, so toggling a mod never loses files
+[*][b]Every format auto-detected[/b] — pak, IoStore, LogicMods, UE4SS Lua/DLL mods, game-folder replacement mods (e.g. movies), even the UE4SS runtime itself
+[*][b]Guided installers (FOMOD)[/b] — mods that ship an installer script are installed by answering the author's own questions, with descriptions, images, recommended answers and conditional steps. Scripts are read, never executed
+[*][b]Game files protected[/b] — a replacement-style mod backs up the original of every game file it overwrites and restores it on disable/uninstall
+[*][b]Clean enable/disable[/b] — canonical copies are kept in the manager's library, so toggling a mod never loses files. Every deployed file's SHA-256 is recorded; a file you edited by hand is never silently deleted
 [*][b]Squad profiles[/b] — save named sets of enabled mods + load order and swap between them in two clicks
 [/list]
 
@@ -37,6 +39,8 @@ The launcher itself announces new versions too, so you never mod on an outdated 
 [list]
 [*]Drag-to-reorder pak/IoStore mods — later loads win conflicts
 [*][b]Suggest order[/b] — one click proposes an order (broad overhauls first, targeted patches later) and tells you which conflicts it decides
+[*][b]Review before apply[/b] — applying first shows every conflict pair and which winners change; [b]Undo last apply[/b] rolls the order back in one click
+[*][b]Startup recovery[/b] — enabled mods whose deployed files went missing (game update, manual cleanup) are redeployed automatically
 [/list]
 
 [b][color=#ffc857]Updates, handled[/color][/b]
@@ -67,7 +71,7 @@ The launcher itself announces new versions too, so you never mod on an outdated 
 [list=1]
 [*]Download and run [b]ZeroCompanyModCommand.exe[/b] — portable, keeps its data in a folder next to the exe
 [*]The game is auto-detected through Steam (or set the folder in Settings)
-[*]In Settings → Nexus Mods, paste your personal API key and press [b]Register handler[/b] to enable one-click downloads
+[*]In Settings → Nexus Mods, paste your personal API key (stored encrypted with your Windows account, never in plain text) and press [b]Register handler[/b] to enable one-click downloads
 [*]Install mods from the Holonet tab, or drag archives onto the window
 [/list]
 

@@ -608,6 +608,26 @@ $('#btn-apply-ue4ss-order').addEventListener('click', async () => {
 
 $('#btn-run-diag').addEventListener('click', runDiagnostics);
 
+$('#btn-copy-report').addEventListener('click', async () => {
+  const btn = $('#btn-copy-report');
+  btn.disabled = true;
+  try {
+    const res = await call('supportReport');
+    if (!res) return;
+    await navigator.clipboard.writeText(res.text);
+    toast('Support report copied — paths, usernames and machine names are scrubbed. Paste it into a bug report.', 'info', 8000);
+  } catch (err) {
+    toast(`Could not copy the report: ${err.message}`, 'error', 6000);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$('#btn-save-report').addEventListener('click', async () => {
+  const res = await call('saveSupportReport');
+  if (res && res.saved) toast(`Sanitized report saved as ${res.file}.`, 'info', 6000);
+});
+
 async function runDiagnostics() {
   const data = await call('runDiagnostics');
   if (!data) return;

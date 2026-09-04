@@ -2,6 +2,30 @@
 
 Context document for continuing work on this project. Last updated 2026-09-04.
 
+## v1.4.0 (2026-09-04, feat/support-reports branch) — support reports
+
+Diagnostics → Copy support report / Save report…: lib/report.js (buildReport +
+makeSanitizer scrubbing gamePath/dataDir/home/username/hostname, longest-rule-
+first, both slash styles, case-insensitive) + lib/log.js (600-entry in-memory
+session log; wired into IPC error wrapper + install/enable/order/update/fomod/
+recovery events; nothing on disk). IPC support-report / save-support-report.
+CI FIXES riding this branch: --publish never on tag builds (electron-builder
+otherwise self-publishes and dies without GH_TOKEN) + permissions contents:
+write (default workflow token got HTTP 403 on release upload — the v1.3.0
+AppImage was attached MANUALLY via API instead). NOT released.
+
+## AppImage + Nexus multipart (2026-09-04)
+
+v1.3.0 AppImage: CI built it (run 33926839636), attach failed on permissions →
+downloaded artifact + attached via API + uploaded to NEXUS as file id 554
+("Zero Company Mod Command (Linux AppImage)", category optional, NOT primary).
+upload-nexus-file.js now supports --category/--no-primary AND >100MiB files:
+v3 MULTIPART flow = POST /v3/uploads/multipart {size_bytes,filename,md5} →
+{id, part_size_bytes(50MiB), part_presigned_urls[], complete_presigned_url} →
+PUT each part (collect ETag headers) → POST S3 CompleteMultipartUpload XML
+(<Part><PartNumber/><ETag/>) to complete_presigned_url → POST finalise → poll.
+Bare finalise without the S3 completion 422s ("file could not be found").
+
 ## v1.3.0 RELEASED 2026-09-04 (merged to main, tag v1.3.0)
 
 Nexus file id 551 (global 42893838385703, main + primary MM download) on draft

@@ -353,10 +353,17 @@ $('#btn-check-updates').addEventListener('click', async () => {
 });
 
 $('#btn-update-all').addEventListener('click', async () => {
-  const targets = state.mods.filter((m) => m.updateInfo && m.updateInfo.available && m.updateInfo.auto);
-  for (const mod of targets) {
-    const res = await call('updateMod', mod.id);
+  const targetIds = state.mods
+    .filter((m) => m.updateInfo && m.updateInfo.available && m.updateInfo.auto)
+    .map((m) => m.id);
+  for (const id of targetIds) {
+    // A multi-entry archive update replaces its siblings too — re-check
+    // against the freshest state before asking for another update.
+    const mod = state.mods.find((m) => m.id === id);
+    if (!mod || !mod.updateInfo || !mod.updateInfo.available) continue;
+    const res = await call('updateMod', id);
     if (res && res.updated) { state = res.state; toast(`“${mod.name}” updated.`); }
+    else if (res && res.state) state = res.state;
   }
   $('#progress-toast').classList.add('hidden');
   render();
@@ -997,6 +1004,8 @@ function installResultsToToasts(payload) {
   for (const r of payload.results) {
     if (r.ok && r.pendingFomod) {
       fomodQueue.push(r);
+    } else if (r.ok && r.note) {
+      toast(r.message, 'info', 8000);
     } else if (r.ok) {
       toast(`Installed “${r.name}” (${TYPE_LABEL[r.modType] || r.modType})`);
       for (const w of r.warnings) toast(`${r.name}: ${w}`, 'warn', 6000);
@@ -1158,10 +1167,16 @@ function buildBrowseCard(m) {
       if (!res) return;
       if (res.opened === 'website') {
         toast(`Files page opened for “${m.name}” — press “Mod Manager Download” and it will install here automatically.`, 'info', 9000);
+      } else if (res.pendingFomod) {
+        state = res.state;
+        render();
+        toast(`“${m.name}” ships a guided installer — answer its steps to finish.`, 'info', 8000);
       } else if (res.installed) {
         state = res.state;
         render();
-        toast(`Installed “${m.name}” from the holonet.`);
+        toast(res.count > 1
+          ? `Installed ${res.count} mods from “${m.name}” — each is its own entry.`
+          : `Installed “${m.name}” from the holonet.`);
       }
     } finally {
       installBtn.disabled = false;
@@ -1349,10 +1364,16 @@ function buildForgeCard(m) {
       try {
         const res = await call('installGithub', m.fullName);
         if (!res || res.cancelled) return;
-        if (res.installed) {
+        if (res.pendingFomod) {
           state = res.state;
           render();
-          toast(`Installed “${m.name}” from the forge.`);
+          toast(`“${m.name}” ships a guided installer — answer its steps to finish.`, 'info', 8000);
+        } else if (res.installed) {
+          state = res.state;
+          render();
+          toast(res.count > 1
+            ? `Installed ${res.count} mods from “${m.name}” — each is its own entry.`
+            : `Installed “${m.name}” from the forge.`);
         }
       } finally {
         installBtn.disabled = false;
@@ -2186,6 +2207,12 @@ $('#launcher-banner-dismiss').addEventListener('click', () => $('#launcher-banne
 window.zc.onEvent((payload) => {
   if (payload.type === 'launcher-update') {
     showLauncherBanner(payload.info);
+    return;
+  }
+  if (payload.type === 'fomod-pending') {
+    // A Nexus/GitHub download turned out to be a guided installer.
+    fomodQueue.push(payload.job);
+    processFomodQueue();
     return;
   }
   if (payload.type === 'toast') {

@@ -48,9 +48,21 @@ image skips Nexus's canvas crop, which Brave's fingerprinting shield otherwise b
 The description's Discord banner reads "Join Smexy's Mods Discord" — that is correct: the server is
 shared with SmexyXey and Envian has his own section in it.
 
+**v1.1.0 released 2026-09-04** (still on the unpublished draft page): Nexus file
+id 549 (global 42893838385701, main + primary MM download, uploaded via
+`owner-tools/update-featured-authors/upload-nexus-file.js` — the v3 flow is now
+a script; reads the key from nexus-key.txt / NEXUS_API_KEY / pre-1.1.0 dev
+store). Archive Release + silent GitHub mirror + main/dev pushes done for 1.1.0.
+NOTE: v1.1.0 encrypts the Nexus key in the app store (safeStorage) — once the
+dev app runs on 1.1.0, `data/manager-data.json` no longer has the plaintext key;
+put a copy in `owner-tools/update-featured-authors/nexus-key.txt` (gitignored)
+for the upload script. Old v1.0.0 file (id 519) left as-is on the page — archive
+it manually after publishing if desired.
+
 **NOT yet done — the actual launch:**
-1. Press **Publish** on the mod page
-2. Announce: `"Update Launcher Version.bat" 1.0.0 "https://www.nexusmods.com/starwarszerocompany/mods/121?tab=files"`
+1. Press **Publish** on the mod page (description update: paste the refreshed
+   `NEXUS_DESCRIPTION.bbcode` — it now covers the v1.1.0 features)
+2. Announce: `"Update Launcher Version.bat" 1.1.0 "https://www.nexusmods.com/starwarszerocompany/mods/121?tab=files"`
    (launcher-version.json is unpublished — no update banners exist until this runs)
 
 **Nexus v3 API upload flow** (works with the personal API key as an `apikey` header):

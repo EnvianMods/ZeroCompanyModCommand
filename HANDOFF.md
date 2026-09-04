@@ -2,6 +2,20 @@
 
 Context document for continuing work on this project. Last updated 2026-09-04.
 
+## v1.4.0 RELEASED 2026-09-04 (merged to main, tag v1.4.0)
+
+Nexus: file id 555 (Windows zip, main + primary MM) and file id 556 (Linux
+AppImage, optional, non-primary) on draft page 121. Archive Release + silent
+GitHub mirror done (release carries zip + AppImage); main/branch/tag pushed
+BEFORE publish-release (order gotcha respected). CI built the AppImage
+successfully with the fixed permissions, but its attach step still raced the
+release creation (CI finishes ~3min after tag; the release exists only after
+the ~6min local flow) → attached manually again; the workflow now CREATES the
+release when missing (publish-release reuses it), so the next tag should need
+no manual step. Announcement still NOT run (page unpublished): after Publish,
+announce 1.4.0. Archive repo dev mirror STILL stalled (archive-token workflow
+scope).
+
 ## v1.4.0 (2026-09-04, feat/support-reports branch) — support reports
 
 Diagnostics → Copy support report / Save report…: lib/report.js (buildReport +

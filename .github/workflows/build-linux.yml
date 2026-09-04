@@ -30,12 +30,15 @@ jobs:
           name: ZeroCompanyModCommand-AppImage
           path: release/ZeroCompanyModCommand.AppImage
           if-no-files-found: error
-      # On a version tag, attach the AppImage to that tag's GitHub release
-      # (created by the local release flow) as an extra asset.
+      # On a version tag, attach the AppImage to that tag's GitHub release.
+      # CI usually finishes before the local release flow creates the release,
+      # so create it when missing — publish-release.js reuses an existing
+      # release and adds the Windows zip + notes afterwards.
       - name: Attach to release
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release upload "${GITHUB_REF_NAME}" release/ZeroCompanyModCommand.AppImage --clobber || \
-            echo "No release for ${GITHUB_REF_NAME} yet — artifact is still available from this workflow run."
+            gh release create "${GITHUB_REF_NAME}" release/ZeroCompanyModCommand.AppImage \
+              --title "${GITHUB_REF_NAME}" --notes "Automated Linux AppImage build. The Windows zip and release notes follow from the local release flow."

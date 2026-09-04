@@ -1,6 +1,23 @@
 # HANDOFF — Zero Company Mod Command
 
-Context document for continuing work on this project. Last updated 2026-09-03.
+Context document for continuing work on this project. Last updated 2026-09-04.
+
+## v1.1.0 (2026-09-04) — ZCOM-parity release
+
+Everything ZCOM Mod Manager (Nexus mod 29, the competing manager) listed as a
+strength that was shippable on Windows is now in Mod Command: FOMOD guided
+installers (lib/fomod.js + wizard in src/app.js; scripts read, never executed,
+paths re-validated main-side), game-folder replacement mods with backup/restore
+(modType 'gamefolder', backups in data/backups/gamefiles/<id>), SHA-256
+ownership with verify-before-disable/uninstall/reorder (VERIFY_CHANGED:: error
+protocol → renderer confirm → force), safeStorage-encrypted Nexus API key
+(auto-migrates plaintext), traversal-safe extraction, load-order
+review-before-apply + one-step rollback + startup redeploy recovery.
+NOT done (deliberate): Linux/Proton (Windows-specific registry/paths/tools;
+would ship untested), open-source relicensing (owner's legal call).
+Engine test suite pattern: see the session scratchpad engine-test.js approach —
+temp Store + fake game dir; UI verified via TEMP hook + ZC_DATA_DIR override
+(new: env ZC_DATA_DIR redirects the data dir for isolated test runs).
 
 ## What this is
 

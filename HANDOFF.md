@@ -21,12 +21,29 @@ Everything ever built is folded into **v1.0.0** (user's decision: nothing distri
 before launch counts as pre-release). Git: `main` == `feat/pak-modinfo-metadata` ==
 tag `v1.0.0`. Built zip is identical on both GitHub releases.
 
+**Nexus draft page EXISTS (unpublished): mod id 121** —
+https://www.nexusmods.com/starwarszerocompany/mods/121 (global API id 42893838385273).
+Created 2026-09-03: General (bbcode description, Utilities, tag "Utilities for Players",
+author "Envian Mods", version 1.0.0), Media (5 gallery screenshots, copies in `docs/screenshots/`),
+Files (v1.0.0 zip uploaded via the **Nexus v3 API**, main file id 519, primary MM download).
+Header image NOT yet set: Brave's fingerprinting shield blocks Nexus's canvas crop — lower
+Shields for nexusmods.com, then upload `src/assets/nexus-header.png` (1300x372, source
+`nexus-header.svg`; the old 1280x720 `nexus-banner.png` is the wrong shape for the header slot).
+The `[img]` in the description's SUPPORT section renders "Join Smexy's Mods Discord" — check
+EnvianMods/Assets/discord_banner.png before publishing.
+
 **NOT yet done — the actual launch:**
-1. Upload `release\ZeroCompanyModCommand-v1.0.0.zip` to the Nexus mod page
-   (description: `NEXUS_DESCRIPTION.bbcode`; header image: `src/assets/nexus-banner.png`;
-   plain-text description for elsewhere: `DESCRIPTION.txt`)
-2. Announce: `"Update Launcher Version.bat" 1.0.0 "https://www.nexusmods.com/starwarszerocompany/mods/<mod-id>?tab=files"`
+1. Set the header image (above), then press **Publish** on the mod page
+2. Announce: `"Update Launcher Version.bat" 1.0.0 "https://www.nexusmods.com/starwarszerocompany/mods/121?tab=files"`
    (launcher-version.json is unpublished — no update banners exist until this runs)
+
+**Nexus v3 API upload flow** (works with the personal API key as an `apikey` header):
+GET /v3/games/<domain>/mods/<id> → global id; POST /v3/uploads {size_bytes, filename, md5 hex}
+→ PUT bytes to presigned_url with Content-Disposition: attachment; filename="<name>",
+Content-MD5 (base64) and **Content-Type: application/octet-stream** (signed; application/zip fails);
+POST /v3/uploads/<id>/finalise; poll GET /v3/uploads/<id> until state=available; POST /v3/mod-files
+{upload_id, mod_id (global), name, version, file_category:"main", primary_mod_manager_download:true}.
+Worth folding into owner-tools as an upload script for future releases.
 
 ## Feature summary
 
@@ -109,6 +126,7 @@ GitHub won't overwrite same-named Release assets: DELETE the asset by id first, 
 - **window.prompt() doesn't exist in Electron** — silently no-ops. Use the `zcPrompt()` modal (src/app.js). Test features through the real click path, not just engine functions.
 - **extract-zip can hang forever** on some zips — archive.js uses Windows `tar -xf` first, extract-zip fallback.
 - **Browser "Open …?" dialogs** show the handler exe's `FileDescription` → package.json `description` must stay short ("Mod Command"). Registry FriendlyAppName/Application values also set by register-nxm.
+- **Chromium protocol dialog name is cached per browser process.** Chrome/Brave/Edge call `AssocQueryString(ASSOCSTR_FRIENDLYAPPNAME)` for `nxm` once and keep the answer in memory; `SHChangeNotify` does NOT refresh it. A stale "Open A Star Wars themed…" label means the browser process predates the last handler registration, or the handler was registered by an old build (no `FriendlyAppName` value on the command key). Fix: Unregister → Register handler in the app, then fully exit the browser (check `tasklist | findstr brave.exe`). The launch command itself is not cached, so links still open the right exe.
 - **`signAndEditExecutable: true` breaks builds** (winCodeSign download/symlink failure) — keep false; the portable stub takes metadata from package.json anyway.
 - **Electron npm install** can silently fail to fetch the binary — fix: extract `%LOCALAPPDATA%\electron\Cache\*\electron-*.zip` into `node_modules/electron/dist` + write `path.txt` containing `electron.exe`.
 - robocopy exits 1-7 on success (looks like failure); PowerShell 5.1: no `&&`, `$` mangles in `node -e` double quotes (use Bash tool or files), a safety hook blocks commands mixing `Remove-Item` with `G:\Envian` paths — split such commands.

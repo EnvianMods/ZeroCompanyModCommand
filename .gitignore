@@ -5,8 +5,9 @@ release/
 # Local user data (settings, Nexus API key, installed mod library)
 data/
 
-# Secrets — never commit tokens
-owner-tools/**/token.txt
+# Secrets — never commit tokens or API keys
+owner-tools/**/*token*.txt
+owner-tools/**/nexus-key.txt
 token.txt
 
 # Backups and temp

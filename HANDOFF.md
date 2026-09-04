@@ -2,6 +2,17 @@
 
 Context document for continuing work on this project. Last updated 2026-09-04.
 
+## v1.3.0 RELEASED 2026-09-04 (merged to main, tag v1.3.0)
+
+Nexus file id 551 (global 42893838385703, main + primary MM download) on draft
+page 121. Archive Release + silent GitHub mirror done; main/tag pushed.
+RELEASE-ORDER GOTCHA (hit this time): run `git push origin main <tag>` BEFORE
+publish-release.js — creating the GitHub release first mints the remote tag at
+the OLD remote main; fix is `git push --force origin <tag>` (done for v1.3.0,
+release now points at the merge commit). GitHub Actions is now ENABLED on the
+source repo: tag pushes trigger Build Linux AppImage. Archive repo dev mirror
+STILL stalled (archive-token still lacks workflow scope).
+
 ## v1.3.0 (2026-09-04, feat/multi-mod-split branch) — multi-mod archives
 
 Every mod in an archive becomes its own entry (ZCOM's last install-side edge):

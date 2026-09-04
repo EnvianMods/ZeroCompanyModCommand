@@ -1,5 +1,26 @@
 # Zero Company Mod Command — Changelog
 
+## v1.3.0 (2026-09-04)
+
+**Multi-mod archives: every mod becomes its own entry**
+- An archive that packs several mods now installs each as its own entry, so
+  they can be enabled, ordered, updated, and removed separately:
+  - every folder with `Scripts/main.lua` or `dlls/main.dll` is one UE4SS mod
+    (previously only the first folder in such an archive was installed)
+  - pak/utoc/ucas containers split by their containing folder — a mod that
+    ships several paks in one folder stays one entry; folders under a
+    `LogicMods` path keep their LogicMods deployment
+  - each entry reads its own folder's `modinfo.json` for title/version/author
+    and EA-compatibility declarations
+  - UE4SS runtime archives, game-folder trees, and single mods never split
+- Nexus/GitHub downloads that split still track their download: every entry
+  carries the origin, and updating any of them replaces all sibling entries
+  from a fresh download (enabled state and load-order positions are preserved
+  by name across the update)
+- Fixed: a Nexus/GitHub download that ships a FOMOD installer now opens the
+  guided steps (previously the wizard only opened for local archive installs),
+  and the finished install keeps the download's update tracking
+
 ## v1.2.0 (2026-09-04)
 
 **EA App support — bridging the Steam and EA mod communities**

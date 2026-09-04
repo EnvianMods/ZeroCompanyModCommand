@@ -35,6 +35,13 @@ automatically for IoStore package inspection; a different copy can be selected i
     (`SWZeroCompany/...`, `Engine/...`, e.g. replacement movies) deploy over the
     game's own files. The original of every replaced file is backed up to
     `data/backups/gamefiles/<id>/` first and restored on disable/uninstall.
+- **Multi-mod archives** — an archive holding several mods installs each as its
+  own entry (separate enable/order/update/remove): UE4SS mod folders split per
+  folder, pak containers split by containing folder (multiple paks in ONE
+  folder stay one mod), LogicMods subfolders keep their deployment, and each
+  entry reads its own `modinfo.json`. Nexus/GitHub origin tracking covers every
+  entry; updating one replaces all siblings from a fresh download, preserving
+  enabled state and priorities by name.
 - **Guided installers (FOMOD)** — an archive shipping `fomod/ModuleConfig.xml`
   installs by answering the author's own steps: option groups with descriptions,
   images and recommended answers, flags/conditional steps, and a Back button.

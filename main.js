@@ -91,6 +91,25 @@ function sendEvent(payload) {
   if (win && !win.isDestroyed()) win.webContents.send('zc-event', payload);
 }
 
+// A download that turned out to carry a FOMOD script: hand the wizard job to
+// the renderer (its answers come back through fomod-complete, with the origin
+// riding the engine session).
+function forwardFomod(result, sourceLabel) {
+  sendEvent({
+    type: 'fomod-pending',
+    job: {
+      sessionId: result.sessionId, moduleXml: result.moduleXml,
+      info: result.info, name: result.name, source: sourceLabel,
+    },
+  });
+}
+
+// engine.install result → array of installed mod records (empty for pendingFomod).
+function installedMods(res) {
+  if (res.pendingFomod) return [];
+  return res.multi ? res.mods : [res];
+}
+
 const protocolArgs = () => {
   // Portable builds must register the on-disk exe, not the temp-extracted one.
   if (process.env.PORTABLE_EXECUTABLE_FILE) return { exe: process.env.PORTABLE_EXECUTABLE_FILE, args: [] };
@@ -114,30 +133,33 @@ async function handleNxm(rawUrl) {
       sendEvent({ type: 'progress', label: info ? info.name : `mod ${link.modId}`, received: got, total });
     });
     try {
-      // Same Nexus mod already installed? This is an update — replace in place.
-      const existing = store.mods.find((m) => m.origin && m.origin.type === 'nexus' && m.origin.modId === link.modId);
+      // Same Nexus mod already installed? This is an update — replace in place
+      // (all entries, when the archive holds several mods).
+      const existing = store.mods.some((m) => m.origin && m.origin.type === 'nexus' && m.origin.modId === link.modId);
       const origin = { type: 'nexus', modId: link.modId, fileId: link.fileId, version: info ? info.version : null };
+      const version = info ? info.version : null;
       if (existing) {
-        const mod = await engine.replaceInPlace(existing.id, dest);
-        if (mod.id) {
-          const stored = store.getMod(mod.id);
-          stored.origin = origin;
-          stored.version = info ? info.version : null;
-          store.save();
+        const res = await engine.replaceOrigin({ type: 'nexus', modId: link.modId }, dest, origin, version);
+        if (res.pendingFomod) {
+          forwardFomod(res, info ? info.name : `mod ${link.modId}`);
+        } else {
+          const names = installedMods(res).map((m) => m.name).join('”, “');
+          sendEvent({ type: 'toast', message: `Updated “${names}” to ${version ? 'v' + version : 'the latest version'}.` });
         }
-        sendEvent({ type: 'toast', message: `Updated “${mod.name}” to ${info && info.version ? 'v' + info.version : 'the latest version'}.` });
       } else {
-        const mod = await engine.install(dest);
-        if (mod.id) {
-          if (info && info.name) { try { engine.rename(mod.id, info.name); } catch (_) {} }
-          const stored = store.getMod(mod.id);
-          if (stored) {
-            stored.version = info ? info.version : null;
-            stored.origin = origin;
-            store.save();
+        const res = await engine.install(dest, { origin, version });
+        if (res.pendingFomod) {
+          forwardFomod(res, info ? info.name : `mod ${link.modId}`);
+        } else {
+          const mods = installedMods(res);
+          if (mods.length === 1 && mods[0].id && info && info.name) {
+            try { engine.rename(mods[0].id, info.name); } catch (_) {}
           }
+          const label = mods.length === 1
+            ? `Installed “${info && info.name ? info.name : mods[0].name}” from Nexus Mods.`
+            : `Installed ${mods.length} mods from “${info && info.name ? info.name : path.basename(dest)}” — each is its own entry.`;
+          sendEvent({ type: 'toast', message: label });
         }
-        sendEvent({ type: 'toast', message: `Installed “${info && info.name ? info.name : path.basename(dest)}” from Nexus Mods.` });
       }
     } finally {
       fs.rmSync(dest, { force: true });
@@ -582,20 +604,20 @@ const handlers = {
       sendEvent({ type: 'progress', label: name || `mod ${modId}`, received: got, total });
     });
     try {
-      const mod = await engine.install(dest);
-      if (mod.id) {
-        if (name) { try { engine.rename(mod.id, name); } catch (_) {} }
-        const stored = store.getMod(mod.id);
-        if (stored) {
-          stored.version = file.version || null;
-          stored.origin = { type: 'nexus', modId, fileId: file.file_id, version: file.version || null };
-          store.save();
-        }
+      const origin = { type: 'nexus', modId, fileId: file.file_id, version: file.version || null };
+      const res = await engine.install(dest, { origin, version: file.version || null });
+      if (res.pendingFomod) {
+        forwardFomod(res, name || `mod ${modId}`);
+        return { pendingFomod: true, state: fullState() };
       }
+      const mods = installedMods(res);
+      if (mods.length === 1 && mods[0].id && name) {
+        try { engine.rename(mods[0].id, name); } catch (_) {}
+      }
+      return { installed: true, count: mods.length, state: fullState() };
     } finally {
       fs.rmSync(dest, { force: true });
     }
-    return { installed: true, state: fullState() };
   },
 
   'config-list': async () =>
@@ -725,17 +747,18 @@ const handlers = {
       sendEvent({ type: 'progress', label: fullName, received: got, total });
     });
     try {
-      const mod = await engine.install(dest);
-      if (mod.id) {
-        const stored = store.getMod(mod.id);
-        stored.origin = { type: 'github', repo: fullName, tag: release.tag };
-        stored.version = release.tag;
-        store.save();
+      const res = await engine.install(dest, {
+        origin: { type: 'github', repo: fullName, tag: release.tag },
+        version: release.tag,
+      });
+      if (res.pendingFomod) {
+        forwardFomod(res, fullName);
+        return { pendingFomod: true, state: fullState() };
       }
+      return { installed: true, count: installedMods(res).length, state: fullState() };
     } finally {
       fs.rmSync(dest, { force: true });
     }
-    return { installed: true, state: fullState() };
   },
 
   'check-updates': async () => {
@@ -754,11 +777,10 @@ const handlers = {
         sendEvent({ type: 'progress', label: mod.name, received: got, total });
       });
       try {
-        const updated = await engine.replaceInPlace(id, dest);
-        const stored = store.getMod(updated.id);
-        stored.origin = { type: 'github', repo: origin.repo, tag: release.tag };
-        stored.version = release.tag;
-        store.save();
+        const res = await engine.replaceOrigin(
+          { type: 'github', repo: origin.repo }, dest,
+          { type: 'github', repo: origin.repo, tag: release.tag }, release.tag);
+        if (res.pendingFomod) { forwardFomod(res, mod.name); return { pendingFomod: true, state: fullState() }; }
       } finally {
         fs.rmSync(dest, { force: true });
       }
@@ -774,11 +796,11 @@ const handlers = {
           sendEvent({ type: 'progress', label: mod.name, received: got, total });
         });
         try {
-          const updated = await engine.replaceInPlace(id, dest);
-          const stored = store.getMod(updated.id);
-          stored.origin = { type: 'nexus', modId: origin.modId, fileId: file.file_id, version: file.version || mod.updateInfo.latest };
-          stored.version = file.version || mod.updateInfo.latest;
-          store.save();
+          const newVersion = file.version || mod.updateInfo.latest;
+          const res = await engine.replaceOrigin(
+            { type: 'nexus', modId: origin.modId }, dest,
+            { type: 'nexus', modId: origin.modId, fileId: file.file_id, version: newVersion }, newVersion);
+          if (res.pendingFomod) { forwardFomod(res, mod.name); return { pendingFomod: true, state: fullState() }; }
         } finally {
           fs.rmSync(dest, { force: true });
         }
@@ -814,16 +836,26 @@ async function installPaths(paths) {
   const results = [];
   for (const p of paths) {
     try {
-      const mod = await engine.install(p);
-      if (mod.pendingFomod) {
+      const res = await engine.install(p);
+      if (res.pendingFomod) {
         // The renderer runs the guided steps and finishes via fomod-complete.
         results.push({
           source: path.basename(p), ok: true, pendingFomod: true,
-          sessionId: mod.sessionId, moduleXml: mod.moduleXml, info: mod.info, name: mod.name,
+          sessionId: res.sessionId, moduleXml: res.moduleXml, info: res.info, name: res.name,
         });
         continue;
       }
-      results.push({ source: path.basename(p), ok: true, name: mod.name, modType: mod.modType, warnings: mod.warnings || [] });
+      for (const mod of installedMods(res)) {
+        results.push({ source: path.basename(p), ok: true, name: mod.name, modType: mod.modType, warnings: mod.warnings || [] });
+      }
+      if (res.multi) {
+        for (const e of res.errors || []) results.push({ source: path.basename(p), ok: false, error: e });
+        results.push({
+          source: path.basename(p), ok: true, note: true,
+          name: path.basename(p), modType: 'multi',
+          message: `${res.mods.length} mods found in one archive — each installed as its own entry.`,
+        });
+      }
     } catch (err) {
       results.push({ source: path.basename(p), ok: false, error: err.message });
     }

@@ -2,6 +2,23 @@
 
 Context document for continuing work on this project. Last updated 2026-09-04.
 
+## v1.3.0 (2026-09-04, feat/multi-mod-split branch) — multi-mod archives
+
+Every mod in an archive becomes its own entry (ZCOM's last install-side edge):
+engine._splitModGroups (UE4SS folders each split; pak/utoc/ucas group by
+containing folder — several paks in ONE folder stay one mod; LogicMods
+subfolders keep type; runtime/gamefolder/root-level-ue4ss never split; each
+entry reads its own modinfo.json). install() returns {multi:true, mods, errors}
+when split; opts {origin, version} thread through install/_installFromFolder/
+FOMOD session so Nexus/GitHub origin stamps every entry. replaceInPlace REMOVED
+→ engine.replaceOrigin(match, source, newOrigin, newVersion): uninstalls all
+entries sharing the origin, reinstalls (re-splits), restores enabled/priorities
+by name (single-entry keeps custom name). ALSO FIXED: a Nexus/GitHub download
+carrying a FOMOD script now forwards the wizard to the renderer
+('fomod-pending' event, main.js forwardFomod) — previously the session leaked
+and nothing installed. Tests: engine-test-v13.js (21) + both prior suites green
+(83 total); UI drop-path verified. NOT released.
+
 ## v1.2.0 RELEASED 2026-09-04 (merged to main, tag v1.2.0)
 
 Nexus file id 550 (global 42893838385702, main + primary MM download) on the

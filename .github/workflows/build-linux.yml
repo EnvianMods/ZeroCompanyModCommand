@@ -1,6 +1,3 @@
-# STAGED WORKFLOW - copy this file to .github/workflows/build-linux.yml
-# (the release token lacks the workflow scope, so it cannot push there itself:
-#  either add it via the GitHub web UI, or grant the token Workflows write access)
 name: Build Linux AppImage
 
 # The Windows portable exe is built locally; the AppImage needs a Linux host

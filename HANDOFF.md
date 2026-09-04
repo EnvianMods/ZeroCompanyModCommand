@@ -26,14 +26,13 @@ https://www.nexusmods.com/starwarszerocompany/mods/121 (global API id 4289383838
 Created 2026-09-03: General (bbcode description, Utilities, tag "Utilities for Players",
 author "Envian Mods", version 1.0.0), Media (5 gallery screenshots, copies in `docs/screenshots/`),
 Files (v1.0.0 zip uploaded via the **Nexus v3 API**, main file id 519, primary MM download).
-Header image NOT yet set: Brave's fingerprinting shield blocks Nexus's canvas crop — lower
-Shields for nexusmods.com, then upload `src/assets/nexus-header.png` (1300x372, source
-`nexus-header.svg`; the old 1280x720 `nexus-banner.png` is the wrong shape for the header slot).
-The `[img]` in the description's SUPPORT section renders "Join Smexy's Mods Discord" — check
-EnvianMods/Assets/discord_banner.png before publishing.
+Header image SET (`src/assets/nexus-header.png`, 1300x372, source `nexus-header.svg`; an exact-size
+image skips Nexus's canvas crop, which Brave's fingerprinting shield otherwise blocks).
+The description's Discord banner reads "Join Smexy's Mods Discord" — that is correct: the server is
+shared with SmexyXey and Envian has his own section in it.
 
 **NOT yet done — the actual launch:**
-1. Set the header image (above), then press **Publish** on the mod page
+1. Press **Publish** on the mod page
 2. Announce: `"Update Launcher Version.bat" 1.0.0 "https://www.nexusmods.com/starwarszerocompany/mods/121?tab=files"`
    (launcher-version.json is unpublished — no update banners exist until this runs)
 

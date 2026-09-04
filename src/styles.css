@@ -684,3 +684,56 @@ body.reduced-motion * { transition: none !important; animation: none !important;
 .toast.error { border-left-color: var(--danger); }
 .toast.warn { border-left-color: var(--amber); }
 @keyframes toastIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: none; } }
+
+/* ---------- v1.1.0: game-folder mods, FOMOD wizard, order review ---------- */
+
+.badge-gamefolder { color: #ff9d7a; border-color: rgba(255, 157, 122, 0.5); }
+
+.order-review-row .import-name { font-weight: 600; }
+.order-review-row.winner-changes { border-left: 3px solid var(--amber); }
+.order-review-row.winner-changes .import-meta { color: var(--amber); }
+
+.fomod-box { width: 860px; }
+.fomod-stepline {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  margin-bottom: 10px;
+}
+.fomod-stepname { font-size: 13px; font-weight: 700; letter-spacing: 2px; color: var(--amber); }
+.fomod-progress { font-size: 11px; font-family: var(--mono); }
+.fomod-warnings {
+  font-size: 11px; color: var(--amber); background: rgba(255, 200, 87, 0.08);
+  border: 1px solid rgba(255, 200, 87, 0.35); padding: 8px 12px; margin-bottom: 10px;
+}
+.fomod-layout {
+  display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px;
+  min-height: 260px; margin-bottom: 14px;
+}
+.fomod-groups { overflow-y: auto; max-height: 46vh; display: flex; flex-direction: column; gap: 14px; }
+.fomod-group-title {
+  font-size: 11px; font-weight: 800; letter-spacing: 2px; color: var(--holo);
+  margin-bottom: 6px;
+}
+.fomod-group-hint { letter-spacing: 0.5px; font-weight: 400; text-transform: lowercase; }
+.fomod-option {
+  display: flex; align-items: center; gap: 10px; cursor: pointer;
+  padding: 7px 10px; background: var(--panel); border: 1px solid var(--panel-edge);
+  margin-bottom: 4px; font-size: 13px;
+}
+.fomod-option:hover { border-color: rgba(79, 209, 255, 0.45); }
+.fomod-option.notusable { opacity: 0.45; cursor: not-allowed; }
+.fomod-option-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.fomod-option-type {
+  font-size: 9px; font-weight: 800; letter-spacing: 1.5px; font-family: var(--mono);
+  color: var(--text-dim); flex-shrink: 0;
+}
+.fomod-option-type.t-required { color: var(--good); }
+.fomod-option-type.t-recommended { color: var(--holo); }
+.fomod-option-type.t-notusable { color: var(--danger); }
+.fomod-detail {
+  border: 1px solid var(--panel-edge); background: var(--panel);
+  padding: 12px 14px; overflow-y: auto; max-height: 46vh;
+}
+.fomod-detail-image { margin-bottom: 10px; }
+.fomod-detail-image img { max-width: 100%; max-height: 220px; display: block; border: 1px solid var(--panel-edge); }
+.fomod-detail-name { font-size: 11px; letter-spacing: 1.5px; font-weight: 700; margin-bottom: 6px; }
+.fomod-detail-desc { font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }

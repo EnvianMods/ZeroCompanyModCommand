@@ -2,6 +2,23 @@
 
 Context document for continuing work on this project. Last updated 2026-09-04.
 
+## v1.2.0 RELEASED 2026-09-04 (merged to main, tag v1.2.0)
+
+Nexus file id 550 (global 42893838385702, main + primary MM download) on the
+still-unpublished draft page 121. Archive Release v1.2.0 done; silent GitHub
+mirror release done; main/branch/tag pushed to source repo. OUTSTANDING:
+1. Archive repo dev mirror is STALLED at b6efcbd — archive-token.txt lacks the
+   `workflow` scope (main now contains .github/workflows/build-linux.yml).
+   Extend that token like the release token, then: push main:dev.
+2. Linux AppImage: workflow registered+active on the source repo but the v1.2.0
+   tag push started NO run — GitHub Actions is likely disabled in the repo/org
+   settings (token can't read/change it; Actions API dispatch also needs an
+   `Actions: write` token permission the release token lacks). Enable Actions,
+   then press "Run workflow" on Build Linux AppImage (or re-push a tag) — on a
+   v* tag run it auto-attaches ZeroCompanyModCommand.AppImage to that GitHub
+   release. Then optionally upload the AppImage to Nexus as an optional file.
+3. Linux paths still untested on real hardware — test on Deck before promoting.
+
 ## v1.2.0 (2026-09-04, feat/steam-ea-linux branch) — cross-launcher release
 
 Built on the user's ask to close the remaining ZCOM gaps + go further:

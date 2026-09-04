@@ -11,7 +11,10 @@
 //        file_category:"main", primary_mod_manager_download:true}
 //
 // Usage: node upload-nexus-file.js <version> <zipPath> [--mod-id 121]
-//        [--name "Zero Company Mod Command"] [--dry-run]
+//        [--name "Zero Company Mod Command"] [--category main|optional]
+//        [--no-primary] [--dry-run]
+// The Windows zip stays the main + primary Mod Manager Download; extra
+// platform files (e.g. the Linux AppImage) go up as --category optional --no-primary.
 // API key: nexus-key.txt beside this script, env NEXUS_API_KEY, or the dev
 // store's plaintext nexusApiKey (pre-1.1.0 stores only — 1.1.0 encrypts it).
 
@@ -85,22 +88,52 @@ async function api(method, pathname, apiKey, body) {
   console.log(`mod ${modId} -> global id ${globalId}`);
   if (dryRun) { console.log('dry-run: stopping before upload.'); return; }
 
-  const upload = await api('POST', '/uploads', apiKey, {
-    size_bytes: data.length, filename: basename, md5: md5hex,
-  });
-  console.log(`upload id ${upload.id}, pushing bytes…`);
-  const put = await fetch(upload.presigned_url, {
-    method: 'PUT',
-    headers: {
-      'Content-Disposition': `attachment; filename="${basename}"`,
-      'Content-MD5': md5b64,
-      'Content-Type': 'application/octet-stream',
-    },
-    body: data,
-  });
-  if (!put.ok) throw new Error(`PUT presigned -> ${put.status} ${put.statusText}: ${(await put.text()).slice(0, 300)}`);
-
-  await api('POST', `/uploads/${upload.id}/finalise`, apiKey);
+  // Files over 100 MiB must go through the multipart flow (50 MiB parts).
+  const SINGLE_PART_MAX = 100 * 1024 * 1024;
+  let upload;
+  if (data.length > SINGLE_PART_MAX) {
+    upload = await api('POST', '/uploads/multipart', apiKey, {
+      size_bytes: data.length, filename: basename, md5: md5hex,
+    });
+    const partSize = upload.part_size_bytes;
+    const urls = upload.part_presigned_urls;
+    console.log(`multipart upload id ${upload.id}: ${urls.length} part(s) of ≤${(partSize / 1048576).toFixed(0)} MB`);
+    const etags = [];
+    for (let i = 0; i < urls.length; i++) {
+      const chunk = data.subarray(i * partSize, Math.min((i + 1) * partSize, data.length));
+      const put = await fetch(urls[i], { method: 'PUT', body: chunk });
+      if (!put.ok) throw new Error(`PUT part ${i + 1} -> ${put.status} ${put.statusText}: ${(await put.text()).slice(0, 300)}`);
+      etags.push({ part_number: i + 1, etag: (put.headers.get('etag') || '').replace(/"/g, '') });
+      process.stdout.write(`part ${i + 1}/${urls.length} done\n`);
+    }
+    // S3 CompleteMultipartUpload via the presigned completion URL (XML body
+    // listing every part's ETag), then the normal v3 finalise.
+    const xml = '<CompleteMultipartUpload>'
+      + etags.map((e) => `<Part><PartNumber>${e.part_number}</PartNumber><ETag>"${e.etag}"</ETag></Part>`).join('')
+      + '</CompleteMultipartUpload>';
+    const complete = await fetch(upload.complete_presigned_url, { method: 'POST', body: xml });
+    const completeText = await complete.text();
+    if (!complete.ok || /<Error>/.test(completeText)) {
+      throw new Error(`multipart completion failed (${complete.status}): ${completeText.slice(0, 300)}`);
+    }
+    await api('POST', `/uploads/${upload.id}/finalise`, apiKey);
+  } else {
+    upload = await api('POST', '/uploads', apiKey, {
+      size_bytes: data.length, filename: basename, md5: md5hex,
+    });
+    console.log(`upload id ${upload.id}, pushing bytes…`);
+    const put = await fetch(upload.presigned_url, {
+      method: 'PUT',
+      headers: {
+        'Content-Disposition': `attachment; filename="${basename}"`,
+        'Content-MD5': md5b64,
+        'Content-Type': 'application/octet-stream',
+      },
+      body: data,
+    });
+    if (!put.ok) throw new Error(`PUT presigned -> ${put.status} ${put.statusText}: ${(await put.text()).slice(0, 300)}`);
+    await api('POST', `/uploads/${upload.id}/finalise`, apiKey);
+  }
   process.stdout.write('finalised, waiting for scan');
   for (let i = 0; i < 60; i++) {
     await new Promise((r) => setTimeout(r, 5000));
@@ -116,8 +149,8 @@ async function api(method, pathname, apiKey, body) {
     mod_id: globalId,
     name: fileName || basename.replace(/\.zip$/i, ''),
     version,
-    file_category: 'main',
-    primary_mod_manager_download: true,
+    file_category: arg('--category', 'main'),
+    primary_mod_manager_download: !process.argv.includes('--no-primary'),
   });
   console.log('mod file created:', JSON.stringify(file).slice(0, 300));
   console.log(`done — https://www.nexusmods.com/${GAME_DOMAIN}/mods/${modId}?tab=files`);

@@ -15,6 +15,8 @@ const { getPromotedAuthors } = require('./lib/featured');
 const github = require('./lib/github');
 const ea = require('./lib/ea');
 const { checkLauncherUpdate } = require('./lib/launcher-update');
+const { log, logText } = require('./lib/log');
+const report = require('./lib/report');
 
 // Data lives next to the portable exe, or in ./data when running from source.
 function resolveDataDir() {
@@ -166,6 +168,7 @@ async function handleNxm(rawUrl) {
     }
     sendEvent({ type: 'state', state: fullState() });
   } catch (err) {
+    log('error', `nxm install failed: ${err.message}`);
     sendEvent({ type: 'toast', kind: 'error', message: err.message });
   }
 }
@@ -211,6 +214,7 @@ async function checkForUpdates() {
   }
   store.settings.lastUpdateCheck = new Date().toISOString();
   store.save();
+  log('info', `update check: ${results.checked} checked, ${results.updates} update(s), ${results.errors.length} error(s)`);
   return results;
 }
 
@@ -233,6 +237,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  log('info', `app start v${app.getVersion()} on ${process.platform} ${require('os').release()}`);
   // Move a legacy plaintext Nexus key into the OS-encrypted store.
   try { migrateNexusKey(); } catch (_) {}
   try { eaAppDetected = ea.eaAppPresent(); } catch (_) {}
@@ -264,6 +269,7 @@ app.whenReady().then(() => {
     try {
       const repaired = engine.repairDeployments();
       if (repaired.length) {
+        log('warn', `startup recovery redeployed: ${repaired.join(', ')}`);
         sendEvent({ type: 'state', state: fullState() });
         sendEvent({ type: 'toast', kind: 'warn', message: `Recovered missing deployed files for: ${repaired.join(', ')}.` });
       }
@@ -408,17 +414,35 @@ const handlers = {
 
   'install-dropped': async (_e, paths) => installPaths(paths),
 
-  'set-mod-enabled': async (_e, { id, enabled, force }) => { engine.setEnabled(id, enabled, force); return fullState(); },
-  'uninstall-mod': async (_e, { id, force }) => { engine.uninstall(id, force); return fullState(); },
+  'set-mod-enabled': async (_e, { id, enabled, force }) => {
+    const mod = engine.setEnabled(id, enabled, force);
+    log('info', `${enabled ? 'enabled' : 'disabled'} "${mod.name}"${force ? ' (forced past ownership check)' : ''}`);
+    return fullState();
+  },
+  'uninstall-mod': async (_e, { id, force }) => {
+    const name = (store.getMod(id) || {}).name;
+    engine.uninstall(id, force);
+    log('info', `uninstalled "${name}"`);
+    return fullState();
+  },
   'rename-mod': async (_e, { id, name }) => { engine.rename(id, name); return fullState(); },
-  'apply-load-order': async (_e, { orderedIds }) => { engine.applyLoadOrder(orderedIds); return fullState(); },
+  'apply-load-order': async (_e, { orderedIds }) => {
+    engine.applyLoadOrder(orderedIds);
+    log('info', `pak load order applied (${orderedIds.length} mod(s))`);
+    return fullState();
+  },
   'preview-load-order': async (_e, { orderedIds }) => engine.previewLoadOrder(orderedIds),
   'rollback-load-order': async () => { engine.rollbackLoadOrder(); return fullState(); },
-  'apply-ue4ss-order': async (_e, { orderedIds }) => { engine.applyUe4ssOrder(orderedIds); return fullState(); },
+  'apply-ue4ss-order': async (_e, { orderedIds }) => {
+    engine.applyUe4ssOrder(orderedIds);
+    log('info', `UE4SS start order applied (${orderedIds.length} mod(s))`);
+    return fullState();
+  },
   'confirm-mod-build': async (_e, { id }) => { engine.confirmBuild(id); return fullState(); },
 
   'fomod-complete': async (_e, { sessionId, selections }) => {
     const mod = await engine.completeFomod(sessionId, selections);
+    log('info', `guided install completed: "${mod.name}" (${selections.length} file rule(s))`);
     return { state: fullState(), name: mod.name, modType: mod.modType, warnings: mod.warnings || [] };
   },
   'fomod-cancel': async (_e, { sessionId }) => { engine.cancelFomod(sessionId); return true; },
@@ -846,6 +870,7 @@ async function installPaths(paths) {
         continue;
       }
       for (const mod of installedMods(res)) {
+        log('info', `installed "${mod.name}" (${mod.modType}) from ${path.basename(p)}`);
         results.push({ source: path.basename(p), ok: true, name: mod.name, modType: mod.modType, warnings: mod.warnings || [] });
       }
       if (res.multi) {
@@ -857,6 +882,7 @@ async function installPaths(paths) {
         });
       }
     } catch (err) {
+      log('error', `install of ${path.basename(p)} failed: ${err.message}`);
       results.push({ source: path.basename(p), ok: false, error: err.message });
     }
   }
@@ -977,11 +1003,64 @@ function diagnostics() {
   return { items, generatedAt: new Date().toISOString() };
 }
 
+// Everything a bug report needs, gathered fresh and scrubbed of personal data.
+function buildSupportReport() {
+  const detection = steam.detectGame(store.settings.gamePath);
+  const hookReport = store.settings.gamePath ? engine.scanUe4ssHooks() : { entries: [], conflicts: [] };
+  const conflicts = (store.settings.gamePath ? engine.conflicts(hookReport) : [])
+    .map((c) => ({
+      ...c,
+      aName: (store.getMod(c.aId) || {}).name,
+      bName: (store.getMod(c.bId) || {}).name,
+    }));
+  const compat = ea.compatSync();
+  const modCompat = {};
+  for (const m of store.mods) modCompat[m.id] = ea.evaluateMod(m, compat);
+  return report.buildReport({
+    appVersion: app.getVersion(),
+    platform: process.platform,
+    osRelease: require('os').release(),
+    generatedAt: new Date().toISOString(),
+    detection,
+    eaAppPresent: eaAppDetected,
+    settings: store.settings,
+    hasNexusKey: !!nexusKey(),
+    keyEncrypted: !!store.settings.nexusApiKeyEncrypted,
+    mods: store.mods,
+    modCompat,
+    conflicts,
+    hookConflicts: hookReport.conflicts,
+    duplicates: store.settings.gamePath ? engine.scanDuplicateMods() : [],
+    missingDeployed: store.settings.gamePath ? engine.auditDeployedFiles() : [],
+    ue4ssStatus: engine.ue4ssStatus(),
+    retoc: engine.retocStatus(),
+    sevenZip: !!findSevenZip(store.settings.sevenZipPath),
+    diagItems: diagnostics().items,
+    logText: logText(250),
+    paths: { gamePath: store.settings.gamePath, dataDir: store.dataDir },
+  });
+}
+
+handlers['support-report'] = async () => ({ text: buildSupportReport() });
+
+handlers['save-support-report'] = async () => {
+  const res = await dialog.showSaveDialog(win, {
+    title: 'Save support report',
+    defaultPath: `ZeroCompanyModCommand-report-${new Date().toISOString().slice(0, 10)}.txt`,
+    filters: [{ name: 'Text report', extensions: ['txt'] }],
+  });
+  if (res.canceled || !res.filePath) return { saved: false };
+  fs.writeFileSync(res.filePath, buildSupportReport());
+  log('info', 'support report saved');
+  return { saved: true, file: path.basename(res.filePath) };
+};
+
 for (const [channel, fn] of Object.entries(handlers)) {
   ipcMain.handle(channel, async (event, payload) => {
     try {
       return ok(await fn(event, payload));
     } catch (err) {
+      log('error', `${channel}: ${err && err.message ? err.message : err}`);
       return fail(err);
     }
   });

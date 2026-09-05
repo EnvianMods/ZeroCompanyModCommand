@@ -770,3 +770,7 @@ body.reduced-motion * { transition: none !important; animation: none !important;
 }
 .browse-card.in-hangar { border-color: rgba(109, 255, 176, 0.35); }
 .freeze-note { font-size: 11.5px; line-height: 1.5; margin: 6px 2px 0; }
+
+/* ---------- API key guidance ---------- */
+.setting-note { font-size: 11.5px; line-height: 1.55; margin: 4px 0 0; max-width: 560px; }
+.setting-note b { color: var(--text); }

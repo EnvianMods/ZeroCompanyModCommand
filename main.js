@@ -521,7 +521,7 @@ const handlers = {
   },
 
   'open-external': async (_e, { url }) => {
-    if (!/^https:\/\/(www\.)?(nexusmods\.com|github\.com|discord\.gg)\//.test(url)) throw new Error('Blocked URL.');
+    if (!/^https:\/\/(www\.|next\.)?(nexusmods\.com|github\.com|discord\.gg)\//.test(url)) throw new Error('Blocked URL.');
     await shell.openExternal(url);
     return true;
   },

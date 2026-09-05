@@ -1,5 +1,37 @@
 # Zero Company Mod Command — Changelog
 
+## v1.5.0 (2026-09-04)
+
+**Version vault — roll back mod versions, pin them in profiles**
+- Whenever a mod updates, the outgoing version is archived automatically (the
+  newest 5 per mod are kept). A new ⧗ version button on every Hangar Bay row
+  opens the vault: one click rolls back to any archived version — and rolling
+  back archives the current version first, so you can roll forward again
+- Squad profiles now pin the exact version of every mod they were saved with:
+  applying a profile swaps versions back in from the vault where they differ
+  (with a clear note when an archived version is no longer available)
+
+**Game update freeze (experimental, opt-in)**
+- New Settings toggle that stops the game auto-updating overnight and breaking
+  a modded playthrough: it sets Steam's own "update only on launch" flag and
+  locks the game's Steam manifest so no update can be scheduled, and the
+  Launch button starts the game directly while frozen (a Steam launch is what
+  triggers the update check). The freeze is re-asserted at startup if Steam
+  unlocked the manifest, Diagnostics reports its state, and turning it off
+  restores everything
+- Honest limits, shown before enabling: launching from the Steam UI itself can
+  still force an update, and online modes may require the current build.
+  Steam installs only — EA App users get pointed at the EA App's own
+  auto-update setting
+
+**Hangar Bay & Holonet quality of life**
+- Enable all / Disable all buttons (disable-all runs one aggregate file-
+  ownership check first, so hand-edited files are never silently removed)
+- Holonet and Forge cards now show when a mod is already installed: a green
+  "IN HANGAR" badge (with a disabled note when all its entries are off), the
+  Install button becomes "✓ Installed", and if an update is waiting the card
+  offers "⬆ Update" directly
+
 ## v1.4.0 (2026-09-04)
 
 **Support reports & sanitized logs**

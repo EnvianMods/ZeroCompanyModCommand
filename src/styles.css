@@ -760,3 +760,13 @@ body.reduced-motion * { transition: none !important; animation: none !important;
 .ue4ss-pass.pass-dll { color: var(--amber); border-color: rgba(255, 200, 87, 0.5); }
 .ue4ss-pass.pass-lua { color: var(--holo); border-color: rgba(79, 209, 255, 0.5); }
 .ue4ss-order-note { font-size: 11.5px; margin-top: 10px; line-height: 1.5; }
+
+/* ---------- v1.5.0: bulk toggle, installed badges, version vault, update freeze ---------- */
+
+.profile-bar-spacer { flex: 1; }
+.featured-tag.installed-tag {
+  top: 32px;
+  color: #04180c; background: linear-gradient(90deg, rgba(109, 255, 176, 0.8), var(--good));
+}
+.browse-card.in-hangar { border-color: rgba(109, 255, 176, 0.35); }
+.freeze-note { font-size: 11.5px; line-height: 1.5; margin: 6px 2px 0; }

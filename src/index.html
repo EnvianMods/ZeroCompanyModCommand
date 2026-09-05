@@ -149,8 +149,8 @@
               <option value="">All categories</option>
             </select>
             <select id="browse-sort" class="profile-select">
-              <option value="downloads">Most downloaded</option>
               <option value="endorsements">Most endorsed</option>
+              <option value="downloads">Most downloaded</option>
               <option value="newest">Newest</option>
               <option value="updated">Recently updated</option>
               <option value="name">Name A–Z</option>
@@ -388,6 +388,7 @@
             <button class="btn ghost" data-open="data">Open manager data</button>
             <button class="btn ghost" data-open="ue4ssMods">Open UE4SS mods</button>
             <button class="btn ghost" id="btn-launch-direct">Launch game directly (no Steam)</button>
+            <button class="btn ghost" id="btn-rerun-setup">Setup assistant</button>
           </div>
         </div>
       </section>
@@ -455,6 +456,41 @@
       <div class="zc-modal-actions">
         <button id="prompt-ok" class="btn primary">Confirm</button>
         <button id="prompt-cancel" class="btn ghost">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="setup-modal" class="zc-modal hidden">
+    <div class="zc-modal-box setup-box">
+      <div class="zc-modal-title">FIRST RUN — GET MISSION-READY</div>
+      <p class="zc-modal-sub dim">Two quick steps and every mod on Nexus is one click away. Both can be changed later in Settings.</p>
+
+      <div class="setup-step">
+        <div class="setup-step-head"><span class="setup-step-num">1</span> GAME DETECTION <span id="setup-game-status" class="setup-status"></span></div>
+        <p class="setting-note dim" id="setup-game-note"></p>
+      </div>
+
+      <div class="setup-step">
+        <div class="setup-step-head"><span class="setup-step-num">2</span> NEXUS API KEY <span id="setup-key-status" class="setup-status"></span></div>
+        <p class="setting-note dim">The free key unlocks one-click installs and update checking. Press the button, log in if asked, scroll to <b>Personal API Key</b> at the bottom, press <b>Request an API key</b> if you don't have one, copy it, and paste it here. It is stored encrypted with your OS account and only ever sent to nexusmods.com.</p>
+        <div class="setup-row">
+          <button class="btn" data-url="https://next.nexusmods.com/settings/api-keys">Get my API key ↗</button>
+          <input type="password" id="setup-key-input" class="text-input" placeholder="Paste personal API key" />
+          <button class="btn tiny primary" id="btn-setup-key-save">Save</button>
+        </div>
+      </div>
+
+      <div class="setup-step">
+        <div class="setup-step-head"><span class="setup-step-num">3</span> ONE-CLICK DOWNLOADS <span id="setup-nxm-status" class="setup-status"></span></div>
+        <p class="setting-note dim">Registering the nxm:// handler makes the <b>Mod Manager Download</b> button on nexusmods.com download and install mods straight into the manager.</p>
+        <div class="setup-row">
+          <button class="btn" id="btn-setup-nxm">Register nxm:// handler</button>
+        </div>
+      </div>
+
+      <div class="zc-modal-actions">
+        <button id="btn-setup-finish" class="btn primary">Finish setup</button>
+        <button id="btn-setup-skip" class="btn ghost">Skip for now</button>
       </div>
     </div>
   </div>

@@ -277,10 +277,41 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      // Enables the in-app <webview> that hosts the Holonet Nexus download panel
+      // (the free-account path: the user browses the real Nexus page and clicks
+      // "Mod Manager Download"; we catch the nxm:// it emits — see below).
+      webviewTag: true,
     },
   });
   win.loadFile(path.join(__dirname, 'src', 'index.html'));
 }
+
+// The embedded Nexus <webview> is untrusted remote content. We never expose app
+// IPC to it; instead the MAIN process watches every webview's navigations for the
+// nxm:// link the "Mod Manager Download" button emits, and routes it into the
+// same install pipeline the OS protocol handler uses (handleNxm). This is what
+// lets a non-premium user download without leaving the app — the website mints
+// the signed nxm link from their logged-in session, exactly as in a real browser.
+app.on('web-contents-created', (_e, contents) => {
+  if (contents.getType() !== 'webview') return;
+  const catchNxm = (url) => {
+    if (typeof url === 'string' && url.startsWith('nxm://')) {
+      handleNxm(url);
+      return true;
+    }
+    return false;
+  };
+  contents.on('will-navigate', (e, url) => { if (catchNxm(url)) e.preventDefault(); });
+  contents.on('will-redirect', (e, url) => { if (catchNxm(url)) e.preventDefault(); });
+  contents.setWindowOpenHandler(({ url }) => {
+    if (catchNxm(url)) return { action: 'deny' };
+    // Keep navigation inside the panel; never spawn OS/native windows from Nexus.
+    if (/^https?:\/\/([a-z0-9-]+\.)?nexusmods\.com/i.test(url)) {
+      contents.loadURL(url);
+    }
+    return { action: 'deny' };
+  });
+});
 
 app.whenReady().then(() => {
   log('info', `app start v${app.getVersion()} on ${process.platform} ${require('os').release()}`);
@@ -801,10 +832,15 @@ const handlers = {
       try { nexusUser = await nexus.validateKey(apiKey); } catch (err) { throw new Error(err.message); }
     }
     if (!nexusUser.isPremium) {
-      // Nexus policy: non-premium downloads must start on the website. The
-      // "Mod Manager Download" button sends an nxm:// link straight back to us.
-      await shell.openExternal(`https://www.nexusmods.com/${nexus.GAME_DOMAIN}/mods/${modId}?tab=files`);
-      return { opened: 'website' };
+      // Nexus policy: non-premium downloads must start on the website. Rather
+      // than leaving the app, we hand the mod's Files URL back to the renderer,
+      // which opens it in the embedded Nexus panel; the "Mod Manager Download"
+      // button there emits an nxm:// link we catch (see web-contents-created).
+      return {
+        opened: 'embed',
+        url: `https://www.nexusmods.com/${nexus.GAME_DOMAIN}/mods/${modId}?tab=files`,
+        name,
+      };
     }
     const files = await nexus.filesList(modId, apiKey);
     const file = nexus.pickPrimaryFile(files);
@@ -982,10 +1018,14 @@ const handlers = {
     if (!apiKey) throw new Error('A Nexus Mods API key is required. Add one in Settings.');
     if (!nexusUser) { try { nexusUser = await nexus.validateKey(apiKey); } catch (err) { throw new Error(err.message); } }
     if (!nexusUser.isPremium) {
-      // Free accounts: the website must mint the link — the nxm handoff then
-      // installs the exact file the user clicked.
-      await shell.openExternal(`https://www.nexusmods.com/${nexus.GAME_DOMAIN}/mods/${modId}?tab=files`);
-      return { opened: 'website' };
+      // Free accounts: the website mints the link. Open the mod's Files page in
+      // the embedded Nexus panel; the nxm handoff installs the file the user
+      // clicks there — no leaving the app.
+      return {
+        opened: 'embed',
+        url: `https://www.nexusmods.com/${nexus.GAME_DOMAIN}/mods/${modId}?tab=files`,
+        name,
+      };
     }
     const files = await nexus.filesList(modId, apiKey);
     const file = files.find((f) => f.file_id === fileId);
@@ -1116,9 +1156,9 @@ const handlers = {
         }
         return { updated: true, state: fullState() };
       }
-      // Free account: route through the website; the nxm link replaces in place.
-      await shell.openExternal(mod.updateInfo.url);
-      return { opened: 'website' };
+      // Free account: open the mod page in the embedded Nexus panel; the nxm
+      // link from "Mod Manager Download" replaces the mod in place.
+      return { opened: 'embed', url: mod.updateInfo.url, name: mod.name };
     }
     throw new Error('That mod has no update source.');
   },

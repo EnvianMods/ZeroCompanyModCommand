@@ -334,6 +334,8 @@ function renderMods() {
             state = res.state;
             render();
             toast(`“${mod.name}” updated to ${mod.updateInfo.latest}.`);
+          } else if (res.opened === 'embed') {
+            openNexusDownload(mod.name, res.url);
           } else if (res.opened === 'website') {
             toast('Files page opened — press “Mod Manager Download” and the update installs in place.', 'info', 9000);
           }
@@ -1430,6 +1432,7 @@ function buildBrowseCard(m) {
       try {
         const res = await call('updateMod', updateEntry.id);
         if (res && res.updated) { state = res.state; render(); toast(`“${updateEntry.name}” updated.`); }
+        else if (res && res.opened === 'embed') openNexusDownload(updateEntry.name, res.url);
         else if (res && res.opened === 'website') toast('Files page opened — press “Mod Manager Download” and the update installs in place.', 'info', 8000);
       } finally {
         installBtn.disabled = false;
@@ -1465,7 +1468,9 @@ function buildBrowseCard(m) {
     try {
       const res = await call('installRemote', m.modId, m.name);
       if (!res) return;
-      if (res.opened === 'website') {
+      if (res.opened === 'embed') {
+        openNexusDownload(m.name, res.url);
+      } else if (res.opened === 'website') {
         toast(`Files page opened for “${m.name}” — press “Mod Manager Download” and it will install here automatically.`, 'info', 9000);
       } else if (res.pendingFomod) {
         state = res.state;
@@ -1540,7 +1545,10 @@ async function openNexusVersionsModal(m) {
         try {
           const res = await call('nexusInstallFile', m.modId, f.fileId, m.name);
           if (!res) return;
-          if (res.installed) {
+          if (res.opened === 'embed') {
+            $('#nexus-versions-modal').classList.add('hidden');
+            openNexusDownload(m.name, res.url);
+          } else if (res.installed) {
             state = res.state;
             render();
             $('#nexus-versions-modal').classList.add('hidden');
@@ -2061,6 +2069,153 @@ $('#btn-open-config').addEventListener('click', () => {
 
 $$('[data-close-modal]').forEach((b) =>
   b.addEventListener('click', () => $(`#${b.dataset.closeModal}`).classList.add('hidden')));
+
+// ------------------------------------------------------------ Nexus download panel (embedded)
+// The free-account path: browse the mod's real Files page inside an isolated
+// <webview>; the "Mod Manager Download" nxm:// link is caught in the main
+// process and installed (main.js). Faithful render — the page is shown untouched.
+// This panel surfaces download progress from the same events the install
+// pipeline already emits, and closes itself once the mod is installed.
+const nexusDl = { open: false, sawProgress: false, done: false, target: '' };
+const NEXUS_LOGIN_URL = 'https://users.nexusmods.com/auth/sign_in';
+
+function setNexusPill(text, kind) {
+  const status = $('#nexus-dl-status');
+  if (!status) return;
+  status.textContent = text;
+  status.className = 'nexus-dl-pill' + (kind ? ' ' + kind : '');
+}
+
+function openNexusDownload(name, url) {
+  const modal = $('#nexus-dl-modal');
+  const view = $('#nexus-dl-view');
+  if (!modal || !view) return;
+  nexusDl.open = true; nexusDl.sawProgress = false; nexusDl.done = false; nexusDl.target = url;
+  $('#nexus-dl-sub').textContent = name || 'Nexus Mods';
+  setNexusPill('Loading…', 'busy');
+  $('#nexus-dl-progress').classList.add('hidden');
+  $('#nexus-dl-progress-bar').style.width = '0%';
+  view.src = url;
+  modal.classList.remove('hidden');
+  // Some Nexus ad/tracker subresources retry and can delay did-stop-loading;
+  // settle the pill and re-check the account state after a few seconds so the
+  // panel never looks stuck on "Loading…".
+  setTimeout(() => {
+    if (nexusDl.open && !nexusDl.sawProgress && !nexusDl.done) {
+      const s = $('#nexus-dl-status');
+      if (s && /Loading/.test(s.textContent)) setNexusPill('Awaiting “Mod Manager Download”', '');
+      refreshNexusAccount();
+    }
+  }, 5000);
+}
+window.openNexusDownload = openNexusDownload; // reachable for verification harness
+
+function closeNexusDownload() {
+  nexusDl.open = false;
+  const modal = $('#nexus-dl-modal');
+  const view = $('#nexus-dl-view');
+  if (modal) modal.classList.add('hidden');
+  // Stop background media/network in the guest once the panel is dismissed.
+  try { if (view) view.src = 'about:blank'; } catch (_) {}
+}
+
+// Progress + completion for the panel, driven by the shared install events.
+function nexusDlProgress(pct, received) {
+  if (!nexusDl.open || nexusDl.done) return;
+  nexusDl.sawProgress = true;
+  $('#nexus-dl-progress').classList.remove('hidden');
+  $('#nexus-dl-progress-label').textContent = pct !== null
+    ? `Downloading — ${pct}%`
+    : `Downloading — ${(received / 1048576).toFixed(1)} MB`;
+  $('#nexus-dl-progress-bar').style.width = `${pct ?? 100}%`;
+  setNexusPill('Downloading…', 'busy');
+}
+function nexusDlMaybeComplete() {
+  if (!nexusDl.open || !nexusDl.sawProgress || nexusDl.done) return;
+  nexusDl.done = true;
+  $('#nexus-dl-progress-bar').style.width = '100%';
+  $('#nexus-dl-progress-label').textContent = 'Installed';
+  setNexusPill('Installed ✓', 'done');
+  setTimeout(closeNexusDownload, 1600);
+}
+function nexusDlError() {
+  if (!nexusDl.open) return;
+  setNexusPill('Download failed — try again', '');
+  nexusDl.sawProgress = false;
+  $('#nexus-dl-progress').classList.add('hidden');
+}
+
+// Best-effort: detect whether the embedded Nexus session is signed in (and the
+// account name) by inspecting the loaded page — robust across cookie changes.
+async function refreshNexusAccount() {
+  const view = $('#nexus-dl-view');
+  const chip = $('#nexus-dl-account');
+  if (!view || !chip) return;
+  let res = null;
+  try {
+    // Conservative: only claim "signed in" on a POSITIVE marker (a logout link
+    // or account avatar). Never infer it from the mere absence of a login link —
+    // Nexus renders its header late, which would falsely read as signed in.
+    res = await view.executeJavaScript(`(() => {
+      const logout = [...document.querySelectorAll('a')].some(a => {
+        const h = (a.getAttribute('href') || ''), t = (a.textContent || '');
+        return /sign[-_ ]?out|log[-_ ]?out/i.test(h) || /^\\s*(log ?out|sign ?out)\\s*$/i.test(t);
+      });
+      const avatar = !!document.querySelector('header img[src*="/avatars/"], img.avatar, .avatar img');
+      const acct = document.querySelector('header a[href*="/users/"]');
+      const name = acct ? (acct.getAttribute('title') || acct.textContent || '').trim() : '';
+      return { loggedIn: !!(logout || avatar), name };
+    })()`, true);
+  } catch (_) { return; }
+  if (!res) return;
+  if (res.loggedIn) {
+    chip.textContent = res.name ? `◈ ${res.name}` : '◈ Signed in';
+    chip.classList.add('in');
+    chip.title = 'Signed in to Nexus Mods in this panel';
+    // If they just signed in on the auth page, return them to the mod.
+    let cur = ''; try { cur = view.getURL(); } catch (_) {}
+    if (nexusDl.target && /users\.nexusmods\.com\/auth/i.test(cur)) {
+      try { view.loadURL(nexusDl.target); } catch (_) {}
+    }
+  } else {
+    chip.textContent = '◈ Sign in to Nexus';
+    chip.classList.remove('in');
+    chip.title = 'Sign in to Nexus Mods so downloads work';
+    if (nexusDl.open && !nexusDl.sawProgress && !nexusDl.done) {
+      setNexusPill('Sign in, then press “Mod Manager Download”', '');
+    }
+  }
+}
+
+(() => {
+  const view = $('#nexus-dl-view');
+  if (!view) return;
+  view.addEventListener('did-start-loading', () => {
+    if (nexusDl.open && !nexusDl.done) setNexusPill('Loading…', 'busy');
+  });
+  view.addEventListener('did-stop-loading', () => {
+    if (nexusDl.open && !nexusDl.sawProgress && !nexusDl.done) {
+      setNexusPill('Awaiting “Mod Manager Download”', '');
+    }
+    refreshNexusAccount();
+  });
+  const reload = $('#nexus-dl-reload');
+  if (reload) reload.addEventListener('click', () => { try { view.reload(); } catch (_) {} });
+  const ext = $('#nexus-dl-ext');
+  if (ext) ext.addEventListener('click', () => {
+    let u = 'about:blank';
+    try { u = view.getURL(); } catch (_) {}
+    if (u && u.startsWith('http')) call('openExternal', u);
+  });
+  const acct = $('#nexus-dl-account');
+  if (acct) acct.addEventListener('click', () => {
+    if (acct.classList.contains('in')) return;
+    try { view.loadURL(NEXUS_LOGIN_URL); } catch (_) { view.src = NEXUS_LOGIN_URL; }
+  });
+  // The shared [data-close-modal] handler hides the panel; also blank the guest.
+  const closeBtn = document.querySelector('[data-close-modal="nexus-dl-modal"]');
+  if (closeBtn) closeBtn.addEventListener('click', closeNexusDownload);
+})();
 
 async function openImportModal(opts = {}) {
   const candidates = await call('scanUnmanaged');
@@ -2714,11 +2869,14 @@ window.zc.onEvent((payload) => {
   }
   if (payload.type === 'toast') {
     toast(payload.message, payload.kind || 'info', 7000);
+    if (payload.kind === 'error') nexusDlError();
   } else if (payload.type === 'state') {
     state = payload.state;
     pendingOrder = null;
     pendingUe4ssOrder = null;
     render();
+    // A state refresh after download progress means the embedded install finished.
+    nexusDlMaybeComplete();
   } else if (payload.type === 'progress') {
     const box = $('#progress-toast');
     box.classList.remove('hidden');
@@ -2730,6 +2888,7 @@ window.zc.onEvent((payload) => {
     if (payload.total && payload.received >= payload.total) {
       setTimeout(() => box.classList.add('hidden'), 1200);
     }
+    nexusDlProgress(pct, payload.received); // mirror into the download panel
   }
 });
 

@@ -32,6 +32,50 @@ const store = new Store(resolveDataDir());
 const engine = new ModEngine(store);
 let win = null;
 
+// ---------------------------------------------------------- mod archive location
+// The archive (library/backups/versions + a mirrored manifest) lives in the
+// GAME folder by default — <game>\ZeroCompanyModArchive — so mods survive app
+// updates and deletions, and a fresh install can restore everything from it.
+// settings.storageDir overrides with a custom location.
+
+const storageLib = require('./lib/storage');
+const { ARCHIVE_DIR_NAME } = storageLib;
+
+function resolveStorageRoot() {
+  return storageLib.resolveStorageRoot(store.settings, store.dataDir);
+}
+
+// Re-point (and migrate) the archive whenever the resolved location changes —
+// at startup, when the game folder is set, or when the user picks a custom dir.
+function ensureStorage() {
+  const desired = resolveStorageRoot();
+  if (path.resolve(desired) === path.resolve(store.storageRoot)) return null;
+  fs.mkdirSync(desired, { recursive: true });
+  const res = storageLib.migrateStorage(store.storageRoot, desired);
+  store.setStorageRoot(desired);
+  store.save(); // also writes the mirrored manifest into the new root
+  log('info', `mod archive moved to ${desired} (${res.moved} entr(y/ies) migrated)`);
+  return { root: desired, moved: res.moved };
+}
+
+// Fresh install + an archive already sitting in the game folder (or the custom
+// location): restore every mod, profile, and vault entry from it.
+async function autoRestoreFromArchive() {
+  if (store.mods.length) return null;
+  const manifest = path.join(store.storageRoot, 'manager-data.json');
+  if (path.resolve(store.storageRoot) === path.resolve(store.dataDir) || !fs.existsSync(manifest)) return null;
+  try {
+    const results = await engine.restoreFromData(store.storageRoot, { pruneImported: true });
+    if (results.imported.length || results.profiles || results.vault) {
+      log('info', `auto-restored from archive: ${results.imported.length} mod(s), ${results.profiles} profile(s), ${results.vault} vault entr(y/ies)`);
+      return results;
+    }
+  } catch (err) {
+    log('error', `archive auto-restore failed: ${err.message}`);
+  }
+  return null;
+}
+
 // ---------------------------------------------------------- Nexus API key at rest
 // The key is kept encrypted with the OS user's credentials (DPAPI on Windows)
 // via Electron safeStorage. Plaintext is only the fallback when the OS store is
@@ -240,6 +284,9 @@ app.whenReady().then(() => {
   log('info', `app start v${app.getVersion()} on ${process.platform} ${require('os').release()}`);
   // Move a legacy plaintext Nexus key into the OS-encrypted store.
   try { migrateNexusKey(); } catch (_) {}
+  // Archive lives in the game folder (or the custom location) — migrate any
+  // app-side content there, then restore from it when this store is fresh.
+  try { ensureStorage(); } catch (err) { log('error', `archive setup failed: ${err.message}`); }
   try { eaAppDetected = ea.eaAppPresent(); } catch (_) {}
   // EA-compat community list: fetch now and refresh every 30 minutes; a state
   // push follows so freshly flagged mods surface without a restart.
@@ -262,6 +309,34 @@ app.whenReady().then(() => {
   win.webContents.once('did-finish-load', async () => {
     const info = await checkLauncherUpdate();
     if (info.available) sendEvent({ type: 'launcher-update', info });
+  });
+  // Fresh store + existing archive → restore mods/profiles/vault from it.
+  win.webContents.once('did-finish-load', async () => {
+    const results = await autoRestoreFromArchive();
+    if (results) {
+      sendEvent({ type: 'state', state: fullState() });
+      sendEvent({
+        type: 'toast',
+        message: `Restored from the mod archive: ${results.imported.length} mod(s), ${results.profiles} profile(s), ${results.vault} archived version(s).`,
+      });
+    }
+    // One-time automatic existing-mods scan after the first game connection —
+    // the review dialog opens by itself when there is anything to adopt.
+    if (!store.settings.firstScanDone && store.settings.gamePath) {
+      store.settings.firstScanDone = true;
+      store.save();
+      try {
+        const found = engine.scanUnmanaged().length
+          + engine.scanOrphanLibraries().length
+          + detectManagerSources().length;
+        if (found > 0) {
+          log('info', `first scan found ${found} existing mod source(s)`);
+          sendEvent({ type: 'first-scan', found });
+        }
+      } catch (err) {
+        log('error', `first scan failed: ${err.message}`);
+      }
+    }
   });
   // Re-assert an update freeze the user turned on (Steam may have rewritten
   // the manifest while it was briefly writable, e.g. during a verify).
@@ -342,6 +417,12 @@ function fullState() {
     },
     platform: process.platform,
     eaAppPresent: eaAppDetected,
+    storage: {
+      root: store.storageRoot,
+      custom: !!store.settings.storageDir,
+      inGameFolder: !!store.settings.gamePath
+        && path.resolve(store.storageRoot) === path.resolve(path.join(store.settings.gamePath, ARCHIVE_DIR_NAME)),
+    },
     updateFreeze: {
       wanted: !!store.settings.updateFreeze,
       ...steam.updateFreezeStatus(store.settings.gamePath),
@@ -365,6 +446,62 @@ function fullState() {
   };
 }
 
+// Best-effort Nexus identity via md5 (matches files uploaded to Nexus as-is).
+// Used by adoption, orphan recovery, and foreign-library imports.
+async function identifyOnNexus(modId) {
+  const mod = store.getMod(modId);
+  if (!mod || !nexusKey() || mod.modType === 'ue4ss-mod') return null;
+  for (const f of mod.files.slice(0, 4)) {
+    try {
+      const hit = await nexus.md5Lookup(path.join(store.modLibraryDir(mod.id), f.libraryRelative), nexusKey());
+      if (hit) {
+        engine.setOrigin(mod.id, { type: 'nexus', modId: hit.modId, fileId: hit.fileId, version: hit.version, adopted: true });
+        const stored = store.getMod(mod.id);
+        stored.version = hit.version;
+        if (hit.modName) { try { engine.rename(mod.id, hit.modName); } catch (_) {} }
+        store.save();
+        return hit;
+      }
+    } catch (_) {}
+  }
+  return null;
+}
+
+// Auto-detected import sources: a previous app-side data folder (pre-archive
+// layout), and known locations other managers keep their libraries in.
+function detectManagerSources() {
+  const out = [];
+  const seen = new Set([path.resolve(store.storageRoot).toLowerCase()]);
+  const consider = (p, label) => {
+    try {
+      const resolved = path.resolve(p).toLowerCase();
+      if (seen.has(resolved) || !fs.existsSync(p)) return;
+      seen.add(resolved);
+      const isModCommand = fs.existsSync(path.join(p, 'manager-data.json'));
+      let root = p;
+      for (const sub of ['library', 'mods', 'Mods']) {
+        if (fs.existsSync(path.join(p, sub))) { root = path.join(p, sub); break; }
+      }
+      let subdirs = 0;
+      try { subdirs = fs.readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory()).length; } catch (_) {}
+      if (!isModCommand && !subdirs) return;
+      out.push({ path: p, label, kind: isModCommand ? 'modcommand' : 'library', entries: subdirs });
+    } catch (_) {}
+  };
+  // The app-side data folder, when the archive has moved to the game folder.
+  if (path.resolve(store.dataDir) !== path.resolve(store.storageRoot)
+    && fs.existsSync(path.join(store.dataDir, 'library'))) {
+    consider(store.dataDir, 'Previous Mod Command data (app folder)');
+  }
+  const la = process.env.LOCALAPPDATA;
+  if (la) {
+    for (const name of ['zcom-mod-manager', 'ZCOM Mod Manager', 'ZCOMModManager']) {
+      consider(path.join(la, name), 'ZCOM Mod Manager data');
+    }
+  }
+  return out;
+}
+
 function ok(data) { return { ok: true, data }; }
 function fail(err) { return { ok: false, error: err && err.message ? err.message : String(err) }; }
 
@@ -384,6 +521,7 @@ const handlers = {
     }
     store.settings.gamePath = p;
     store.save();
+    ensureStorage(); // the auto archive location follows the game folder
     return fullState();
   },
 
@@ -521,7 +659,7 @@ const handlers = {
   },
 
   'open-external': async (_e, { url }) => {
-    if (!/^https:\/\/(www\.)?(nexusmods\.com|github\.com|discord\.gg)\//.test(url)) throw new Error('Blocked URL.');
+    if (!/^https:\/\/(www\.|next\.)?(nexusmods\.com|github\.com|discord\.gg)\//.test(url)) throw new Error('Blocked URL.');
     await shell.openExternal(url);
     return true;
   },
@@ -736,38 +874,138 @@ const handlers = {
 
   'scan-unmanaged': async () => engine.scanUnmanaged(),
 
+  'scan-manager-sources': async () => ({
+    orphans: engine.scanOrphanLibraries(),
+    sources: detectManagerSources(),
+  }),
+
   'adopt-mods': async (_e, { ids }) => {
-    const candidates = engine.scanUnmanaged().filter((c) => ids.includes(c.id));
     const results = [];
+    // Orphaned entries in our own library (lost store) re-import directly.
+    for (const oid of ids.filter((i) => i.startsWith('orphan:'))) {
+      const dirName = oid.slice('orphan:'.length);
+      try {
+        const mod = await engine.adoptOrphan(dirName);
+        const identified = await identifyOnNexus(mod.id);
+        results.push({ ok: true, name: store.getMod(mod.id).name, identified: identified ? identified.modName : null });
+      } catch (err) {
+        results.push({ ok: false, name: dirName, error: err.message });
+      }
+    }
+    const candidates = engine.scanUnmanaged().filter((c) => ids.includes(c.id));
     for (const candidate of candidates) {
       try {
         const mod = engine.adopt(candidate);
-        let identified = null;
-        // Try to reattach a Nexus identity via md5 (only matches files that were
-        // uploaded to Nexus as-is; extracted contents usually won't).
-        if (nexusKey() && mod.modType !== 'ue4ss-mod') {
-          for (const f of mod.files.slice(0, 4)) {
-            try {
-              const hit = await nexus.md5Lookup(
-                path.join(store.modLibraryDir(mod.id), f.libraryRelative), nexusKey());
-              if (hit) {
-                engine.setOrigin(mod.id, { type: 'nexus', modId: hit.modId, fileId: hit.fileId, version: hit.version, adopted: true });
-                const stored = store.getMod(mod.id);
-                stored.version = hit.version;
-                if (hit.modName) { try { engine.rename(mod.id, hit.modName); } catch (_) {} }
-                store.save();
-                identified = hit;
-                break;
-              }
-            } catch (_) {}
-          }
-        }
+        const identified = await identifyOnNexus(mod.id);
         results.push({ ok: true, name: store.getMod(mod.id).name, identified: identified ? identified.modName : null });
       } catch (err) {
         results.push({ ok: false, name: candidate.name, error: err.message });
       }
     }
     return { results, state: fullState() };
+  },
+
+  'choose-storage-dir': async () => {
+    const res = await dialog.showOpenDialog(win, {
+      title: 'Choose the mod archive folder',
+      properties: ['openDirectory', 'createDirectory'],
+      defaultPath: store.storageRoot,
+    });
+    if (res.canceled || !res.filePaths.length) return fullState();
+    store.settings.storageDir = res.filePaths[0];
+    store.save();
+    const moved = ensureStorage();
+    if (moved) sendEvent({ type: 'toast', message: `Mod archive moved to ${moved.root}.` });
+    return fullState();
+  },
+
+  'reset-storage-dir': async () => {
+    store.settings.storageDir = null;
+    store.save();
+    ensureStorage();
+    return fullState();
+  },
+
+  'import-manager-folder': async (_e, payload) => {
+    let dir = payload && payload.path;
+    if (!dir) {
+      const res = await dialog.showOpenDialog(win, {
+        title: 'Import mods from a mod manager folder',
+        properties: ['openDirectory'],
+      });
+      if (res.canceled || !res.filePaths.length) return { cancelled: true, state: fullState() };
+      dir = res.filePaths[0];
+    }
+    let results;
+    if (fs.existsSync(path.join(dir, 'manager-data.json'))) {
+      // A Mod Command data/archive folder — full restore with metadata.
+      results = await engine.restoreFromData(dir);
+      log('info', `restored from ${dir}: ${results.imported.length} mod(s), ${results.profiles} profile(s)`);
+    } else {
+      // Another manager's library: import each mod folder, then try to
+      // reattach Nexus identities so names and updates come back.
+      results = await engine.importForeignLibrary(dir);
+      let identified = 0;
+      for (const id of results.importedIds || []) {
+        if (await identifyOnNexus(id)) identified += 1;
+      }
+      results.identified = identified;
+      log('info', `imported ${results.imported.length} mod(s) from foreign library ${dir} (${identified} identified on Nexus)`);
+    }
+    return { results, state: fullState() };
+  },
+
+  'nexus-file-versions': async (_e, { modId }) => {
+    const apiKey = nexusKey();
+    if (!apiKey) throw new Error('A Nexus Mods API key is required. Add one in Settings.');
+    const files = await nexus.filesList(modId, apiKey);
+    const usable = files
+      .filter((f) => !['ARCHIVED', 'DELETED'].includes(f.category_name || ''))
+      .sort((a, b) => (b.uploaded_timestamp || 0) - (a.uploaded_timestamp || 0))
+      .map((f) => ({
+        fileId: f.file_id,
+        name: f.name,
+        version: f.version || null,
+        category: f.category_name || 'MAIN',
+        sizeKb: f.size_kb || f.size || 0,
+        uploaded: f.uploaded_timestamp ? new Date(f.uploaded_timestamp * 1000).toISOString() : null,
+      }));
+    if (!nexusUser) { try { nexusUser = await nexus.validateKey(apiKey); } catch (_) {} }
+    return { files: usable, isPremium: !!(nexusUser && nexusUser.isPremium) };
+  },
+
+  'nexus-install-file': async (_e, { modId, fileId, name }) => {
+    const apiKey = nexusKey();
+    if (!apiKey) throw new Error('A Nexus Mods API key is required. Add one in Settings.');
+    if (!nexusUser) { try { nexusUser = await nexus.validateKey(apiKey); } catch (err) { throw new Error(err.message); } }
+    if (!nexusUser.isPremium) {
+      // Free accounts: the website must mint the link — the nxm handoff then
+      // installs the exact file the user clicked.
+      await shell.openExternal(`https://www.nexusmods.com/${nexus.GAME_DOMAIN}/mods/${modId}?tab=files`);
+      return { opened: 'website' };
+    }
+    const files = await nexus.filesList(modId, apiKey);
+    const file = files.find((f) => f.file_id === fileId);
+    if (!file) throw new Error('That file is no longer listed on the mod page.');
+    const uri = await nexus.downloadLink({ modId, fileId }, apiKey);
+    const dest = await nexus.downloadToFile(uri, store.stagingDir, file.file_name, (got, total) => {
+      sendEvent({ type: 'progress', label: `${name || `mod ${modId}`} ${file.version || ''}`, received: got, total });
+    });
+    try {
+      const origin = { type: 'nexus', modId, fileId, version: file.version || null };
+      const existing = store.mods.some((m) => m.origin && m.origin.type === 'nexus' && m.origin.modId === modId);
+      const res = existing
+        ? await engine.replaceOrigin({ type: 'nexus', modId }, dest, origin, file.version || null)
+        : await engine.install(dest, { origin, version: file.version || null });
+      if (res.pendingFomod) {
+        forwardFomod(res, name || `mod ${modId}`);
+        return { pendingFomod: true, state: fullState() };
+      }
+      log('info', `installed version ${file.version || '?'} (file ${fileId}) of nexus mod ${modId}${existing ? ' (replaced installed version — old one vaulted)' : ''}`);
+      return { installed: true, switched: existing, version: file.version || null, state: fullState() };
+    } finally {
+      fs.rmSync(dest, { force: true });
+    }
   },
 
   'link-origin': async (_e, { id, type, ref }) => {

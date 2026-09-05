@@ -21,12 +21,10 @@
       </div>
 
       <nav class="nav">
-        <button class="nav-item active" data-view="dashboard"><span class="nav-glyph">◈</span> Command Deck</button>
-        <button class="nav-item" data-view="mods"><span class="nav-glyph">▤</span> Hangar Bay <span id="nav-update-count" class="nav-badge warn" title="Mod updates available"></span><span id="nav-mod-count" class="nav-badge"></span></button>
+        <button class="nav-item active" data-view="mods"><span class="nav-glyph">◈</span> Command Deck <span id="nav-update-count" class="nav-badge warn" title="Mod updates available"></span><span id="nav-mod-count" class="nav-badge"></span></button>
         <button class="nav-item" data-view="browse"><span class="nav-glyph">◍</span> Holonet</button>
-        <button class="nav-item" data-view="order"><span class="nav-glyph">≡</span> Load Order</button>
+        <button class="nav-item" data-view="diagnostics"><span class="nav-glyph">≡</span> Diagnostics <span id="nav-conflict-count" class="nav-badge warn"></span></button>
         <button class="nav-item" data-view="configs"><span class="nav-glyph">⌸</span> Datapad</button>
-        <button class="nav-item" data-view="diagnostics"><span class="nav-glyph">✚</span> Diagnostics <span id="nav-conflict-count" class="nav-badge warn"></span></button>
         <button class="nav-item" data-view="settings"><span class="nav-glyph">⚙</span> Settings</button>
       </nav>
 
@@ -43,11 +41,11 @@
 
     <main class="content" id="content">
 
-      <!-- ======================= DASHBOARD ======================= -->
-      <section class="view active" id="view-dashboard">
+      <!-- ============== COMMAND DECK (overview + hangar bay) ============== -->
+      <section class="view active" id="view-mods">
         <header class="view-header">
           <h1>COMMAND DECK</h1>
-          <p class="view-sub">Operational overview — Star Wars: Zero Company</p>
+          <p class="view-sub">Operational overview &amp; installed modifications — Star Wars: Zero Company</p>
         </header>
 
         <div class="card-grid">
@@ -81,31 +79,21 @@
           </div>
         </div>
 
-        <div class="card holo wide">
-          <div class="card-title">QUICK ACTIONS</div>
-          <div class="card-body actions-row">
-            <button class="btn" data-action="install-archive">⊕ Install mod archive</button>
-            <button class="btn" data-action="install-folder">⊞ Install mod folder</button>
-            <button class="btn ghost" data-open="mods">Open ~mods folder</button>
-            <button class="btn ghost" data-open="game">Open game folder</button>
-            <button class="btn ghost" data-url="https://www.nexusmods.com/games/starwarszerocompany/mods">Browse Nexus Mods ↗</button>
+        <div class="hangar-section-head">
+          <div>
+            <h2 class="hangar-section-title">HANGAR BAY</h2>
+            <p class="view-sub">Installed modifications — drop archives anywhere to install</p>
           </div>
-        </div>
-      </section>
-
-      <!-- ======================= MODS ======================= -->
-      <section class="view" id="view-mods">
-        <header class="view-header">
-          <h1>HANGAR BAY</h1>
-          <p class="view-sub">Installed modifications — drop archives anywhere to install</p>
           <div class="header-actions">
             <button id="btn-update-all" class="btn primary hidden">⬆ Update all</button>
             <button id="btn-check-updates" class="btn ghost">⟳ Check updates</button>
             <button class="btn" data-action="install-archive">⊕ Install archive</button>
             <button class="btn ghost" data-action="install-folder">⊞ Install folder</button>
             <button id="btn-import" class="btn ghost">⇲ Import existing</button>
+            <button class="btn ghost" data-open="mods">Open ~mods</button>
+            <button class="btn ghost" data-url="https://www.nexusmods.com/games/starwarszerocompany/mods">Nexus ↗</button>
           </div>
-        </header>
+        </div>
         <div class="profile-bar">
           <span class="profile-label">SQUAD PROFILE</span>
           <select id="profile-select" class="profile-select"><option value="">— select —</option></select>
@@ -149,8 +137,8 @@
               <option value="">All categories</option>
             </select>
             <select id="browse-sort" class="profile-select">
-              <option value="downloads">Most downloaded</option>
               <option value="endorsements">Most endorsed</option>
+              <option value="downloads">Most downloaded</option>
               <option value="newest">Newest</option>
               <option value="updated">Recently updated</option>
               <option value="name">Name A–Z</option>
@@ -178,37 +166,6 @@
           </div>
           <div id="forge-status" class="browse-status hidden"></div>
           <div id="forge-grid" class="browse-grid"></div>
-        </div>
-      </section>
-
-      <!-- ======================= LOAD ORDER ======================= -->
-      <section class="view" id="view-order">
-        <header class="view-header">
-          <h1>LOAD ORDER</h1>
-          <p class="view-sub">Drag to reorder pak &amp; IoStore mods — lower entries load later and win conflicts</p>
-          <div class="header-actions">
-            <button id="btn-suggest-order" class="btn">◈ Suggest order</button>
-            <button id="btn-rollback-order" class="btn ghost" disabled title="Restore the load order from before the last Apply">↩ Undo last apply</button>
-            <button id="btn-apply-order" class="btn primary" disabled>Review &amp; apply</button>
-          </div>
-        </header>
-        <div id="order-list" class="order-list"></div>
-        <div id="order-empty" class="empty-state hidden">
-          <div class="empty-glyph">≡</div>
-          <p>No orderable pak mods installed.</p>
-          <p class="dim">Game-folder mods use fixed paths and are not ordered here.</p>
-        </div>
-
-        <div id="ue4ss-order-section" class="ue4ss-order-section hidden">
-          <div class="ue4ss-order-head">
-            <div>
-              <h2 class="ue4ss-order-title">UE4SS START ORDER</h2>
-              <p class="view-sub">mods.txt is read top-down in two passes — DLL mods start as the runtime boots, Lua mods once scripting exists. Order matters within each pass.</p>
-            </div>
-            <button id="btn-apply-ue4ss-order" class="btn primary" disabled>Apply start order</button>
-          </div>
-          <div id="ue4ss-order-list" class="order-list"></div>
-          <div id="ue4ss-order-note" class="ue4ss-order-note dim"></div>
         </div>
       </section>
 
@@ -248,21 +205,52 @@
         </div>
       </section>
 
-      <!-- ======================= DIAGNOSTICS ======================= -->
+      <!-- ============ DIAGNOSTICS (health + load order + conflicts) ============ -->
       <section class="view" id="view-diagnostics">
         <header class="view-header">
           <h1>DIAGNOSTICS</h1>
-          <p class="view-sub">System scan — installation health, conflict report, and support tools</p>
+          <p class="view-sub">Installation health, load order, and conflict analysis</p>
           <div class="header-actions">
             <button id="btn-copy-report" class="btn" title="Copies a full support report to the clipboard — paths, usernames and machine names are scrubbed">⧉ Copy support report</button>
             <button id="btn-save-report" class="btn ghost" title="Saves the same sanitized report as a .txt file">⤓ Save report…</button>
             <button id="btn-run-diag" class="btn primary">Run scan</button>
           </div>
         </header>
-        <div id="diag-list" class="diag-list"></div>
+        <div id="diag-list" class="diag-list diag-slim"></div>
+
+        <div id="ue4ss-order-section" class="ue4ss-order-section hidden">
+          <div class="ue4ss-order-head">
+            <div>
+              <h2 class="ue4ss-order-title">UE4SS START ORDER</h2>
+              <p class="view-sub">mods.txt is read top-down in two passes — DLL mods start as the runtime boots, Lua mods once scripting exists. Order matters within each pass.</p>
+            </div>
+            <button id="btn-apply-ue4ss-order" class="btn primary" disabled>Apply start order</button>
+          </div>
+          <div id="ue4ss-order-list" class="order-list"></div>
+          <div id="ue4ss-order-note" class="ue4ss-order-note dim"></div>
+        </div>
+
         <div id="conflict-matrix" class="conflict-matrix"></div>
         <div id="conflict-detail" class="conflict-detail"></div>
         <div id="ue4ss-hook-report" class="conflict-detail"></div>
+
+        <div class="hangar-section-head">
+          <div>
+            <h2 class="hangar-section-title">PAK &amp; IOSTORE LOAD ORDER</h2>
+            <p class="view-sub">Drag to reorder packaged asset mods — lower entries load later and win conflicts</p>
+          </div>
+          <div class="header-actions">
+            <button id="btn-suggest-order" class="btn">◈ Suggest order</button>
+            <button id="btn-rollback-order" class="btn ghost" disabled title="Restore the load order from before the last Apply">↩ Undo last apply</button>
+            <button id="btn-apply-order" class="btn primary" disabled>Review &amp; apply</button>
+          </div>
+        </div>
+        <div id="order-list" class="order-list"></div>
+        <div id="order-empty" class="empty-state hidden">
+          <div class="empty-glyph">≡</div>
+          <p>No orderable pak mods installed.</p>
+          <p class="dim">Packaged asset mods (.pak / .utoc / .ucas) appear here; UE4SS and game-folder mods are ordered above or use fixed paths.</p>
+        </div>
       </section>
 
       <!-- ======================= SETTINGS ======================= -->
@@ -281,6 +269,16 @@
                 <span id="set-game-path" class="setting-value mono">Not set</span>
               </div>
               <button class="btn" id="btn-browse-game">Browse…</button>
+            </div>
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-name">Mod archive <span class="dim">(your installed mods, backups &amp; versions — survives app updates)</span></span>
+                <span id="set-storage-path" class="setting-value mono">—</span>
+              </div>
+              <div class="nexus-key-controls">
+                <button class="btn" id="btn-storage-change">Change…</button>
+                <button class="btn ghost" id="btn-storage-reset">Use game folder</button>
+              </div>
             </div>
             <div class="setting-row">
               <div class="setting-info">
@@ -322,7 +320,7 @@
           <div class="card-body settings-body">
             <div class="setting-row">
               <div class="setting-info">
-                <span class="setting-name">API key <span class="dim">(from nexusmods.com → Site preferences → API keys)</span></span>
+                <span class="setting-name">API key</span>
                 <span id="nexus-status" class="setting-value">No key stored</span>
               </div>
               <div class="nexus-key-controls">
@@ -330,6 +328,13 @@
                 <button class="btn tiny" id="btn-nexus-save">Save</button>
                 <button class="btn ghost tiny" id="btn-nexus-clear">Clear</button>
               </div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-name dim">Where do I get the key?</span>
+                <p class="setting-note dim">The key is free with any Nexus Mods account and unlocks one-click downloads and update checking. Press the button to open your Nexus API keys page (log in if asked), scroll to <b>Personal API Key</b> at the bottom, press <b>Request an API key</b> if you don't have one yet, then copy it and paste it into the field above. The key is stored encrypted with your OS account — never in plain text — and is only ever sent to nexusmods.com.</p>
+              </div>
+              <button class="btn" data-url="https://next.nexusmods.com/settings/api-keys">Get my API key ↗</button>
             </div>
             <div class="setting-row">
               <div class="setting-info">
@@ -381,6 +386,7 @@
             <button class="btn ghost" data-open="data">Open manager data</button>
             <button class="btn ghost" data-open="ue4ssMods">Open UE4SS mods</button>
             <button class="btn ghost" id="btn-launch-direct">Launch game directly (no Steam)</button>
+            <button class="btn ghost" id="btn-rerun-setup">Setup assistant</button>
           </div>
         </div>
       </section>
@@ -405,8 +411,14 @@
         library and brings them under full management — nothing in the game folder moves. Files that match a Nexus
         upload are identified automatically.</p>
       <div id="import-list" class="import-list"></div>
+      <div id="import-manager-section" class="hidden">
+        <div class="link-section-title" style="margin-top:14px">⛃ FROM MOD MANAGERS</div>
+        <p class="zc-modal-sub dim">Orphaned entries in this manager's own archive, and mod libraries other managers left behind. A Mod Command archive restores with names, versions, origins and profiles.</p>
+        <div id="import-manager-list" class="import-list"></div>
+      </div>
       <div class="zc-modal-actions">
         <button id="btn-import-adopt" class="btn primary">Adopt selected</button>
+        <button id="btn-import-folder" class="btn ghost">Import from a manager folder…</button>
         <button class="btn ghost" data-close-modal="import-modal">Cancel</button>
       </div>
     </div>
@@ -448,6 +460,52 @@
       <div class="zc-modal-actions">
         <button id="prompt-ok" class="btn primary">Confirm</button>
         <button id="prompt-cancel" class="btn ghost">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="setup-modal" class="zc-modal hidden">
+    <div class="zc-modal-box setup-box">
+      <div class="zc-modal-title">FIRST RUN — GET MISSION-READY</div>
+      <p class="zc-modal-sub dim">Two quick steps and every mod on Nexus is one click away. Both can be changed later in Settings.</p>
+
+      <div class="setup-step">
+        <div class="setup-step-head"><span class="setup-step-num">1</span> GAME DETECTION <span id="setup-game-status" class="setup-status"></span></div>
+        <p class="setting-note dim" id="setup-game-note"></p>
+      </div>
+
+      <div class="setup-step">
+        <div class="setup-step-head"><span class="setup-step-num">2</span> NEXUS API KEY <span id="setup-key-status" class="setup-status"></span></div>
+        <p class="setting-note dim">The free key unlocks one-click installs and update checking. Press the button, log in if asked, scroll to <b>Personal API Key</b> at the bottom, press <b>Request an API key</b> if you don't have one, copy it, and paste it here. It is stored encrypted with your OS account and only ever sent to nexusmods.com.</p>
+        <div class="setup-row">
+          <button class="btn" data-url="https://next.nexusmods.com/settings/api-keys">Get my API key ↗</button>
+          <input type="password" id="setup-key-input" class="text-input" placeholder="Paste personal API key" />
+          <button class="btn tiny primary" id="btn-setup-key-save">Save</button>
+        </div>
+      </div>
+
+      <div class="setup-step">
+        <div class="setup-step-head"><span class="setup-step-num">3</span> ONE-CLICK DOWNLOADS <span id="setup-nxm-status" class="setup-status"></span></div>
+        <p class="setting-note dim">Registering the nxm:// handler makes the <b>Mod Manager Download</b> button on nexusmods.com download and install mods straight into the manager.</p>
+        <div class="setup-row">
+          <button class="btn" id="btn-setup-nxm">Register nxm:// handler</button>
+        </div>
+      </div>
+
+      <div class="zc-modal-actions">
+        <button id="btn-setup-finish" class="btn primary">Finish setup</button>
+        <button id="btn-setup-skip" class="btn ghost">Skip for now</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="nexus-versions-modal" class="zc-modal hidden">
+    <div class="zc-modal-box">
+      <div class="zc-modal-title">HOLONET FILE VERSIONS</div>
+      <p class="zc-modal-sub dim" id="nexus-versions-sub"></p>
+      <div id="nexus-versions-list" class="import-list"></div>
+      <div class="zc-modal-actions">
+        <button class="btn ghost" data-close-modal="nexus-versions-modal">Close</button>
       </div>
     </div>
   </div>

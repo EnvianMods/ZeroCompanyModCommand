@@ -207,9 +207,17 @@ src/               UI (index.html / styles.css / app.js) — holo-terminal theme
 data/              settings + mod library (canonical copies of installed mods)
 ```
 
-Mods keep their canonical files in `data/library/<id>/`; enabling copies them into the
-game, disabling removes them. Uninstalling removes both. The store is portable — the
-whole folder can be moved.
+Mods keep their canonical files in the **mod archive** — by default
+`<game>\ZeroCompanyModArchive\` (library/ + backups/ + versions/ + a mirrored
+manifest), so mods survive app updates and deletions; Settings → Paths can move
+it anywhere (copy-verify-delete migration) or reset it. Enabling copies files
+into the game, disabling removes them, uninstalling deletes the library copy.
+A fresh install that finds an archive restores everything from it
+automatically, and a one-time scan after the first game connection offers any
+unmanaged/orphaned/other-manager mods for adoption (also on demand:
+Import existing → "Import from a manager folder…"). The settings file itself
+stays app-side (`data/manager-data.json` in dev, `ZeroCompanyModCommand-data`
+next to the portable exe).
 
 ## Releases
 

@@ -23,9 +23,8 @@
       <nav class="nav">
         <button class="nav-item active" data-view="mods"><span class="nav-glyph">◈</span> Command Deck <span id="nav-update-count" class="nav-badge warn" title="Mod updates available"></span><span id="nav-mod-count" class="nav-badge"></span></button>
         <button class="nav-item" data-view="browse"><span class="nav-glyph">◍</span> Holonet</button>
-        <button class="nav-item" data-view="order"><span class="nav-glyph">≡</span> Load Order</button>
+        <button class="nav-item" data-view="diagnostics"><span class="nav-glyph">≡</span> Diagnostics <span id="nav-conflict-count" class="nav-badge warn"></span></button>
         <button class="nav-item" data-view="configs"><span class="nav-glyph">⌸</span> Datapad</button>
-        <button class="nav-item" data-view="diagnostics"><span class="nav-glyph">✚</span> Diagnostics <span id="nav-conflict-count" class="nav-badge warn"></span></button>
         <button class="nav-item" data-view="settings"><span class="nav-glyph">⚙</span> Settings</button>
       </nav>
 
@@ -170,37 +169,6 @@
         </div>
       </section>
 
-      <!-- ======================= LOAD ORDER ======================= -->
-      <section class="view" id="view-order">
-        <header class="view-header">
-          <h1>LOAD ORDER</h1>
-          <p class="view-sub">Drag to reorder pak &amp; IoStore mods — lower entries load later and win conflicts</p>
-          <div class="header-actions">
-            <button id="btn-suggest-order" class="btn">◈ Suggest order</button>
-            <button id="btn-rollback-order" class="btn ghost" disabled title="Restore the load order from before the last Apply">↩ Undo last apply</button>
-            <button id="btn-apply-order" class="btn primary" disabled>Review &amp; apply</button>
-          </div>
-        </header>
-        <div id="order-list" class="order-list"></div>
-        <div id="order-empty" class="empty-state hidden">
-          <div class="empty-glyph">≡</div>
-          <p>No orderable pak mods installed.</p>
-          <p class="dim">Game-folder mods use fixed paths and are not ordered here.</p>
-        </div>
-
-        <div id="ue4ss-order-section" class="ue4ss-order-section hidden">
-          <div class="ue4ss-order-head">
-            <div>
-              <h2 class="ue4ss-order-title">UE4SS START ORDER</h2>
-              <p class="view-sub">mods.txt is read top-down in two passes — DLL mods start as the runtime boots, Lua mods once scripting exists. Order matters within each pass.</p>
-            </div>
-            <button id="btn-apply-ue4ss-order" class="btn primary" disabled>Apply start order</button>
-          </div>
-          <div id="ue4ss-order-list" class="order-list"></div>
-          <div id="ue4ss-order-note" class="ue4ss-order-note dim"></div>
-        </div>
-      </section>
-
       <!-- ======================= DATAPAD (config editor) ======================= -->
       <section class="view" id="view-configs">
         <header class="view-header">
@@ -237,18 +205,49 @@
         </div>
       </section>
 
-      <!-- ======================= DIAGNOSTICS ======================= -->
+      <!-- ============ DIAGNOSTICS (health + load order + conflicts) ============ -->
       <section class="view" id="view-diagnostics">
         <header class="view-header">
           <h1>DIAGNOSTICS</h1>
-          <p class="view-sub">System scan — installation health, conflict report, and support tools</p>
+          <p class="view-sub">Installation health, load order, and conflict analysis</p>
           <div class="header-actions">
             <button id="btn-copy-report" class="btn" title="Copies a full support report to the clipboard — paths, usernames and machine names are scrubbed">⧉ Copy support report</button>
             <button id="btn-save-report" class="btn ghost" title="Saves the same sanitized report as a .txt file">⤓ Save report…</button>
             <button id="btn-run-diag" class="btn primary">Run scan</button>
           </div>
         </header>
-        <div id="diag-list" class="diag-list"></div>
+        <div id="diag-list" class="diag-list diag-slim"></div>
+
+        <div class="hangar-section-head">
+          <div>
+            <h2 class="hangar-section-title">LOAD ORDER</h2>
+            <p class="view-sub">Drag to reorder pak &amp; IoStore mods — lower entries load later and win conflicts</p>
+          </div>
+          <div class="header-actions">
+            <button id="btn-suggest-order" class="btn">◈ Suggest order</button>
+            <button id="btn-rollback-order" class="btn ghost" disabled title="Restore the load order from before the last Apply">↩ Undo last apply</button>
+            <button id="btn-apply-order" class="btn primary" disabled>Review &amp; apply</button>
+          </div>
+        </div>
+        <div id="order-list" class="order-list"></div>
+        <div id="order-empty" class="empty-state hidden">
+          <div class="empty-glyph">≡</div>
+          <p>No orderable pak mods installed.</p>
+          <p class="dim">Game-folder mods use fixed paths and are not ordered here.</p>
+        </div>
+
+        <div id="ue4ss-order-section" class="ue4ss-order-section hidden">
+          <div class="ue4ss-order-head">
+            <div>
+              <h2 class="ue4ss-order-title">UE4SS START ORDER</h2>
+              <p class="view-sub">mods.txt is read top-down in two passes — DLL mods start as the runtime boots, Lua mods once scripting exists. Order matters within each pass.</p>
+            </div>
+            <button id="btn-apply-ue4ss-order" class="btn primary" disabled>Apply start order</button>
+          </div>
+          <div id="ue4ss-order-list" class="order-list"></div>
+          <div id="ue4ss-order-note" class="ue4ss-order-note dim"></div>
+        </div>
+
         <div id="conflict-matrix" class="conflict-matrix"></div>
         <div id="conflict-detail" class="conflict-detail"></div>
         <div id="ue4ss-hook-report" class="conflict-detail"></div>

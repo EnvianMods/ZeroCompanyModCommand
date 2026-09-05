@@ -729,6 +729,7 @@ async function runDiagnostics() {
     const msg = document.createElement('div');
     msg.className = 'diag-msg';
     msg.textContent = item.message;
+    msg.title = item.message; // slim tiles clamp to two lines — hover for full text
     body.append(title, msg);
     row.append(icon, body);
     list.appendChild(row);

@@ -2,6 +2,18 @@
 
 Context document for continuing work on this project. Last updated 2026-09-04.
 
+## v1.5.0 RELEASED 2026-09-04 (merged to main, tag v1.5.0) — CURRENT
+
+Nexus: file id 560 (Windows zip, main + primary MM) + file id 561 (Linux
+AppImage, optional). Archive Release + GitHub mirror done. CI PIPELINE NOW
+FULLY HANDS-OFF: the tag push built the AppImage, CI created the release with
+it (race fix), publish-release reused the release and added the zip — no
+manual attach needed anymore. NEXUS_DESCRIPTION.bbcode covers everything
+through v1.5.0 — paste it at Publish time. STILL OUTSTANDING: (1) press
+Publish + paste description + announce 1.5.0 via Update Launcher Version.bat;
+(2) archive-token still lacks `workflow` scope → dev mirror stalled at
+b6efcbd; (3) Steam Deck hardware test; (4) ea-compat.json seed.
+
 ## v1.5.0 (2026-09-04, feat/vault-and-freeze branch) — vault, freeze, QoL
 
 Four user-requested features, NOT yet released:

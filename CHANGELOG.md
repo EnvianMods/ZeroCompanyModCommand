@@ -1,5 +1,42 @@
 # Zero Company Mod Command — Changelog
 
+## v1.6.0 (2026-09-04)
+
+**Your mod archive now lives in the game folder — and survives everything**
+- The archive (installed mods, game-file backups, version vault, and a mirror
+  of the manager's records) now defaults to `<game>\ZeroCompanyModArchive`.
+  Deleting or updating the app no longer touches your mods: a fresh install
+  finds the archive and restores everything automatically — names, versions,
+  origins, enabled states, load order, squad profiles, archived versions
+- Settings → Paths → Mod archive: move it anywhere (contents are copied,
+  verified, then removed from the old location) or reset to the game-folder
+  default. Existing installs migrate their archive automatically on first start
+
+**Import from mod managers — not just game files**
+- Import existing now also finds: orphaned entries in the manager's own
+  archive (a lost settings file no longer strands your mods), a previous Mod
+  Command data folder, and other managers' libraries in known locations —
+  plus "Import from a manager folder…" for anywhere else
+- A Mod Command archive restores with full metadata; foreign libraries import
+  every mod folder as its own entry, then try to identify each on Nexus (md5)
+  so names and update tracking come back
+
+**Choose any version from the Holonet**
+- Every Holonet card gains a ⧗ version picker listing all files the mod's
+  Nexus page offers (newest first, with category, size, and date). Premium
+  accounts install any version directly — switching an installed mod vaults
+  the current version first; free accounts get routed to the exact files page
+- Cards refresh in place after any install: buttons flip to "✓ Installed"
+  (or "⬆ Update") immediately, without reloading the mod list from Nexus
+
+**First-run experience**
+- A setup assistant on first launch walks through game detection, getting and
+  saving the Nexus API key (with a link to the key page and step-by-step
+  instructions), and registering nxm:// one-click downloads; reopen it any
+  time via Settings → Setup assistant
+- Settings gains the same API-key guidance and link
+- Holonet default sort is now Most endorsed
+
 ## v1.5.0 (2026-09-04)
 
 **Version vault — roll back mod versions, pin them in profiles**

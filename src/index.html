@@ -284,6 +284,16 @@
             </div>
             <div class="setting-row">
               <div class="setting-info">
+                <span class="setting-name">Mod archive <span class="dim">(your installed mods, backups &amp; versions — survives app updates)</span></span>
+                <span id="set-storage-path" class="setting-value mono">—</span>
+              </div>
+              <div class="nexus-key-controls">
+                <button class="btn" id="btn-storage-change">Change…</button>
+                <button class="btn ghost" id="btn-storage-reset">Use game folder</button>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-info">
                 <span class="setting-name">retoc.exe <span class="dim">(optional — IoStore package inspection)</span></span>
                 <span id="set-retoc-path" class="setting-value mono">Auto-detect</span>
               </div>
@@ -413,8 +423,14 @@
         library and brings them under full management — nothing in the game folder moves. Files that match a Nexus
         upload are identified automatically.</p>
       <div id="import-list" class="import-list"></div>
+      <div id="import-manager-section" class="hidden">
+        <div class="link-section-title" style="margin-top:14px">⛃ FROM MOD MANAGERS</div>
+        <p class="zc-modal-sub dim">Orphaned entries in this manager's own archive, and mod libraries other managers left behind. A Mod Command archive restores with names, versions, origins and profiles.</p>
+        <div id="import-manager-list" class="import-list"></div>
+      </div>
       <div class="zc-modal-actions">
         <button id="btn-import-adopt" class="btn primary">Adopt selected</button>
+        <button id="btn-import-folder" class="btn ghost">Import from a manager folder…</button>
         <button class="btn ghost" data-close-modal="import-modal">Cancel</button>
       </div>
     </div>
@@ -491,6 +507,17 @@
       <div class="zc-modal-actions">
         <button id="btn-setup-finish" class="btn primary">Finish setup</button>
         <button id="btn-setup-skip" class="btn ghost">Skip for now</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="nexus-versions-modal" class="zc-modal hidden">
+    <div class="zc-modal-box">
+      <div class="zc-modal-title">HOLONET FILE VERSIONS</div>
+      <p class="zc-modal-sub dim" id="nexus-versions-sub"></p>
+      <div id="nexus-versions-list" class="import-list"></div>
+      <div class="zc-modal-actions">
+        <button class="btn ghost" data-close-modal="nexus-versions-modal">Close</button>
       </div>
     </div>
   </div>

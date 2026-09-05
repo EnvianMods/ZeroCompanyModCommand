@@ -2,6 +2,32 @@
 
 Context document for continuing work on this project. Last updated 2026-09-04.
 
+## v1.6.0 (2026-09-04, feat/import-managers branch, NOT released)
+
+Branch lineage: feat/api-key-help → feat/first-run-setup → feat/import-managers.
+Headline: MOD ARCHIVE IN THE GAME FOLDER. lib/storage.js
+(resolveStorageRoot/migrateStorage); Store.setStorageRoot re-points
+library/backups/versions; save() MIRRORS manager-data.json into the archive
+(guard: an empty store never clobbers a restorable mirror — found via the
+scenario test, ensureStorage saved before auto-restore read it). main.js
+ensureStorage (startup + game-path change + choose/reset-storage-dir IPC,
+copy-verify-delete migration), autoRestoreFromArchive (fresh store + mirror →
+engine.restoreFromData pruneImported). restoreFromData restores names/versions/
+origins/enabled/order/profiles/vault. IMPORT: scanOrphanLibraries/adoptOrphan
+(library dirs without records), importForeignLibrary (per-subfolder, descends
+into library|mods, md5 identify via main.identifyOnNexus), detectManagerSources
+(app-side data + LOCALAPPDATA ZCOM guesses), Import modal manager section +
+"Import from a manager folder…". FIRST SCAN: settings.firstScanDone — after
+first game connection the import review OPENS ITSELF when anything is found
+(queued behind the setup wizard). HOLONET VERSIONS: ⧗ picker per card →
+nexus-file-versions/nexus-install-file IPC (premium installs any file —
+existing installs switch via replaceOrigin+vault; free → files page). Cards
+refresh IN PLACE via liveCards registry (refreshBrowseCards in render()) — no
+grid re-fetch. Also: setup wizard (first run; Settings → Setup assistant),
+API-key guidance + next.nexusmods.com allowlisted, Holonet default sort =
+endorsements. Tests: engine-test-v16.js (20) + all suites = 161 green; two
+full scenario click-path runs (the failing first run caught the mirror bug).
+
 ## v1.5.0 RELEASED 2026-09-04 (merged to main, tag v1.5.0) — CURRENT
 
 Nexus: file id 560 (Windows zip, main + primary MM) + file id 561 (Linux

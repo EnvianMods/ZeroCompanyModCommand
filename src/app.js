@@ -144,6 +144,7 @@ function render() {
   renderOrder();
   renderUe4ssOrder();
   renderSettings();
+  refreshBrowseCards();
 }
 
 function renderMods() {
@@ -1024,6 +1025,11 @@ function renderSettings() {
   $('#ue4ss-settings-status').textContent = state.ue4ss.message;
   $('#btn-install-ue4ss').textContent = state.ue4ss.healthy ? 'Reinstall latest' : 'Download & install';
   $('#set-game-path').textContent = state.settings.gamePath || 'Not set';
+  const storage = state.storage || {};
+  $('#set-storage-path').textContent = storage.root
+    ? `${storage.root}${storage.inGameFolder ? '  (game folder — survives app updates)' : (storage.custom ? '  (custom)' : '  (app folder)')}`
+    : '—';
+  $('#btn-storage-reset').disabled = !state.settings.gamePath || storage.inGameFolder;
   $('#set-retoc-path').textContent = state.settings.retocPath || (state.retoc.found ? `Auto: ${state.retoc.path}` : 'Auto-detect (not found)');
   $('#set-7z-path').textContent = state.settings.sevenZipPath || (state.sevenZip ? 'Auto-detected' : 'Auto-detect (not found)');
   $('#chk-close-on-launch').checked = !!state.settings.closeOnLaunch;
@@ -1064,6 +1070,15 @@ $('#chk-update-freeze').addEventListener('change', async (e) => {
   } else {
     e.target.checked = !enabling;
   }
+});
+
+$('#btn-storage-change').addEventListener('click', async () => {
+  const data = await call('chooseStorageDir');
+  if (data) { state = data; render(); }
+});
+$('#btn-storage-reset').addEventListener('click', async () => {
+  const data = await call('resetStorageDir');
+  if (data) { state = data; render(); toast('Mod archive moved back to the game folder default.'); }
 });
 
 $('#btn-browse-game').addEventListener('click', async () => {
@@ -1201,6 +1216,19 @@ window.addEventListener('drop', async (e) => {
 
 // ------------------------------------------------------------------ Holonet (Nexus browser)
 
+// Live browse/featured/forge cards: each registers a rebuild function so state
+// changes can refresh badges and Install/Installed buttons IN PLACE — no
+// re-fetch from Nexus, no grid reset, scroll position kept.
+const liveCards = new Map(); // element -> rebuild()
+function registerLiveCard(el, rebuild) { liveCards.set(el, rebuild); }
+function refreshBrowseCards() {
+  for (const [el, rebuild] of [...liveCards]) {
+    liveCards.delete(el);
+    if (!el.isConnected) continue;
+    el.replaceWith(rebuild()); // the rebuilt card re-registers itself
+  }
+}
+
 const CATEGORIES = ['Gameplay', 'Outfits', 'User Interface', 'Miscellaneous', 'Characters', 'Visuals', 'Audio', 'Weapons', 'Utilities'];
 const PAGE_SIZE = 24;
 const browse = { mods: [], total: 0, offset: 0, loading: false, loaded: false, isPremium: false, hasKey: false };
@@ -1262,6 +1290,14 @@ async function loadBrowse(reset) {
 function buildBrowseCard(m) {
   const card = document.createElement('div');
   card.className = 'browse-card';
+  // Every exit path funnels through this: adds the version picker, and
+  // registers the card so installs refresh it in place.
+  const finishCard = () => {
+    const acts = card.querySelector('.browse-actions');
+    if (acts) acts.appendChild(makeHolonetVersionsBtn(m));
+    registerLiveCard(card, () => buildBrowseCard(m));
+    return card;
+  };
 
   // Already in the hangar? (matched by Nexus origin on any installed entry)
   const inHangar = (state && state.mods ? state.mods : [])
@@ -1329,7 +1365,7 @@ function buildBrowseCard(m) {
     pageBtn0.addEventListener('click', () => call('openExternal', m.url));
     actions.append(installBtn, pageBtn0);
     card.append(pic, body, actions);
-    return card;
+    return finishCard();
   }
   if (inHangar.length) {
     installBtn.textContent = '✓ Installed';
@@ -1341,7 +1377,7 @@ function buildBrowseCard(m) {
     pageBtn0.addEventListener('click', () => call('openExternal', m.url));
     actions.append(installBtn, pageBtn0);
     card.append(pic, body, actions);
-    return card;
+    return finishCard();
   }
   installBtn.textContent = '⭳ Install';
   installBtn.title = browse.isPremium
@@ -1376,7 +1412,83 @@ function buildBrowseCard(m) {
   actions.append(installBtn, pageBtn);
 
   card.append(pic, body, actions);
-  return card;
+  return finishCard();
+}
+
+// Version picker for Holonet cards: browse the mod's Nexus file list and
+// install any version — switching an installed mod vaults the current one.
+function makeHolonetVersionsBtn(m) {
+  const btn = document.createElement('button');
+  btn.className = 'btn ghost tiny';
+  btn.textContent = '⧗';
+  btn.title = 'Choose a version — install any file the mod page offers (needs the API key)';
+  btn.addEventListener('click', () => openNexusVersionsModal(m));
+  return btn;
+}
+
+async function openNexusVersionsModal(m) {
+  const data = await call('nexusFileVersions', m.modId);
+  if (!data) return;
+  $('#nexus-versions-sub').textContent = `“${m.name}” — every file its Nexus page offers, newest first. ` +
+    (data.isPremium
+      ? 'Installing a different version replaces the installed one (the old version goes to the vault).'
+      : 'Free accounts: the site must start the download — open the files page, and the “Mod Manager Download” button of the file you pick installs exactly that version here.');
+  const list = $('#nexus-versions-list');
+  list.innerHTML = '';
+  if (!data.files.length) {
+    const empty = document.createElement('div');
+    empty.className = 'dim';
+    empty.style.padding = '10px 4px';
+    empty.textContent = 'The mod page lists no downloadable files.';
+    list.appendChild(empty);
+  }
+  for (const f of data.files) {
+    const row = document.createElement('div');
+    row.className = 'import-row';
+    const info = document.createElement('div');
+    info.className = 'import-info';
+    const name = document.createElement('div');
+    name.className = 'import-name';
+    name.textContent = `${f.name}${f.version ? ` — v${f.version}` : ''}`;
+    const meta = document.createElement('div');
+    meta.className = 'import-meta';
+    meta.textContent = `${f.category}${f.sizeKb ? ` · ${(f.sizeKb / 1024).toFixed(1)} MB` : ''}${f.uploaded ? ` · ${new Date(f.uploaded).toLocaleDateString()}` : ''}`;
+    info.append(name, meta);
+    const act = document.createElement('button');
+    act.className = 'btn tiny primary';
+    if (data.isPremium) {
+      act.textContent = '⭳ Install this version';
+      act.addEventListener('click', async () => {
+        act.disabled = true;
+        try {
+          const res = await call('nexusInstallFile', m.modId, f.fileId, m.name);
+          if (!res) return;
+          if (res.installed) {
+            state = res.state;
+            render();
+            $('#nexus-versions-modal').classList.add('hidden');
+            toast(res.switched
+              ? `“${m.name}” switched to ${f.version ? 'v' + f.version : f.name} — the previous version is in the vault.`
+              : `Installed “${m.name}” (${f.version ? 'v' + f.version : f.name}).`);
+          } else if (res.pendingFomod) {
+            state = res.state;
+            render();
+            $('#nexus-versions-modal').classList.add('hidden');
+          }
+        } finally {
+          act.disabled = false;
+          $('#progress-toast').classList.add('hidden');
+        }
+      });
+    } else {
+      act.textContent = 'Files page ↗';
+      act.className = 'btn tiny';
+      act.addEventListener('click', () => call('openExternal', `${m.url}?tab=files`));
+    }
+    row.append(info, act);
+    list.appendChild(row);
+  }
+  $('#nexus-versions-modal').classList.remove('hidden');
 }
 
 // --------------------------------------------------- featured transmissions (promoted authors)
@@ -1457,6 +1569,7 @@ function buildFeaturedCard(m, isFiller) {
   tag.className = `featured-tag${isFiller ? ' filler' : ''}`;
   tag.textContent = isFiller ? 'TOP RATED' : 'PROMOTED';
   card.prepend(tag);
+  registerLiveCard(card, () => buildFeaturedCard(m, isFiller));
   return card;
 }
 
@@ -1607,6 +1720,7 @@ function buildForgeCard(m) {
   actions.append(installBtn, pageBtn);
 
   card.append(body, actions);
+  registerLiveCard(card, () => buildForgeCard(m));
   return card;
 }
 
@@ -1870,14 +1984,69 @@ $('.nav-item[data-view="configs"]').addEventListener('click', () => {
 $$('[data-close-modal]').forEach((b) =>
   b.addEventListener('click', () => $(`#${b.dataset.closeModal}`).classList.add('hidden')));
 
-$('#btn-import').addEventListener('click', async () => {
+async function openImportModal(opts = {}) {
   const candidates = await call('scanUnmanaged');
   if (!candidates) return;
+  const managerSources = await call('scanManagerSources');
+  const orphans = (managerSources && managerSources.orphans) || [];
+  const sources = (managerSources && managerSources.sources) || [];
   const list = $('#import-list');
   list.innerHTML = '';
-  if (!candidates.length) {
-    toast('No unmanaged mod files found — everything in the game is already under management.', 'info', 6000);
-    return;
+
+  // Manager section: orphaned library entries (checkbox — adopted with the
+  // rest) and detected manager data folders (one-click import each).
+  const mgrSection = $('#import-manager-section');
+  const mgrList = $('#import-manager-list');
+  mgrList.innerHTML = '';
+  mgrSection.classList.toggle('hidden', !(orphans.length || sources.length));
+  for (const o of orphans) {
+    const row = document.createElement('label');
+    row.className = 'import-row';
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.checked = true;
+    check.dataset.candidateId = o.id;
+    const info = document.createElement('div');
+    info.className = 'import-info';
+    const name = document.createElement('div');
+    name.className = 'import-name';
+    name.textContent = o.name;
+    const meta = document.createElement('div');
+    meta.className = 'import-meta';
+    meta.textContent = `${TYPE_LABEL[o.modType] || o.modType} · ${o.fileCount} file(s) · orphaned archive entry (no mod record)`;
+    info.append(name, meta);
+    row.append(check, info);
+    mgrList.appendChild(row);
+  }
+  for (const s of sources) {
+    const row = document.createElement('div');
+    row.className = 'import-row';
+    const info = document.createElement('div');
+    info.className = 'import-info';
+    const name = document.createElement('div');
+    name.className = 'import-name';
+    name.textContent = s.label;
+    const meta = document.createElement('div');
+    meta.className = 'import-meta';
+    meta.textContent = `${s.path} · ${s.kind === 'modcommand' ? 'full restore (names, versions, origins, profiles)' : `${s.entries} mod folder(s)`}`;
+    info.append(name, meta);
+    const btn = document.createElement('button');
+    btn.className = 'btn tiny primary';
+    btn.textContent = '⇲ Import';
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try { await runManagerImport(s.path); } finally { btn.disabled = false; }
+    });
+    row.append(info, btn);
+    mgrList.appendChild(row);
+  }
+
+  if (!candidates.length && !orphans.length && !sources.length) {
+    if (opts.auto) return; // silent when the automatic first scan finds nothing
+    toast('Nothing found to import automatically. “Import from a manager folder…” inside this dialog can target any location by hand.', 'info', 8000);
+  }
+  if (opts.auto) {
+    toast(`First scan found ${candidates.length + orphans.length + sources.length} existing mod source(s) — review and adopt below.`, 'info', 9000);
   }
   for (const c of candidates) {
     const row = document.createElement('label');
@@ -1899,10 +2068,39 @@ $('#btn-import').addEventListener('click', async () => {
     list.appendChild(row);
   }
   $('#import-modal').classList.remove('hidden');
-});
+}
+
+$('#btn-import').addEventListener('click', () => openImportModal());
+
+// The automatic first scan waits for the setup wizard to close, so the two
+// dialogs never stack on a brand-new install.
+let pendingFirstScan = false;
+function maybeRunFirstScan() {
+  if (!pendingFirstScan) return;
+  pendingFirstScan = false;
+  openImportModal({ auto: true });
+}
+
+// Restore/import from a manager data folder (auto-detected row or hand-picked).
+async function runManagerImport(dirPath) {
+  const res = await call('importManagerFolder', dirPath);
+  if (!res || res.cancelled) return;
+  state = res.state;
+  render();
+  const r = res.results;
+  const bits = [`Imported ${r.imported.length} mod(s)`];
+  if (r.profiles) bits.push(`${r.profiles} profile(s)`);
+  if (r.vault) bits.push(`${r.vault} archived version(s)`);
+  if (r.identified) bits.push(`${r.identified} identified on Nexus`);
+  toast(`${bits.join(', ')}.${r.skipped.length ? ` ${r.skipped.length} already installed.` : ''}`, 'info', 9000);
+  for (const e of (r.errors || []).slice(0, 3)) toast(e, 'error', 7000);
+  $('#import-modal').classList.add('hidden');
+}
+
+$('#btn-import-folder').addEventListener('click', () => runManagerImport(undefined));
 
 $('#btn-import-adopt').addEventListener('click', async () => {
-  const ids = $$('#import-list input:checked').map((c) => c.dataset.candidateId);
+  const ids = $$('#import-list input:checked, #import-manager-list input:checked').map((c) => c.dataset.candidateId);
   if (!ids.length) { toast('Select at least one mod to adopt.', 'warn'); return; }
   const btn = $('#btn-import-adopt');
   btn.disabled = true;
@@ -2431,6 +2629,11 @@ window.zc.onEvent((payload) => {
     processFomodQueue();
     return;
   }
+  if (payload.type === 'first-scan') {
+    pendingFirstScan = true;
+    if ($('#setup-modal').classList.contains('hidden')) maybeRunFirstScan();
+    return;
+  }
   if (payload.type === 'toast') {
     toast(payload.message, payload.kind || 'info', 7000);
   } else if (payload.type === 'state') {
@@ -2483,6 +2686,7 @@ async function closeSetupModal(finished) {
   $('#setup-modal').classList.add('hidden');
   const data = await call('saveSettings', { onboarded: true });
   if (data) { state = data; render(); }
+  maybeRunFirstScan();
   if (!finished) {
     toast('Setup skipped — the API key and one-click downloads live in Settings whenever you need them.', 'info', 8000);
   } else {

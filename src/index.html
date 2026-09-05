@@ -21,8 +21,7 @@
       </div>
 
       <nav class="nav">
-        <button class="nav-item active" data-view="dashboard"><span class="nav-glyph">◈</span> Command Deck</button>
-        <button class="nav-item" data-view="mods"><span class="nav-glyph">▤</span> Hangar Bay <span id="nav-update-count" class="nav-badge warn" title="Mod updates available"></span><span id="nav-mod-count" class="nav-badge"></span></button>
+        <button class="nav-item active" data-view="mods"><span class="nav-glyph">◈</span> Command Deck <span id="nav-update-count" class="nav-badge warn" title="Mod updates available"></span><span id="nav-mod-count" class="nav-badge"></span></button>
         <button class="nav-item" data-view="browse"><span class="nav-glyph">◍</span> Holonet</button>
         <button class="nav-item" data-view="order"><span class="nav-glyph">≡</span> Load Order</button>
         <button class="nav-item" data-view="configs"><span class="nav-glyph">⌸</span> Datapad</button>
@@ -43,11 +42,11 @@
 
     <main class="content" id="content">
 
-      <!-- ======================= DASHBOARD ======================= -->
-      <section class="view active" id="view-dashboard">
+      <!-- ============== COMMAND DECK (overview + hangar bay) ============== -->
+      <section class="view active" id="view-mods">
         <header class="view-header">
           <h1>COMMAND DECK</h1>
-          <p class="view-sub">Operational overview — Star Wars: Zero Company</p>
+          <p class="view-sub">Operational overview &amp; installed modifications — Star Wars: Zero Company</p>
         </header>
 
         <div class="card-grid">
@@ -81,31 +80,21 @@
           </div>
         </div>
 
-        <div class="card holo wide">
-          <div class="card-title">QUICK ACTIONS</div>
-          <div class="card-body actions-row">
-            <button class="btn" data-action="install-archive">⊕ Install mod archive</button>
-            <button class="btn" data-action="install-folder">⊞ Install mod folder</button>
-            <button class="btn ghost" data-open="mods">Open ~mods folder</button>
-            <button class="btn ghost" data-open="game">Open game folder</button>
-            <button class="btn ghost" data-url="https://www.nexusmods.com/games/starwarszerocompany/mods">Browse Nexus Mods ↗</button>
+        <div class="hangar-section-head">
+          <div>
+            <h2 class="hangar-section-title">HANGAR BAY</h2>
+            <p class="view-sub">Installed modifications — drop archives anywhere to install</p>
           </div>
-        </div>
-      </section>
-
-      <!-- ======================= MODS ======================= -->
-      <section class="view" id="view-mods">
-        <header class="view-header">
-          <h1>HANGAR BAY</h1>
-          <p class="view-sub">Installed modifications — drop archives anywhere to install</p>
           <div class="header-actions">
             <button id="btn-update-all" class="btn primary hidden">⬆ Update all</button>
             <button id="btn-check-updates" class="btn ghost">⟳ Check updates</button>
             <button class="btn" data-action="install-archive">⊕ Install archive</button>
             <button class="btn ghost" data-action="install-folder">⊞ Install folder</button>
             <button id="btn-import" class="btn ghost">⇲ Import existing</button>
+            <button class="btn ghost" data-open="mods">Open ~mods</button>
+            <button class="btn ghost" data-url="https://www.nexusmods.com/games/starwarszerocompany/mods">Nexus ↗</button>
           </div>
-        </header>
+        </div>
         <div class="profile-bar">
           <span class="profile-label">SQUAD PROFILE</span>
           <select id="profile-select" class="profile-select"><option value="">— select —</option></select>

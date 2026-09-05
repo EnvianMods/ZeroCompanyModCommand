@@ -795,3 +795,20 @@ body.reduced-motion * { transition: none !important; animation: none !important;
 .setup-status.warn { color: var(--amber); }
 .setup-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
 .setup-row .text-input { flex: 1; min-width: 220px; }
+
+/* ---------- merged Command Deck / Hangar Bay ---------- */
+.hangar-section-head {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 16px;
+  margin: 30px 0 14px; padding-top: 18px; border-top: 1px solid var(--panel-edge);
+  flex-wrap: wrap;
+}
+.hangar-section-title {
+  font-size: 17px; font-weight: 800; letter-spacing: 4px; color: var(--holo);
+  text-shadow: 0 0 12px var(--holo-glow); margin: 0 0 4px;
+}
+.hangar-section-head .view-sub { margin: 0; }
+
+/* Hangar section header keeps its actions inline (the absolute positioning is
+   for the old single view-header layout). */
+.hangar-section-head { position: relative; }
+.hangar-section-head .header-actions { position: static; flex-wrap: wrap; justify-content: flex-end; }

@@ -1465,7 +1465,9 @@ function buildBrowseCard(m) {
     try {
       const res = await call('installRemote', m.modId, m.name);
       if (!res) return;
-      if (res.opened === 'website') {
+      if (res.opened === 'embed') {
+        openNexusDownload(m.name, res.url);
+      } else if (res.opened === 'website') {
         toast(`Files page opened for “${m.name}” — press “Mod Manager Download” and it will install here automatically.`, 'info', 9000);
       } else if (res.pendingFomod) {
         state = res.state;
@@ -2061,6 +2063,43 @@ $('#btn-open-config').addEventListener('click', () => {
 
 $$('[data-close-modal]').forEach((b) =>
   b.addEventListener('click', () => $(`#${b.dataset.closeModal}`).classList.add('hidden')));
+
+// ------------------------------------------------------------ Nexus download panel (embedded)
+// The free-account path: browse the mod's real Files page inside an isolated
+// <webview>; the "Mod Manager Download" nxm:// link is caught in the main
+// process and installed. Faithful render — the page is shown untouched.
+function openNexusDownload(name, url) {
+  const modal = $('#nexus-dl-modal');
+  const view = $('#nexus-dl-view');
+  if (!modal || !view) return;
+  $('#nexus-dl-sub').textContent = name || 'Nexus Mods';
+  const status = $('#nexus-dl-status');
+  status.textContent = 'Loading…'; status.className = 'nexus-dl-pill busy';
+  $('#nexus-dl-progress').classList.add('hidden');
+  view.src = url;
+  modal.classList.remove('hidden');
+}
+window.openNexusDownload = openNexusDownload; // reachable for verification harness
+
+(() => {
+  const view = $('#nexus-dl-view');
+  if (!view) return;
+  const status = $('#nexus-dl-status');
+  view.addEventListener('did-start-loading', () => {
+    status.textContent = 'Loading…'; status.className = 'nexus-dl-pill busy';
+  });
+  view.addEventListener('did-stop-loading', () => {
+    status.textContent = 'Awaiting “Mod Manager Download”'; status.className = 'nexus-dl-pill';
+  });
+  const reload = $('#nexus-dl-reload');
+  if (reload) reload.addEventListener('click', () => { try { view.reload(); } catch (_) {} });
+  const ext = $('#nexus-dl-ext');
+  if (ext) ext.addEventListener('click', () => {
+    let u = 'about:blank';
+    try { u = view.getURL(); } catch (_) {}
+    if (u && u.startsWith('http')) call('openExternal', u);
+  });
+})();
 
 async function openImportModal(opts = {}) {
   const candidates = await call('scanUnmanaged');

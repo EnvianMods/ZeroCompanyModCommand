@@ -61,17 +61,18 @@ Windows gets the portable exe; Linux and Steam Deck get the AppImage.[/size][/ce
 
 [b][color=#ffc857]Updates, handled[/color][/b]
 [list]
-[*][b]Mod update checks[/b] — every Nexus and GitHub install is tracked; outdated mods get flagged in the Hangar Bay (checked automatically, or on demand)
-[*][b]One-click updates[/b] — GitHub mods (and Nexus premium) update in place, keeping your load order, custom names, and enabled state; free Nexus accounts get a direct link and the returning download replaces the old version automatically
+[*][b]Mod update checks[/b] — every Nexus and GitHub install is tracked; outdated mods get flagged in the Command Deck (checked automatically, or on demand)
+[*][b]One-click updates[/b] — GitHub mods (and Nexus premium) update in place, keeping your load order, custom names, and enabled state; free Nexus accounts update in-app too — the mod's Nexus page opens inside the manager and the download you start there replaces the old version automatically
 [*][b]Launcher updates[/b] — the app announces new launcher versions with a banner, so you always know when a better build is out
 [/list]
 
 [b][color=#ffc857]Two mod sources built in[/color][/b]
 [list]
 [*][b]Holonet browser[/b] — browse this game's entire Nexus catalogue inside the app: thumbnails, search, category filters, and sorting by downloads / endorsements / newest / updated. Mods you already have show a green IN HANGAR badge — and an Update button right on the card when a new version is out
+[*][b]Free accounts download IN-APP — no premium needed, no leaving the app[/b]: press Install and the mod's real Nexus page opens right inside Mod Command; sign in if asked, press its "Mod Manager Download" button, and the file downloads and installs here with a live progress bar. (Free Nexus accounts can't get download links through the API — so the manager brings the page to you instead of sending you out to a browser.)
+[*][b]Premium accounts[/b] — install any mod, and switch to any of its file versions, fully in-app in one click
+[*][b]nxm:// one-click downloads[/b] — the "Mod Manager Download" button on the Nexus website in your own browser also installs straight into the manager
 [*][b]The Forge[/b] — a second tab of curated GitHub mods, hand-vetted by Envian Mods (the list updates live). Installs come only from release archives, behind a confirmation naming the exact repo and file
-[*][b]nxm:// one-click downloads[/b] — press "Mod Manager Download" on the website and the mod downloads and installs straight into the manager
-[*]Works with free accounts (via the website button) and premium accounts (fully in-app)
 [/list]
 
 [b][color=#ffc857]Quality of life[/color][/b]
@@ -90,7 +91,7 @@ Windows gets the portable exe; Linux and Steam Deck get the AppImage.[/size][/ce
 [list=1]
 [*]Grab your build from the Files tab: [b]Windows[/b] → the portable zip (extract anywhere, run ZeroCompanyModCommand.exe) · [b]Linux / Steam Deck[/b] → the AppImage (make it executable and run it, Desktop Mode on Deck)
 [*]The game is auto-detected — Steam and EA App installs both (or set the folder in Settings)
-[*]Already modded? [b]Hangar Bay → Import existing[/b] adopts your current mods without moving a file
+[*]Already modded? [b]Command Deck → Import existing[/b] adopts your current mods without moving a file
 [*]In Settings → Nexus Mods, paste your personal API key and press [b]Register handler[/b] to enable one-click downloads
 [*]Install mods from the Holonet tab, or drag archives onto the window
 [/list]
@@ -119,7 +120,7 @@ A: Yes. The manager detects the EA edition automatically, every mod format deplo
 A: Yes — download the AppImage, run it in Desktop Mode, and mods you deploy work in Gaming Mode. Diagnostics walks you through the one UE4SS launch-option line Proton needs (the manager never edits your launch options itself).
 
 [b]Q: Does it work with mods I installed manually?[/b]
-A: Yes — [b]Hangar Bay → Import existing[/b] adopts paks in ~mods, LogicMods and UE4SS mod folders in place, without moving or renaming anything. Adopted files that match a Nexus upload are identified automatically so updates get tracked; the rest can be linked by hand from their LOCAL badge.
+A: Yes — [b]Command Deck → Import existing[/b] adopts paks in ~mods, LogicMods and UE4SS mod folders in place, without moving or renaming anything. Adopted files that match a Nexus upload are identified automatically so updates get tracked; the rest can be linked by hand from their LOCAL badge.
 
 [b]Q: Windows SmartScreen warns about the exe.[/b]
 A: The exe is unsigned (code-signing certificates are expensive). Click "More info → Run anyway". The app is fully self-contained and only writes inside its own folder, your game folder, and the game's config folder.

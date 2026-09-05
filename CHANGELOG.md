@@ -1,5 +1,21 @@
 # Zero Company Mod Command — Changelog
 
+## v1.8.0 (2026-09-05)
+
+**Free Nexus accounts can now download and install without leaving the app**
+- Pressing Install on a mod (or updating one, or picking a specific version)
+  now opens that mod's real Nexus page inside Mod Command, in an isolated,
+  themed panel. Sign in if asked, press the page's **Mod Manager Download**
+  button, and the file downloads and installs right here — with a progress bar
+  and an "Installed ✓" confirmation that closes the panel for you.
+- This closes the one gap free accounts had: Nexus only issues download links to
+  a logged-in session (never through the API), so the manager brings the page to
+  you instead of sending you out to a separate browser. Premium accounts still
+  install fully in-app as before, and the website "Mod Manager Download" button
+  (nxm://) still works too.
+- The embedded page is shown faithfully and runs in its own isolated session; a
+  "Sign in to Nexus" control and an "Open in browser" fallback are always there.
+
 ## v1.7.1 (2026-09-05)
 
 **Interface**

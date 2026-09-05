@@ -1,6 +1,15 @@
 # Zero Company Mod Command — Changelog
 
-## v1.7.0 (unreleased)
+## v1.7.0 (2026-09-05)
+
+**Interface**
+- The Command Deck's overview cards are slimmer, taking less vertical space
+- The config editor is renamed **Config Editor** and opens as a full-screen
+  window from a button in the Hangar Bay action row (it no longer has its own
+  sidebar tab); the redundant external Nexus link was removed from that row
+  since in-app browsing lives in the Holonet tab
+- The Hangar Bay action buttons stay on one line and shrink to fit instead of
+  wrapping when the window is narrow
 
 **Content mods built with the Zero Company Mod SDK install like any other pak mod**
 - SDK packages ship two sidecars beside the pak trio — `<Mod>.AssetRegistry.bin`

@@ -2,6 +2,31 @@
 
 Context document for continuing work on this project. Last updated 2026-09-04.
 
+## v1.5.0 (2026-09-04, feat/vault-and-freeze branch) — vault, freeze, QoL
+
+Four user-requested features, NOT yet released:
+1. Enable/Disable all (Hangar profile bar; engine.setAllEnabled with ONE
+   aggregate ownership pre-check so nothing half-toggles).
+2. Holonet/Forge installed badges: green IN HANGAR tag (matched by origin
+   nexus modId / github repo), Install → "✓ Installed" disabled, or "⬆ Update"
+   straight on the card when updateInfo is set.
+3. VERSION VAULT: data/versions/<modType-name-slug>/<timestamp__version>/
+   {files/, vault.json}; snapshots on every replaceOrigin + before rollback
+   (roll-forward works); newest 5 kept; ⧗ button on Hangar rows → modal;
+   engine.listVersions/rollbackVersion (reinstalls library-layout copy via
+   install()). PROFILES now pin versions (entries carry vaultKey+version;
+   applyProfile is ASYNC, swaps pinned versions from the vault, remaps saved
+   order ids through the swaps). Identity = modType+name → rename starts new
+   history (documented).
+4. GAME UPDATE FREEZE (opt-in toggle, Steam only): steam.setUpdateFreeze sets
+   AutoUpdateBehavior "1" + chmods the appmanifest read-only; Launch goes
+   direct-exe while frozen; re-asserted at startup; Diagnostics reports state;
+   EA/manual installs get guidance instead. attachManifest IMPROVED: a path
+   shaped <lib>/steamapps/common/<game> reads its neighbor manifest directly
+   (covers unregistered libraries; also what makes freeze testable).
+Tests: engine-test-v15.js (21) + all four prior suites green (121 total);
+bulk-toggle/vault verified through real clicks.
+
 ## v1.4.0 RELEASED 2026-09-04 (merged to main, tag v1.4.0)
 
 Nexus: file id 555 (Windows zip, main + primary MM) and file id 556 (Linux

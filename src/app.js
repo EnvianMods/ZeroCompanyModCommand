@@ -269,6 +269,12 @@ function renderMods() {
 
     const actions = document.createElement('div');
     actions.className = 'mod-actions';
+    const versionsBtn = document.createElement('button');
+    versionsBtn.className = 'btn ghost tiny';
+    versionsBtn.textContent = mod.version ? `⧗ v${mod.version}` : '⧗ versions';
+    versionsBtn.title = 'Version vault — roll back to an archived version';
+    versionsBtn.addEventListener('click', () => openVersionsModal(mod));
+    actions.appendChild(versionsBtn);
     const renameBtn = document.createElement('button');
     renameBtn.className = 'btn ghost tiny';
     renameBtn.textContent = 'Rename';
@@ -331,6 +337,81 @@ function renderMods() {
 
   const autoUpdatable = state.mods.filter((m) => m.updateInfo && m.updateInfo.available && m.updateInfo.auto);
   $('#btn-update-all').classList.toggle('hidden', autoUpdatable.length < 2);
+}
+
+// ------------------------------------------------------------------ enable / disable all
+
+$('#btn-enable-all').addEventListener('click', async () => {
+  const res = await call('setAllEnabled', true);
+  if (!res) return;
+  state = res.state;
+  render();
+  toast(res.result.changed ? `Enabled ${res.result.changed} mod(s).` : 'Everything is already enabled.');
+  for (const e of res.result.errors.slice(0, 3)) toast(e, 'error', 7000);
+});
+
+$('#btn-disable-all').addEventListener('click', async () => {
+  const enabledCount = state.mods.filter((m) => m.enabled).length;
+  if (!enabledCount) { toast('Everything is already disabled.'); return; }
+  if (!window.confirm(`Disable all ${enabledCount} enabled mod(s)? Game-folder mods restore their original files.`)) return;
+  const res = await verifiedCall('setAllEnabled', [false], 'Disable all');
+  if (!res) return;
+  state = res.state;
+  render();
+  toast(`Disabled ${res.result.changed} mod(s).`);
+  for (const e of res.result.errors.slice(0, 3)) toast(e, 'error', 7000);
+});
+
+// ------------------------------------------------------------------ version vault
+
+function versionLabel(v) { return v ? `v${v}` : 'unversioned'; }
+
+async function openVersionsModal(mod) {
+  const data = await call('modVersions', mod.id);
+  if (!data) return;
+  $('#versions-sub').textContent = `“${data.current.name}” — installed: ${versionLabel(data.current.version)}. ` +
+    'Old versions are archived automatically when a mod updates; rolling back archives the current version too, so you can roll forward again. Squad profiles re-apply the version they were saved with.';
+  const list = $('#versions-list');
+  list.innerHTML = '';
+  if (!data.entries.length) {
+    const empty = document.createElement('div');
+    empty.className = 'dim';
+    empty.style.padding = '10px 4px';
+    empty.textContent = 'No archived versions yet — they appear here after the first update (or rollback) of this mod.';
+    list.appendChild(empty);
+  }
+  for (const e of data.entries) {
+    const row = document.createElement('div');
+    row.className = 'import-row';
+    const info = document.createElement('div');
+    info.className = 'import-info';
+    const name = document.createElement('div');
+    name.className = 'import-name';
+    name.textContent = versionLabel(e.version);
+    const meta = document.createElement('div');
+    meta.className = 'import-meta';
+    meta.textContent = `archived ${new Date(e.savedAt).toLocaleString()}`;
+    info.append(name, meta);
+    const btn = document.createElement('button');
+    btn.className = 'btn tiny primary';
+    btn.textContent = '↩ Roll back';
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        const res = await call('rollbackVersion', mod.id, e.entryId);
+        if (!res) return;
+        state = res.state;
+        render();
+        $('#versions-modal').classList.add('hidden');
+        toast(`“${res.name}” switched to ${versionLabel(res.version)}. The previous version is in the vault.`);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+    row.append(info, btn);
+    list.appendChild(row);
+  }
+  $('#versions-modal').classList.remove('hidden');
 }
 
 $('#btn-check-updates').addEventListener('click', async () => {
@@ -947,7 +1028,43 @@ function renderSettings() {
   $('#set-7z-path').textContent = state.settings.sevenZipPath || (state.sevenZip ? 'Auto-detected' : 'Auto-detect (not found)');
   $('#chk-close-on-launch').checked = !!state.settings.closeOnLaunch;
   $('#chk-reduced-motion').checked = !!state.settings.reducedMotion;
+  // Game update freeze
+  const uf = state.updateFreeze || {};
+  const chk = $('#chk-update-freeze');
+  chk.checked = !!uf.wanted;
+  chk.disabled = !uf.supported;
+  $('#freeze-status').textContent = !uf.supported
+    ? (state.detection && state.detection.launcher === 'ea'
+      ? 'Not available for the EA App edition — disable auto-updates in the EA App settings instead'
+      : 'Not available (needs a Steam-manifest install)')
+    : uf.wanted
+      ? (uf.frozen && uf.behavior === '1'
+        ? 'ACTIVE — manifest locked, updates only on launch, direct-exe launching'
+        : 'Enabled but not fully applied — toggle off and on to re-apply')
+      : 'Off — Steam updates the game normally';
 }
+
+$('#chk-update-freeze').addEventListener('change', async (e) => {
+  const enabling = e.target.checked;
+  if (enabling && !window.confirm(
+    'Freeze game updates?\n\nThe game will stop auto-updating (protecting your modded playthrough), but:\n' +
+    '• online modes may require the current build\n' +
+    '• launching from the Steam UI itself can still force an update — use the Launch button here\n\n' +
+    'You can turn this off any time.')) {
+    e.target.checked = false;
+    return;
+  }
+  const data = await call('setUpdateFreeze', enabling);
+  if (data) {
+    state = data;
+    render();
+    toast(enabling
+      ? 'Game updates frozen — the manifest is locked and launches go direct.'
+      : 'Game updates unfrozen — Steam will update the game normally again.');
+  } else {
+    e.target.checked = !enabling;
+  }
+});
 
 $('#btn-browse-game').addEventListener('click', async () => {
   const data = await call('browseGamePath');
@@ -1146,6 +1263,22 @@ function buildBrowseCard(m) {
   const card = document.createElement('div');
   card.className = 'browse-card';
 
+  // Already in the hangar? (matched by Nexus origin on any installed entry)
+  const inHangar = (state && state.mods ? state.mods : [])
+    .filter((x) => x.origin && x.origin.type === 'nexus' && x.origin.modId === m.modId);
+  const updateEntry = inHangar.find((x) => x.updateInfo && x.updateInfo.available);
+  if (inHangar.length) {
+    const tag = document.createElement('div');
+    tag.className = 'featured-tag installed-tag';
+    const allOff = inHangar.every((x) => !x.enabled);
+    tag.textContent = updateEntry ? '⬆ UPDATE READY' : (allOff ? '✓ IN HANGAR · OFF' : '✓ IN HANGAR');
+    tag.title = inHangar.length === 1
+      ? `Installed as “${inHangar[0].name}”${inHangar[0].version ? ` v${inHangar[0].version}` : ''}${inHangar[0].enabled ? '' : ' (disabled)'}`
+      : `${inHangar.length} entries from this mod are installed`;
+    card.appendChild(tag);
+    card.classList.add('in-hangar');
+  }
+
   const pic = document.createElement('div');
   pic.className = 'browse-pic';
   const img = document.createElement('img');
@@ -1176,6 +1309,40 @@ function buildBrowseCard(m) {
   actions.className = 'browse-actions';
   const installBtn = document.createElement('button');
   installBtn.className = 'btn tiny primary';
+  if (inHangar.length && updateEntry) {
+    installBtn.textContent = '⬆ Update';
+    installBtn.title = `Update “${updateEntry.name}” to ${updateEntry.updateInfo.latest}`;
+    installBtn.addEventListener('click', async () => {
+      installBtn.disabled = true;
+      try {
+        const res = await call('updateMod', updateEntry.id);
+        if (res && res.updated) { state = res.state; render(); toast(`“${updateEntry.name}” updated.`); }
+        else if (res && res.opened === 'website') toast('Files page opened — press “Mod Manager Download” and the update installs in place.', 'info', 8000);
+      } finally {
+        installBtn.disabled = false;
+        $('#progress-toast').classList.add('hidden');
+      }
+    });
+    const pageBtn0 = document.createElement('button');
+    pageBtn0.className = 'btn ghost tiny';
+    pageBtn0.textContent = 'Page ↗';
+    pageBtn0.addEventListener('click', () => call('openExternal', m.url));
+    actions.append(installBtn, pageBtn0);
+    card.append(pic, body, actions);
+    return card;
+  }
+  if (inHangar.length) {
+    installBtn.textContent = '✓ Installed';
+    installBtn.disabled = true;
+    installBtn.title = 'Already in the Hangar Bay — manage it there.';
+    const pageBtn0 = document.createElement('button');
+    pageBtn0.className = 'btn ghost tiny';
+    pageBtn0.textContent = 'Page ↗';
+    pageBtn0.addEventListener('click', () => call('openExternal', m.url));
+    actions.append(installBtn, pageBtn0);
+    card.append(pic, body, actions);
+    return card;
+  }
   installBtn.textContent = '⭳ Install';
   installBtn.title = browse.isPremium
     ? 'Download and install directly'
@@ -1356,6 +1523,17 @@ function buildForgeCard(m) {
   tag.textContent = 'GITHUB';
   card.appendChild(tag);
 
+  const inHangar = (state && state.mods ? state.mods : [])
+    .filter((x) => x.origin && x.origin.type === 'github' && x.origin.repo === m.fullName);
+  if (inHangar.length) {
+    const instTag = document.createElement('div');
+    instTag.className = 'featured-tag installed-tag';
+    instTag.textContent = inHangar.every((x) => !x.enabled) ? '✓ IN HANGAR · OFF' : '✓ IN HANGAR';
+    instTag.title = `Installed as “${inHangar[0].name}”${inHangar[0].version ? ` ${inHangar[0].version}` : ''}`;
+    card.appendChild(instTag);
+    card.classList.add('in-hangar');
+  }
+
   const body = document.createElement('div');
   body.className = 'browse-body';
   const name = document.createElement('div');
@@ -1377,7 +1555,25 @@ function buildForgeCard(m) {
   actions.className = 'browse-actions';
   const installBtn = document.createElement('button');
   installBtn.className = 'btn tiny primary';
-  if (m.release) {
+  const forgeUpdate = inHangar.find((x) => x.updateInfo && x.updateInfo.available);
+  if (forgeUpdate) {
+    installBtn.textContent = '⬆ Update';
+    installBtn.title = `Update “${forgeUpdate.name}” to ${forgeUpdate.updateInfo.latest}`;
+    installBtn.addEventListener('click', async () => {
+      installBtn.disabled = true;
+      try {
+        const res = await call('updateMod', forgeUpdate.id);
+        if (res && res.updated) { state = res.state; render(); toast(`“${forgeUpdate.name}” updated.`); }
+      } finally {
+        installBtn.disabled = false;
+        $('#progress-toast').classList.add('hidden');
+      }
+    });
+  } else if (inHangar.length) {
+    installBtn.textContent = '✓ Installed';
+    installBtn.disabled = true;
+    installBtn.title = 'Already in the Hangar Bay — manage it there.';
+  } else if (m.release) {
     installBtn.textContent = '⭳ Install';
     installBtn.addEventListener('click', async () => {
       installBtn.disabled = true;

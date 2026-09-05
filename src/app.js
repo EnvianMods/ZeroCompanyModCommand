@@ -2305,8 +2305,10 @@ async function openImportModal(opts = {}) {
 
 $('#btn-import').addEventListener('click', () => openImportModal());
 
-// Link mods — md5-match every unlinked installed mod against Nexus on demand and
-// attach its source, so updates start being tracked (no dialog; runs in place).
+// Link mods — find Nexus source candidates for every unlinked installed mod
+// (md5 for loose paks, a name search for UE4SS mods), then open a review dialog
+// so nothing is linked without the user confirming each match.
+const CONF_LABEL = { md5: 'file match', exact: 'exact name', strong: 'likely', weak: 'possible' };
 $('#btn-link-mods').addEventListener('click', async () => {
   const btn = $('#btn-link-mods');
   const label = btn.textContent;
@@ -2319,15 +2321,117 @@ $('#btn-link-mods').addEventListener('click', async () => {
     render();
     if (res.checked === 0) {
       toast('Every installed mod is already linked to a source.', 'info', 6000);
-    } else if (res.linked === 0) {
-      toast(`Checked ${res.checked} unlinked mod${res.checked === 1 ? '' : 's'} — none matched a Nexus upload. Link the rest by hand from their LOCAL badge.`, 'warn', 8000);
-    } else {
-      toast(`Linked ${res.linked} of ${res.checked} mod${res.checked === 1 ? '' : 's'} to Nexus — updates are now tracked${res.names.length ? `: “${res.names.join('”, “')}”` : ''}.`, 'info', 9000);
+      return;
     }
+    const withCands = res.suggestions.filter((s) => s.candidates.length).length;
+    if (withCands === 0) {
+      toast(`Checked ${res.checked} unlinked mod${res.checked === 1 ? '' : 's'} — no Nexus matches found. Link the rest by hand from their LOCAL badge.`, 'warn', 8000);
+      return;
+    }
+    openLinkModsModal(res.suggestions, res.hasKey);
   } finally {
     btn.disabled = false;
     btn.textContent = label;
     $('#progress-toast').classList.add('hidden');
+  }
+});
+
+// Build the Link mods review dialog. High-confidence matches (file match / exact
+// name) are pre-ticked; weaker guesses are shown but left unticked for the user.
+function openLinkModsModal(suggestions, hasKey) {
+  const list = $('#link-mods-list');
+  list.innerHTML = '';
+  let anyTickable = false;
+  for (const s of suggestions) {
+    const row = document.createElement('div');
+    row.className = 'link-mods-row';
+    row.dataset.modId = s.id;
+
+    const nameCol = document.createElement('div');
+    nameCol.className = 'lm-name';
+    nameCol.textContent = s.name;
+    if (s.modType === 'ue4ss-mod') {
+      const t = document.createElement('span');
+      t.className = 'lm-type';
+      t.textContent = 'UE4SS';
+      nameCol.appendChild(t);
+    }
+
+    if (!s.candidates.length) {
+      row.classList.add('lm-nomatch');
+      row.appendChild(nameCol);
+      const none = document.createElement('div');
+      none.className = 'lm-none dim';
+      none.textContent = 'No Nexus match — link by hand from its LOCAL badge.';
+      row.appendChild(none);
+      list.appendChild(row);
+      continue;
+    }
+
+    const best = s.candidates[0];
+    const strong = best.confidence === 'md5' || best.confidence === 'exact';
+    anyTickable = true;
+
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.className = 'lm-check';
+    check.checked = strong;
+
+    const left = document.createElement('label');
+    left.className = 'lm-left';
+    left.appendChild(check);
+    left.appendChild(nameCol);
+
+    const sel = document.createElement('select');
+    sel.className = 'lm-select profile-select';
+    for (const c of s.candidates) {
+      const opt = document.createElement('option');
+      opt.value = String(c.modId);
+      const bits = [c.name];
+      if (c.author) bits.push(`— ${c.author}`);
+      if (c.version) bits.push(`· v${c.version}`);
+      bits.push(`· ${CONF_LABEL[c.confidence] || c.confidence}`);
+      opt.textContent = bits.join(' ');
+      sel.appendChild(opt);
+    }
+    // Ticking follows the box; a manual pick of a weaker option still needs a tick.
+
+    row.appendChild(left);
+    row.appendChild(sel);
+    list.appendChild(row);
+  }
+
+  const applyBtn = $('#btn-link-mods-apply');
+  if (!hasKey) {
+    applyBtn.disabled = true;
+    applyBtn.title = 'Add a Nexus API key in Settings to link mods.';
+    toast('Matches found, but a Nexus API key is required to link. Add one in Settings.', 'warn', 8000);
+  } else {
+    applyBtn.disabled = !anyTickable;
+    applyBtn.title = '';
+  }
+  $('#link-mods-modal').classList.remove('hidden');
+}
+
+$('#btn-link-mods-apply').addEventListener('click', async () => {
+  const picks = $$('#link-mods-list .link-mods-row')
+    .filter((r) => { const c = r.querySelector('.lm-check'); return c && c.checked; })
+    .map((r) => ({ id: r.dataset.modId, modId: r.querySelector('.lm-select').value }));
+  if (!picks.length) { toast('Tick at least one mod to link, or press Cancel.', 'warn'); return; }
+  const btn = $('#btn-link-mods-apply');
+  btn.disabled = true;
+  try {
+    const res = await call('applyModLinks', picks);
+    if (!res) return;
+    state = res.state;
+    render();
+    $('#link-mods-modal').classList.add('hidden');
+    if (res.linked.length) {
+      toast(`Linked ${res.linked.length} mod${res.linked.length === 1 ? '' : 's'} to Nexus — updates now tracked: “${res.linked.join('”, “')}”.`, 'info', 9000);
+    }
+    for (const e of (res.errors || []).slice(0, 3)) toast(e, 'error', 7000);
+  } finally {
+    btn.disabled = false;
   }
 });
 

@@ -480,25 +480,85 @@ function fullState() {
   };
 }
 
-// Best-effort Nexus identity via md5 (matches files uploaded to Nexus as-is).
-// Used by adoption, orphan recovery, and foreign-library imports.
-async function identifyOnNexus(modId) {
-  const mod = store.getMod(modId);
+// Best-effort md5 lookup of a mod's library files against Nexus. Returns the
+// hit ({modId, modName, version, fileId, fileName}) or null and applies nothing.
+// Only matches files uploaded to Nexus as-is (in practice loose paks); UE4SS
+// mods are skipped because their Lua/DLL files never hash-match a Nexus archive.
+async function md5Match(mod) {
   if (!mod || !nexusKey() || mod.modType === 'ue4ss-mod') return null;
   for (const f of mod.files.slice(0, 4)) {
     try {
       const hit = await nexus.md5Lookup(path.join(store.modLibraryDir(mod.id), f.libraryRelative), nexusKey());
-      if (hit) {
-        engine.setOrigin(mod.id, { type: 'nexus', modId: hit.modId, fileId: hit.fileId, version: hit.version, adopted: true });
-        const stored = store.getMod(mod.id);
-        stored.version = hit.version;
-        if (hit.modName) { try { engine.rename(mod.id, hit.modName); } catch (_) {} }
-        store.save();
-        return hit;
-      }
+      if (hit) return hit;
     } catch (_) {}
   }
   return null;
+}
+
+// Best-effort Nexus identity via md5. Used by adoption, orphan recovery, and
+// foreign-library imports: on a hit it attaches the origin and renames in place.
+async function identifyOnNexus(modId) {
+  const mod = store.getMod(modId);
+  const hit = await md5Match(mod);
+  if (!hit) return null;
+  engine.setOrigin(mod.id, { type: 'nexus', modId: hit.modId, fileId: hit.fileId, version: hit.version, adopted: true });
+  const stored = store.getMod(mod.id);
+  stored.version = hit.version;
+  if (hit.modName) { try { engine.rename(mod.id, hit.modName); } catch (_) {} }
+  store.save();
+  return hit;
+}
+
+// ---- Name-based matching (fallback for UE4SS mods md5 can't identify) --------
+// Split CamelCase and letter/digit runs so glued names ("ZCUnlocked") tokenize.
+function deCamel(s) {
+  return String(s || '')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/([A-Za-z])(\d)/g, '$1 $2')
+    .replace(/(\d)([A-Za-z])/g, '$1 $2');
+}
+// Normalize a mod title for comparison: drop a trailing "by <author>", version
+// numbers, punctuation, glued ZC/ZCOM prefixes, and low-signal / game words.
+function normTitle(s) {
+  return deCamel(s).toLowerCase()
+    .replace(/\bby\s+.+$/, ' ')
+    .replace(/\bv?\d+(?:\.\d+)+\b/g, ' ')
+    .replace(/\b(?:zc|zcom|swzc)(?=[a-z])/g, ' ')
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .replace(/\b(?:the|for|and|mod|mods|zero|company|zc|zcom|swzc)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+function titleTokens(s) { return normTitle(s).split(' ').filter(Boolean); }
+// A single distinctive query term to feed Nexus's WILDCARD name search (best
+// recall from one token); falls back to the whole normalized title.
+function searchQuery(name) {
+  const toks = titleTokens(name).filter((t) => t.length >= 3);
+  if (!toks.length) return normTitle(name);
+  return toks.sort((a, b) => b.length - a.length)[0];
+}
+// 0..1 similarity of two titles: exact-normalized = 1, a multi-token phrase
+// contained in the other = 0.85, otherwise the Dice coefficient of the tokens.
+function titleScore(a, b) {
+  const na = normTitle(a), nb = normTitle(b);
+  if (!na || !nb) return 0;
+  if (na === nb) return 1;
+  const ta = titleTokens(a), tb = titleTokens(b);
+  const sa = new Set(ta), sb = new Set(tb);
+  if (!sa.size || !sb.size) return 0;
+  let inter = 0;
+  for (const t of sa) if (sb.has(t)) inter += 1;
+  const dice = (2 * inter) / (sa.size + sb.size);
+  // Containment counts as strong only for a substantial (multi-token) phrase, so
+  // a single shared generic word ("unlocked") can't masquerade as a likely match.
+  const shorterTokens = na.length <= nb.length ? sa.size : sb.size;
+  if (shorterTokens >= 2 && (na.includes(nb) || nb.includes(na))) return Math.max(dice, 0.85);
+  return dice;
+}
+function confOf(score) {
+  if (score >= 0.999) return 'exact';
+  if (score >= 0.6) return 'strong';
+  return 'weak';
 }
 
 // Auto-detected import sources: a previous app-side data folder (pre-archive
@@ -1051,26 +1111,76 @@ const handlers = {
     }
   },
 
-  // On-demand: md5-identify every still-unlinked installed mod against Nexus and
-  // attach the origin so its updates get tracked. Reuses the same identify path
-  // as adoption/import (skips UE4SS mods, which don't md5-match a Nexus upload).
+  // On-demand: find Nexus source candidates for every still-unlinked installed
+  // mod and RETURN them for review — nothing is linked here (the renderer shows a
+  // confirm dialog, then calls 'link-mods-apply'). Two matchers per mod: md5 (the
+  // adoption path, loose paks only) and a name search (GraphQL WILDCARD, catches
+  // UE4SS mods md5 can't). Candidates are scored and sorted best-first.
   'link-mods': async () => {
-    if (!nexusKey()) throw new Error('A Nexus Mods API key is required to match mods. Add one in Settings.');
     const targets = store.mods.filter((m) => !m.origin || m.origin.type === 'local');
     const total = targets.length;
-    if (!total) return { checked: 0, linked: 0, names: [], state: fullState() };
-    const names = [];
+    if (!total) return { checked: 0, suggestions: [], state: fullState() };
+    const hasKey = !!nexusKey();
+    const suggestions = [];
     let i = 0;
     for (const m of targets) {
       i += 1;
       sendEvent({ type: 'progress', label: 'Matching mods on Nexus', received: i, total });
+      const candidates = [];
+      const seen = new Set();
+      // 1) md5 — exact file match (needs a key; skips UE4SS mods)
       try {
-        const hit = await identifyOnNexus(m.id);
-        if (hit) names.push(store.getMod(m.id).name);
+        const hit = await md5Match(m);
+        if (hit) {
+          candidates.push({ modId: hit.modId, name: hit.modName || `mod ${hit.modId}`, author: '', version: hit.version || null, confidence: 'md5', score: 1 });
+          seen.add(hit.modId);
+        }
+      } catch (_) {}
+      // 2) name search — anonymous GraphQL, works with or without a key
+      try {
+        const q = searchQuery(m.name);
+        if (q && q.length >= 2) {
+          const res = await nexus.browseMods({ query: q, sort: 'downloads', count: 25 });
+          for (const r of (res.mods || [])) {
+            if (seen.has(r.modId)) continue;
+            const score = titleScore(m.name, r.name);
+            if (score < 0.34) continue;
+            candidates.push({ modId: r.modId, name: r.name, author: r.author || '', version: r.version || null, confidence: confOf(score), score });
+            seen.add(r.modId);
+          }
+        }
       } catch (_) { /* one mod failing never stops the scan */ }
+      candidates.sort((a, b) => b.score - a.score);
+      suggestions.push({ id: m.id, name: m.name, modType: m.modType, candidates: candidates.slice(0, 6) });
     }
-    log('info', `link-mods: matched ${names.length}/${total} unlinked mod(s) on Nexus`);
-    return { checked: total, linked: names.length, names, state: fullState() };
+    const withCands = suggestions.filter((s) => s.candidates.length).length;
+    log('info', `link-mods: ${withCands}/${total} unlinked mod(s) have candidate source(s)${hasKey ? '' : ' (no API key — linking needs one)'}`);
+    return { checked: total, hasKey, suggestions, state: fullState() };
+  },
+
+  // Apply the user-approved source picks from the Link mods review dialog.
+  // picks: [{ id, modId }]. Links each as a Nexus origin (same as 'link-origin').
+  'link-mods-apply': async (_e, { picks } = {}) => {
+    if (!nexusKey()) throw new Error('A Nexus Mods API key is required to link. Add one in Settings.');
+    const linked = [];
+    const errors = [];
+    for (const p of (picks || [])) {
+      const mod = store.getMod(p.id);
+      if (!mod) continue;
+      try {
+        const modId = Number(p.modId);
+        if (!modId) throw new Error('missing Nexus mod id');
+        const info = await nexus.modInfo(modId, nexusKey());
+        engine.setOrigin(p.id, { type: 'nexus', modId, fileId: null, version: info.version || null, linked: true });
+        store.getMod(p.id).version = info.version || null;
+        linked.push(store.getMod(p.id).name);
+      } catch (e) {
+        errors.push(`${mod.name}: ${e && e.message ? e.message : String(e)}`);
+      }
+    }
+    store.save();
+    log('info', `link-mods-apply: linked ${linked.length}/${(picks || []).length} mod(s) to Nexus`);
+    return { linked, errors, state: fullState() };
   },
 
   'link-origin': async (_e, { id, type, ref }) => {

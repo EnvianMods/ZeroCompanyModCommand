@@ -656,6 +656,24 @@ body.reduced-motion * { transition: none !important; animation: none !important;
 }
 .link-result:hover { border-color: var(--holo); color: var(--holo); }
 
+/* ---------- link mods (bulk review) ---------- */
+.zc-modal-box.wide { width: 720px; }
+.link-mods-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+.link-mods-row {
+  display: grid; grid-template-columns: 1fr minmax(240px, 46%); gap: 12px; align-items: center;
+  padding: 9px 12px; background: var(--panel); border: 1px solid var(--panel-edge);
+}
+.link-mods-row.lm-nomatch { opacity: 0.7; }
+.lm-left { display: flex; align-items: center; gap: 10px; cursor: pointer; min-width: 0; }
+.lm-check { flex: 0 0 auto; accent-color: var(--holo); }
+.lm-name { font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lm-type {
+  margin-left: 8px; font-size: 9px; font-weight: 700; letter-spacing: 1px; color: var(--text-dim);
+  border: 1px solid rgba(111, 139, 160, 0.4); border-radius: 2px; padding: 1px 4px; font-family: var(--mono);
+}
+.lm-select { width: 100%; max-width: none; }
+.lm-none { font-size: 11px; font-family: var(--mono); }
+
 /* ---------- launcher update banner ---------- */
 .launcher-banner {
   position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 220;

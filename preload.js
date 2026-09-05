@@ -60,6 +60,7 @@ contextBridge.exposeInMainWorld('zc', {
   adoptMods: (ids) => invoke('adopt-mods', { ids }),
   linkOrigin: (id, type, ref) => invoke('link-origin', { id, type, ref }),
   linkMods: () => invoke('link-mods'),
+  applyModLinks: (picks) => invoke('link-mods-apply', { picks }),
   promotedMods: () => invoke('nexus-promoted'),
   installRemote: (modId, name) => invoke('nexus-install-remote', { modId, name }),
   configList: () => invoke('config-list'),

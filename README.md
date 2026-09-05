@@ -124,7 +124,7 @@ automatically for IoStore package inspection; a different copy can be selected i
   cycle every 6s (pause on hover, off with reduced motion). Roster mods carry an amber
   PROMOTED tag; slots the roster can't fill are backfilled with random top-downloaded
   mods, tagged TOP RATED in cyan and reshuffled each cycle.
-- **Datapad (config editor)** — edit game and mod config files in-app: the UE user
+- **Config Editor** (opened from a button on the Command Deck) — edit game and mod config files in-app: the UE user
   configs (`%LOCALAPPDATA%\SWZeroCompany\Saved\Config\Windows\` — Engine.ini,
   GameUserSettings.ini, Input.ini, Scalability.ini; missing ones are created on first
   save), UE4SS-settings.ini and mods.txt, config files found inside UE4SS mod folders,

@@ -1754,7 +1754,7 @@ $('.nav-item[data-view="browse"]').addEventListener('click', () => {
   if (!forge.loaded) loadForge(); // fills the tab count even before first visit
 });
 
-// ------------------------------------------------------------------ Datapad (config editor)
+// ------------------------------------------------------------------ Config Editor
 
 const cfg = {
   list: [], listLoaded: false,
@@ -1804,7 +1804,7 @@ function renderConfigList() {
       if (group === 'Custom') {
         row.addEventListener('contextmenu', async (ev) => {
           ev.preventDefault();
-          if (!window.confirm(`Remove “${e.label}” from the Datapad list? The file itself is not deleted.`)) return;
+          if (!window.confirm(`Remove “${e.label}” from the Config Editor list? The file itself is not deleted.`)) return;
           const list = await call('configRemoveCustom', e.path);
           if (list) { cfg.list = list; renderConfigList(); }
         });
@@ -1976,8 +1976,9 @@ $('#btn-config-add').addEventListener('click', async () => {
   const list = await call('configAddCustom');
   if (list) { cfg.list = list; renderConfigList(); }
 });
-$('.nav-item[data-view="configs"]').addEventListener('click', () => {
+$('#btn-open-config').addEventListener('click', () => {
   if (!cfg.listLoaded) loadConfigList();
+  $('#config-modal').classList.remove('hidden');
 });
 
 // ------------------------------------------------------------------ import existing mods

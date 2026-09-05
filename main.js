@@ -1051,6 +1051,28 @@ const handlers = {
     }
   },
 
+  // On-demand: md5-identify every still-unlinked installed mod against Nexus and
+  // attach the origin so its updates get tracked. Reuses the same identify path
+  // as adoption/import (skips UE4SS mods, which don't md5-match a Nexus upload).
+  'link-mods': async () => {
+    if (!nexusKey()) throw new Error('A Nexus Mods API key is required to match mods. Add one in Settings.');
+    const targets = store.mods.filter((m) => !m.origin || m.origin.type === 'local');
+    const total = targets.length;
+    if (!total) return { checked: 0, linked: 0, names: [], state: fullState() };
+    const names = [];
+    let i = 0;
+    for (const m of targets) {
+      i += 1;
+      sendEvent({ type: 'progress', label: 'Matching mods on Nexus', received: i, total });
+      try {
+        const hit = await identifyOnNexus(m.id);
+        if (hit) names.push(store.getMod(m.id).name);
+      } catch (_) { /* one mod failing never stops the scan */ }
+    }
+    log('info', `link-mods: matched ${names.length}/${total} unlinked mod(s) on Nexus`);
+    return { checked: total, linked: names.length, names, state: fullState() };
+  },
+
   'link-origin': async (_e, { id, type, ref }) => {
     const mod = store.getMod(id);
     if (!mod) throw new Error('That mod is no longer installed.');

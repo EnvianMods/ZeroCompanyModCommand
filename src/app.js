@@ -2305,6 +2305,32 @@ async function openImportModal(opts = {}) {
 
 $('#btn-import').addEventListener('click', () => openImportModal());
 
+// Link mods — md5-match every unlinked installed mod against Nexus on demand and
+// attach its source, so updates start being tracked (no dialog; runs in place).
+$('#btn-link-mods').addEventListener('click', async () => {
+  const btn = $('#btn-link-mods');
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⇄ Matching…';
+  try {
+    const res = await call('linkMods');
+    if (!res) return;
+    state = res.state;
+    render();
+    if (res.checked === 0) {
+      toast('Every installed mod is already linked to a source.', 'info', 6000);
+    } else if (res.linked === 0) {
+      toast(`Checked ${res.checked} unlinked mod${res.checked === 1 ? '' : 's'} — none matched a Nexus upload. Link the rest by hand from their LOCAL badge.`, 'warn', 8000);
+    } else {
+      toast(`Linked ${res.linked} of ${res.checked} mod${res.checked === 1 ? '' : 's'} to Nexus — updates are now tracked${res.names.length ? `: “${res.names.join('”, “')}”` : ''}.`, 'info', 9000);
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+    $('#progress-toast').classList.add('hidden');
+  }
+});
+
 // The automatic first scan waits for the setup wizard to close, so the two
 // dialogs never stack on a brand-new install.
 let pendingFirstScan = false;

@@ -10,6 +10,7 @@ const { ModEngine, MODS_REL, LOGIC_MODS_REL, WIN64_REL, UE4SS_MODS_REL } = requi
 const { findSevenZip } = require('./lib/archive');
 const nexus = require('./lib/nexus');
 const ue4ssDl = require('./lib/ue4ss');
+const zcsdkRt = require('./lib/zcsdk');
 const configs = require('./lib/configs');
 const { getPromotedAuthors } = require('./lib/featured');
 const github = require('./lib/github');
@@ -433,6 +434,7 @@ function fullState() {
     conflicts,
     ue4ssHooks,
     ue4ss: engine.ue4ssStatus(),
+    zcsdk: engine.zcsdkStatus(),
     retoc: engine.retocStatus(),
     sevenZip: !!findSevenZip(store.settings.sevenZipPath),
     appId: steam.APP_ID,
@@ -1137,6 +1139,17 @@ const handlers = {
     }
     return { state: fullState(), version: asset.releaseName };
   },
+
+  // One-click prerequisite for content mods built with the Zero Company Mod
+  // SDK: installs the bundled ZCSDK Runtime (two UE4SS mods) from tools/.
+  'install-zcsdk-runtime': async () => {
+    if (!store.settings.gamePath) throw new Error('Locate the game folder in Settings first.');
+    const bundled = zcsdkRt.bundledRuntime();
+    if (!bundled) throw new Error('This build ships without the ZCSDK Runtime package (tools/ZCSDKRuntime.zip).');
+    const res = await engine.installZcsdkRuntime(bundled.zip, bundled.version);
+    log('info', `ZCSDK Runtime ${bundled.version || ''} installed (${res.replaced} previous cop${res.replaced === 1 ? 'y' : 'ies'} replaced)`);
+    return { state: fullState(), version: bundled.version, replaced: res.replaced };
+  },
 };
 
 async function installPaths(paths) {
@@ -1155,6 +1168,16 @@ async function installPaths(paths) {
       for (const mod of installedMods(res)) {
         log('info', `installed "${mod.name}" (${mod.modType}) from ${path.basename(p)}`);
         results.push({ source: path.basename(p), ok: true, name: mod.name, modType: mod.modType, warnings: mod.warnings || [] });
+        // SDK-built content needs the ZCSDK Runtime to be discovered by the game.
+        if (mod.zcsdk) {
+          const rt = engine.zcsdkStatus();
+          if (!rt.healthy) {
+            results.push({
+              source: path.basename(p), ok: true, note: true, needsZcsdk: true, name: mod.name, modType: mod.modType,
+              message: `“${mod.name}” is built with the Zero Company Mod SDK and needs the ZCSDK Runtime, which is ${rt.installed ? 'not active' : 'not installed'}.`,
+            });
+          }
+        }
       }
       if (res.multi) {
         for (const e of res.errors || []) results.push({ source: path.basename(p), ok: false, error: e });
@@ -1255,6 +1278,11 @@ function diagnostics() {
   }
   const ue4ss = engine.ue4ssStatus();
   add(ue4ss.healthy ? 'good' : (ue4ss.installed ? 'warning' : 'info'), 'UE4SS runtime', ue4ss.message);
+  const zc = engine.zcsdkStatus();
+  if (zc.installed || zc.neededBy.length) {
+    const needed = zc.neededBy.some((n) => n.enabled);
+    add(zc.healthy ? (zc.updateAvailable ? 'info' : 'good') : (needed ? 'warning' : 'info'), 'ZCSDK Runtime', zc.message);
+  }
   const retoc = engine.retocStatus();
   add(retoc.found ? 'good' : 'info', 'retoc',
     retoc.found ? `Found at ${retoc.path}${retoc.version ? ` (${retoc.version})` : ''}` : 'Not found (optional — used for IoStore package inspection).');
@@ -1327,6 +1355,7 @@ function buildSupportReport() {
     duplicates: store.settings.gamePath ? engine.scanDuplicateMods() : [],
     missingDeployed: store.settings.gamePath ? engine.auditDeployedFiles() : [],
     ue4ssStatus: engine.ue4ssStatus(),
+    zcsdkStatus: engine.zcsdkStatus(),
     retoc: engine.retocStatus(),
     sevenZip: !!findSevenZip(store.settings.sevenZipPath),
     diagItems: diagnostics().items,

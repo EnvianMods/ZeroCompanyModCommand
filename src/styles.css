@@ -744,6 +744,12 @@ body.reduced-motion * { transition: none !important; animation: none !important;
 .ea-chip.ea-bad { color: var(--danger); border-color: rgba(255, 92, 92, 0.55); }
 .ea-chip.ea-note { color: var(--amber); border-color: rgba(255, 200, 87, 0.45); }
 .ea-chip.ea-ok { color: var(--good); border-color: rgba(109, 255, 176, 0.5); }
+/* ZCSDK content-mod chip (Zero Company Mod SDK builds) */
+.zc-chip { flex-shrink: 0; font-size: 10px; }
+.zc-chip.zc-ok { color: var(--holo); border-color: rgba(79, 209, 255, 0.45); }
+.zc-chip.zc-bad { color: var(--amber); border-color: rgba(255, 200, 87, 0.55); cursor: pointer; background: transparent; font-family: inherit; }
+.zc-chip.zc-bad:hover { color: var(--bg); background: var(--amber); }
+.settings-note { font-size: 11.5px; line-height: 1.5; margin: 6px 2px 0; }
 .build-chip { color: #ff9d7a; background: rgba(255, 157, 122, 0.08); border-color: rgba(255, 157, 122, 0.4); }
 
 .ue4ss-order-section { margin-top: 34px; border-top: 1px solid var(--panel-edge); padding-top: 18px; }

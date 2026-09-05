@@ -26,7 +26,9 @@ Windows gets the portable exe; Linux and Steam Deck get the AppImage.[/size][/ce
 [*][b]Bring your existing setup aboard[/b] — Import existing scans ~mods, LogicMods and ue4ss/Mods for mods you installed by hand (or with another tool) and adopts them in place without touching a single game file; anything matching a Nexus upload is identified automatically so its updates get tracked
 [*][b]Game files protected[/b] — a replacement-style mod backs up the original of every game file it overwrites and restores it on disable/uninstall
 [*][b]Clean enable/disable[/b] — canonical copies are kept in the manager's library, so toggling a mod never loses files. Every deployed file's SHA-256 is recorded; a file you edited by hand is never silently deleted
-[*][b]Squad profiles[/b] — save named sets of enabled mods + load order and swap between them in two clicks
+[*][b]Squad profiles[/b] — save named sets of enabled mods + load order and swap between them in two clicks; profiles remember each mod's [i]version[/i] and swap it back in from the vault when you apply
+[*][b]Version vault[/b] — every update archives the old version; one click rolls a mod back (or forward again) to any archived version
+[*][b]Enable / Disable all[/b] — one button for the whole hangar, with the same file-safety checks as single toggles
 [/list]
 
 [b][color=#ffc857]Conflict detection that actually proves it[/color][/b]
@@ -51,6 +53,7 @@ Windows gets the portable exe; Linux and Steam Deck get the AppImage.[/size][/ce
 [*][b]EA App edition detected and supported[/b] — the manager finds the EA install, deploys every mod format identically, and launches the EA edition directly
 [*][b]EA compatibility flags[/b] — mods can declare Steam-only in their modinfo.json, and a live community list flags known cases: EA players get a clear warning before enabling, Steam players see which of their mods EA friends can't run
 [*][b]Game-build warnings[/b] — every mod remembers which game build it was installed under; after a game update, possibly-broken mods are flagged until you mark them verified
+[*][b]Game update freeze[/b] [i](experimental, opt-in)[/i] — stop the game auto-updating overnight and breaking your modded playthrough: one toggle sets Steam's update-on-launch-only mode, locks the manifest, and launches the game directly. Fully reversible, with the limits stated up front
 [*][b]Linux / Steam Deck[/b] — Steam library discovery on Linux (native and flatpak), Proton prefix detection, UE4SS DLL-override guidance, and a ready-to-run AppImage in the Files tab
 [/list]
 
@@ -63,7 +66,7 @@ Windows gets the portable exe; Linux and Steam Deck get the AppImage.[/size][/ce
 
 [b][color=#ffc857]Two mod sources built in[/color][/b]
 [list]
-[*][b]Holonet browser[/b] — browse this game's entire Nexus catalogue inside the app: thumbnails, search, category filters, and sorting by downloads / endorsements / newest / updated
+[*][b]Holonet browser[/b] — browse this game's entire Nexus catalogue inside the app: thumbnails, search, category filters, and sorting by downloads / endorsements / newest / updated. Mods you already have show a green IN HANGAR badge — and an Update button right on the card when a new version is out
 [*][b]The Forge[/b] — a second tab of curated GitHub mods, hand-vetted by Envian Mods (the list updates live). Installs come only from release archives, behind a confirmation naming the exact repo and file
 [*][b]nxm:// one-click downloads[/b] — press "Mod Manager Download" on the website and the mod downloads and installs straight into the manager
 [*]Works with free accounts (via the website button) and premium accounts (fully in-app)

@@ -263,6 +263,19 @@ app.whenReady().then(() => {
     const info = await checkLauncherUpdate();
     if (info.available) sendEvent({ type: 'launcher-update', info });
   });
+  // Re-assert an update freeze the user turned on (Steam may have rewritten
+  // the manifest while it was briefly writable, e.g. during a verify).
+  win.webContents.once('did-finish-load', () => {
+    if (!store.settings.updateFreeze || !store.settings.gamePath) return;
+    try {
+      const status = steam.updateFreezeStatus(store.settings.gamePath);
+      if (status.supported && (!status.frozen || status.behavior !== '1')) {
+        steam.setUpdateFreeze(store.settings.gamePath, true);
+        log('warn', 'update freeze re-asserted at startup (manifest had been unlocked)');
+        sendEvent({ type: 'toast', kind: 'warn', message: 'Game update freeze re-applied — Steam had unlocked the manifest.' });
+      }
+    } catch (_) {}
+  });
   // Startup recovery: redeploy enabled mods whose deployed files went missing.
   win.webContents.once('did-finish-load', () => {
     if (!store.settings.gamePath) return;
@@ -329,6 +342,10 @@ function fullState() {
     },
     platform: process.platform,
     eaAppPresent: eaAppDetected,
+    updateFreeze: {
+      wanted: !!store.settings.updateFreeze,
+      ...steam.updateFreezeStatus(store.settings.gamePath),
+    },
     modCompat,
     ue4ssOrder: store.settings.gamePath ? engine.ue4ssOrderState() : { managed: [], others: [], applied: false },
     mods: store.mods,
@@ -461,6 +478,12 @@ const handlers = {
       if (process.platform !== 'win32') throw new Error('The EA App edition can only be launched on Windows.');
       const child = spawn(detection.exePath, [], { detached: true, stdio: 'ignore', cwd: path.dirname(detection.exePath) });
       child.unref();
+    } else if (store.settings.updateFreeze && detection.launcher === 'steam' && process.platform === 'win32') {
+      // Frozen updates: a steam:// launch is exactly what triggers the update
+      // check, so start the exe directly while the freeze is on.
+      const child = spawn(detection.exePath, [], { detached: true, stdio: 'ignore', cwd: path.dirname(detection.exePath) });
+      child.unref();
+      sendEvent({ type: 'toast', message: 'Update freeze is on — launched the game directly (Steam launches would trigger the update check).' });
     } else {
       // Prefer a Steam launch so overlay/cloud saves work (also correct under
       // Proton on Linux/Steam Deck — Steam applies the configured launch options).
@@ -511,8 +534,30 @@ const handlers = {
 
   'save-profile': async (_e, { name }) => { engine.saveProfile(name); return fullState(); },
   'apply-profile': async (_e, { id }) => {
-    const { profile, warnings } = engine.applyProfile(id);
+    const { profile, warnings } = await engine.applyProfile(id);
+    log('info', `profile "${profile.name}" applied (${warnings.length} note(s))`);
     return { state: fullState(), profileName: profile.name, warnings };
+  },
+
+  'set-all-enabled': async (_e, { enabled, force }) => {
+    const result = engine.setAllEnabled(enabled, force);
+    log('info', `${enabled ? 'enabled' : 'disabled'} all mods (${result.changed} changed, ${result.errors.length} error(s))`);
+    return { state: fullState(), result };
+  },
+
+  'mod-versions': async (_e, { id }) => engine.listVersions(id),
+  'rollback-version': async (_e, { id, entryId }) => {
+    const mod = await engine.rollbackVersion(id, entryId);
+    log('info', `rolled "${mod.name}" to v${mod.version || 'unversioned'}`);
+    return { state: fullState(), name: mod.name, version: mod.version };
+  },
+
+  'set-update-freeze': async (_e, { freeze }) => {
+    const status = steam.setUpdateFreeze(store.settings.gamePath, freeze);
+    store.settings.updateFreeze = !!freeze;
+    store.save();
+    log('info', `game update freeze ${freeze ? 'ENABLED' : 'disabled'} (manifest ${status.frozen ? 'locked' : 'writable'}, AutoUpdateBehavior=${status.behavior})`);
+    return fullState();
   },
   'delete-profile': async (_e, { id }) => { engine.deleteProfile(id); return fullState(); },
 
@@ -942,6 +987,17 @@ function diagnostics() {
     const modsDir = path.join(detection.gamePath, MODS_REL);
     add(fs.existsSync(modsDir) ? 'good' : 'info', '~mods folder',
       fs.existsSync(modsDir) ? 'Present' : 'Created on first packaged-mod install');
+    // Update freeze state vs the user's intent.
+    const freeze = steam.updateFreezeStatus(store.settings.gamePath);
+    if (store.settings.updateFreeze) {
+      if (freeze.supported && freeze.frozen && freeze.behavior === '1') {
+        add('warning', 'Game update freeze', 'ACTIVE — the game will not auto-update. Remember to unfreeze before playing online modes that require the current build, and use the manager\'s Launch button (a Steam-UI launch can still force an update).');
+      } else if (freeze.supported) {
+        add('warning', 'Game update freeze', 'Enabled in Settings but the manifest is not fully locked — toggle it off and on again to re-apply.');
+      } else {
+        add('info', 'Game update freeze', 'Enabled, but this is not a Steam-manifest install. EA App users: disable automatic game updates in the EA App settings.');
+      }
+    }
   } else {
     add('error', 'Game installation', 'Not detected. Locate the game folder in Settings (Steam and EA App installs are both scanned).');
   }

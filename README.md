@@ -98,8 +98,23 @@ automatically for IoStore package inspection; a different copy can be selected i
   in the pairwise conflict report and matrix. Hook callbacks stack in UE4SS load
   order, so the report explains rather than picks a "winner".
 - **Squad profiles** — save the current enabled set + load order under a name
-  (Hangar Bay profile bar), then apply/delete. Mods installed after a profile was
-  saved are appended last with a warning; missing mods are skipped.
+  (Hangar Bay profile bar), then apply/delete. Profiles pin each mod's version;
+  applying swaps pinned versions back in from the version vault. Mods installed
+  after a profile was saved are appended last with a warning; missing mods are
+  skipped. Enable all / Disable all buttons cover the whole hangar.
+- **Version vault** — every mod update archives the outgoing version under
+  `data/versions/<modType-name>/` (newest 5 kept). The ⧗ button on a Hangar row
+  lists archived versions; rolling back archives the current version first, so
+  roll-forward works too. Identity is modType+name, so renames start fresh
+  history.
+- **Game update freeze** — opt-in Settings toggle (Steam installs only): sets
+  `AutoUpdateBehavior "1"` in the appmanifest, locks the manifest read-only,
+  and routes the Launch button to a direct exe start while frozen. Re-asserted
+  at startup, reported in Diagnostics, fully reversible. EA App has no per-game
+  mechanism — users are pointed at the EA App's global auto-update setting.
+- **Installed badges in Holonet/Forge** — cards for mods already in the hangar
+  show a green IN HANGAR tag; the Install button becomes ✓ Installed, or
+  ⬆ Update when one is waiting.
 - **Featured transmissions** — the Holonet opens with a rotating 3-slot promo strip of
   mods by the featured-creator roster. The roster is owner-controlled, not a user
   setting: the baked-in list lives in `lib/featured.js` (ships with launcher updates),

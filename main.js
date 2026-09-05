@@ -841,7 +841,7 @@ const handlers = {
 
   'config-add-custom': async () => {
     const res = await dialog.showOpenDialog(win, {
-      title: 'Add a config file to the Datapad',
+      title: 'Add a config file to the Config Editor',
       properties: ['openFile'],
       filters: [
         { name: 'Config files', extensions: ['ini', 'json', 'txt', 'cfg'] },

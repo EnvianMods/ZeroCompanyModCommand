@@ -24,7 +24,6 @@
         <button class="nav-item active" data-view="mods"><span class="nav-glyph">◈</span> Command Deck <span id="nav-update-count" class="nav-badge warn" title="Mod updates available"></span><span id="nav-mod-count" class="nav-badge"></span></button>
         <button class="nav-item" data-view="browse"><span class="nav-glyph">◍</span> Holonet</button>
         <button class="nav-item" data-view="diagnostics"><span class="nav-glyph">≡</span> Diagnostics <span id="nav-conflict-count" class="nav-badge warn"></span></button>
-        <button class="nav-item" data-view="configs"><span class="nav-glyph">⌸</span> Datapad</button>
         <button class="nav-item" data-view="settings"><span class="nav-glyph">⚙</span> Settings</button>
       </nav>
 
@@ -48,8 +47,8 @@
           <p class="view-sub">Operational overview &amp; installed modifications — Star Wars: Zero Company</p>
         </header>
 
-        <div class="card-grid">
-          <div class="card holo">
+        <div class="card-grid slim-grid">
+          <div class="card holo slim">
             <div class="card-title">GAME INSTALLATION</div>
             <div class="card-body">
               <div class="stat-row"><span class="stat-label">Status</span><span id="dash-game-status" class="stat-value">—</span></div>
@@ -59,7 +58,7 @@
             </div>
           </div>
 
-          <div class="card holo">
+          <div class="card holo slim">
             <div class="card-title">MOD ROSTER</div>
             <div class="card-body">
               <div class="big-stat"><span id="dash-enabled">0</span><span class="big-stat-label">ACTIVE</span></div>
@@ -69,12 +68,13 @@
             </div>
           </div>
 
-          <div class="card holo">
+          <div class="card holo slim">
             <div class="card-title">SUPPORT SYSTEMS</div>
             <div class="card-body">
               <div class="stat-row"><span class="stat-label">UE4SS runtime</span><span id="dash-ue4ss" class="stat-value">—</span></div>
               <div class="stat-row"><span class="stat-label">retoc</span><span id="dash-retoc" class="stat-value">—</span></div>
               <div class="stat-row"><span class="stat-label">7-Zip</span><span id="dash-7z" class="stat-value">—</span></div>
+              <div class="stat-row"><span class="stat-label">Config editor</span><button id="btn-open-config" class="btn ghost tiny">⌸ Open ↗</button></div>
             </div>
           </div>
         </div>
@@ -166,42 +166,6 @@
           </div>
           <div id="forge-status" class="browse-status hidden"></div>
           <div id="forge-grid" class="browse-grid"></div>
-        </div>
-      </section>
-
-      <!-- ======================= DATAPAD (config editor) ======================= -->
-      <section class="view" id="view-configs">
-        <header class="view-header">
-          <h1>DATAPAD</h1>
-          <p class="view-sub">Configuration editor — game, UE4SS and mod config files</p>
-          <div class="header-actions">
-            <button id="btn-config-add" class="btn ghost">⊕ Add file…</button>
-          </div>
-        </header>
-        <div class="config-layout">
-          <div id="config-list" class="config-list"></div>
-          <div class="config-editor">
-            <div id="config-toolbar" class="config-toolbar hidden">
-              <div class="config-fileinfo">
-                <span id="config-filename" class="config-filename"></span>
-                <span id="config-dirty" class="config-dirty hidden">●</span>
-                <span id="config-filepath" class="config-filepath mono"></span>
-              </div>
-              <div class="config-actions">
-                <button id="btn-config-mode" class="btn ghost tiny">Raw view</button>
-                <button id="btn-config-folder" class="btn ghost tiny">Folder</button>
-                <button id="btn-config-reload" class="btn ghost tiny">Reload</button>
-                <button id="btn-config-save" class="btn primary tiny" disabled>Save</button>
-              </div>
-            </div>
-            <div id="config-placeholder" class="config-placeholder">
-              <div class="empty-glyph">⌸</div>
-              <p>Select a configuration file to edit.</p>
-              <p class="dim">Files marked “create” don’t exist yet — saving creates them. Originals are backed up to .zcbak on first save.</p>
-            </div>
-            <div id="config-structured" class="config-structured hidden"></div>
-            <textarea id="config-raw" class="config-raw hidden" spellcheck="false"></textarea>
-          </div>
         </div>
       </section>
 
@@ -495,6 +459,46 @@
       <div class="zc-modal-actions">
         <button id="btn-setup-finish" class="btn primary">Finish setup</button>
         <button id="btn-setup-skip" class="btn ghost">Skip for now</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="config-modal" class="zc-modal hidden">
+    <div class="zc-modal-box config-modal-box">
+      <div class="config-modal-head">
+        <div>
+          <div class="zc-modal-title">CONFIG EDITOR</div>
+          <p class="zc-modal-sub dim">Game, UE4SS and mod config files — structured or raw, with automatic .zcbak backups</p>
+        </div>
+        <div class="header-actions">
+          <button id="btn-config-add" class="btn ghost">⊕ Add file…</button>
+          <button class="btn ghost" data-close-modal="config-modal">Close</button>
+        </div>
+      </div>
+      <div class="config-layout">
+        <div id="config-list" class="config-list"></div>
+        <div class="config-editor">
+          <div id="config-toolbar" class="config-toolbar hidden">
+            <div class="config-fileinfo">
+              <span id="config-filename" class="config-filename"></span>
+              <span id="config-dirty" class="config-dirty hidden">●</span>
+              <span id="config-filepath" class="config-filepath mono"></span>
+            </div>
+            <div class="config-actions">
+              <button id="btn-config-mode" class="btn ghost tiny">Raw view</button>
+              <button id="btn-config-folder" class="btn ghost tiny">Folder</button>
+              <button id="btn-config-reload" class="btn ghost tiny">Reload</button>
+              <button id="btn-config-save" class="btn primary tiny" disabled>Save</button>
+            </div>
+          </div>
+          <div id="config-placeholder" class="config-placeholder">
+            <div class="empty-glyph">⌸</div>
+            <p>Select a configuration file to edit.</p>
+            <p class="dim">Files marked “create” don’t exist yet — saving creates them. Originals are backed up to .zcbak on first save.</p>
+          </div>
+          <div id="config-structured" class="config-structured hidden"></div>
+          <textarea id="config-raw" class="config-raw hidden" spellcheck="false"></textarea>
+        </div>
       </div>
     </div>
   </div>

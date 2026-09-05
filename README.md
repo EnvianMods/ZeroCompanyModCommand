@@ -25,6 +25,10 @@ automatically for IoStore package inspection; a different copy can be selected i
 - **Mod types** (auto-classified):
   - `pak` / `iostore` → deployed to `SWZeroCompany/Content/Paks/~mods` with
     `pakchunk99-P###_Name` priority naming (matched basenames across pak/utoc/ucas).
+  - Content mods built with the **Zero Company Mod SDK** ship two sidecars beside
+    the pak trio (`<Mod>.AssetRegistry.bin` + `<Mod>.zcsdk.lua`); they deploy to
+    `~mods` too, keeping their exact names, and the row gets a ◆ SDK chip. They
+    need the **ZCSDK Runtime** (see below) or the game can't discover the content.
   - `logicmods` → `SWZeroCompany/Content/Paks/LogicMods`.
   - UE4SS Lua/DLL mods (folders with `Scripts/main.lua` or `dlls/main.dll`) →
     `SWZeroCompany/Binaries/Win64/ue4ss/Mods/<Name>` with `enabled.txt`. The
@@ -124,7 +128,7 @@ automatically for IoStore package inspection; a different copy can be selected i
   cycle every 6s (pause on hover, off with reduced motion). Roster mods carry an amber
   PROMOTED tag; slots the roster can't fill are backfilled with random top-downloaded
   mods, tagged TOP RATED in cyan and reshuffled each cycle.
-- **Datapad (config editor)** — edit game and mod config files in-app: the UE user
+- **Config Editor** (opened from a button on the Command Deck) — edit game and mod config files in-app: the UE user
   configs (`%LOCALAPPDATA%\SWZeroCompany\Saved\Config\Windows\` — Engine.ini,
   GameUserSettings.ini, Input.ini, Scalability.ini; missing ones are created on first
   save), UE4SS-settings.ini and mods.txt, config files found inside UE4SS mod folders,
@@ -149,6 +153,12 @@ automatically for IoStore package inspection; a different copy can be selected i
 - **UE4SS one-click install** — Settings → UE4SS → Download & install fetches the
   latest experimental UE4SS runtime zip from GitHub (UE4SS-RE/RE-UE4SS) and installs
   it into `Binaries/Win64`.
+- **ZCSDK Runtime one-click install** — Settings → ZCSDK Runtime installs the two
+  UE4SS mods (ZCSDKBridge + ZCSDKLoader) that SDK-built content mods need, from
+  `tools/ZCSDKRuntime.zip` bundled with the app (`tools/zcsdk-runtime.json` holds
+  the bundled version). Existing copies are vaulted and replaced by name; installing
+  an SDK-built mod without a working runtime offers the install immediately, and
+  UE4SS is fetched first when it is missing.
 - **Incompatibility check** — pairwise conflict detection between enabled mods:
   **CONFIRMED** pairs modify the same game assets (asset paths extracted from each mod's
   `.utoc` via `retoc list --path`); **SUSPECTED** pairs ship identically named files.

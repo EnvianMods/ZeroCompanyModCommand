@@ -2,6 +2,60 @@
 
 Context document for continuing work on this project. Last updated 2026-09-04.
 
+## v1.7.0 (2026-09-05, feat/zcsdk-sidecars branch, NOT released) — the SDK bridge
+
+Branch lineage: feat/deck-slim-config → feat/zcsdk-sidecars. The deck-slim UI
+commit is unreleased too, and the user's UNCOMMITTED deck/CSS edits
+(src/index.html nav area, src/styles.css slim cards) were left in the working
+tree — only this feature's hunks were staged (HEAD + ours, via the patch-ui
+script's stage mode). Headline: the consumer half of the "two tools, one
+bridge" design with the Zero Company Mod SDK (dev project at
+G:\Envian Mods and Projects\Zero Company Projects\ZeroCompanyModSDK, its
+docs/HANDOFF.md is the SDK briefing).
+
+CONTRACT (from the SDK's ZCSDKLoader): a content mod = pak trio +
+<Mod>.AssetRegistry.bin + <Mod>.zcsdk.lua + modinfo.json (with a "zcsdk"
+block: registry/manifest/grants/requires). The runtime scans Content/Paks and
+Content/Paks/~mods (flat) for *.zcsdk.lua and resolves "registry" RELATIVE TO
+THE MANIFEST → sidecars must deploy beside the paks UNRENAMED (paks keep the
+pakchunk99-P###_Name_ prefix). lib/mods.js: SIDECAR_RE / isSidecar() /
+zcsdkMeta(); classifyFolder + _splitModGroups put sidecars in the payload and
+meta.zcsdk; install() loose-pak path stages a folder's sidecars only when it
+holds ONE pak group; the record gains mod.zcsdk = {manifest, registry, grants}
+(null for ordinary paks); _deployMod keeps sidecar names; scanUnmanaged attaches
+unowned ~mods sidecars to the pak group whose cleaned name equals/starts with
+the sidecar stem; adopt() records zcsdk. engine.zcsdkStatus() = {installed,
+active, healthy, updateAvailable, parts{ZCSDKBridge,ZCSDKLoader:{present,
+active,version,managedId}}, neededBy[], bundled{version,bridge,loader},
+message}; engine.installZcsdkRuntime(zip, version) vaults + force-uninstalls
+managed copies named ZCSDKBridge/ZCSDKLoader (adopted dev copies included),
+installs the zip (multi-mod split → two ue4ss-mod entries, origin
+{type:'local', bundled:'zcsdk-runtime'}), restores ue4ssPriority, syncs the
+mods.txt block. lib/zcsdk.js locates tools/ZCSDKRuntime.zip (+ zcsdk-runtime.json
+= bundled version numbers; resourcesPath in packaged builds — tools/ already
+ships via extraResources). TO BUMP THE BUNDLED RUNTIME: copy the SDK's
+build/ZCSDKRuntime_v<x>.zip over tools/ZCSDKRuntime.zip and edit the json.
+IPC: install-zcsdk-runtime (preload installZcsdkRuntime); state.zcsdk in
+fullState; installPaths pushes a {needsZcsdk:true} note per SDK mod when the
+runtime isn't healthy → renderer offerZcsdkRuntime() confirm → installZcsdkRuntime()
+(chains installUe4ss when UE4SS is absent); Settings card "ZCSDK RUNTIME"
+(#zcsdk-settings-status, #btn-install-zcsdk: Install x / Update to x /
+Reinstall); Hangar ◆ SDK chip (.zc-chip, amber button when unhealthy);
+Diagnostics + report.js line. Tests: scratchpad engine-test-v17.js (uses the
+REAL SDK demo zip + the bundled runtime zip; 51 checks) + all prior suites
+green. FIX FOUND BY THAT TEST: lib/archive.js called a bare `tar` — under Git
+Bash (and on Linux) that is GNU tar, which can't read zips, so installs fell to
+extract-zip, which throws "Out of bound path" on the `./` directory entry that
+bsdtar's `-C dir .` writes (every SDK zip had it). Now: absolute
+System32\tar.exe → PATH tar → extract-zip → 7-Zip. The SDK side was fixed too
+(zcmod-build passes explicit entries; zips rebuilt without `./`).
+GOTCHAS: repo files are CRLF — string anchors must normalize; every
+zcmod-build package names its pak pakchunk500-Windows_P.* so two SDK mods show
+a SUSPECTED (filename) conflict — harmless (deploy names differ), SDK-side
+follow-up is to name paks after the mod. User's real setup: Mod Command's
+adopted ZCSDKBridge library copy was v0.2 while disk had v0.3 → the Settings
+card shows "Update to 0.3" (unversioned copy) until the user presses it.
+
 ## v1.6.0 RELEASED 2026-09-04 (merged to main, tag v1.6.0) — CURRENT
 
 Nexus: file 562 (Windows zip, main + primary MM) + file 563 (Linux AppImage,

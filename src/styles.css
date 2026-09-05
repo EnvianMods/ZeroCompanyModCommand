@@ -744,6 +744,12 @@ body.reduced-motion * { transition: none !important; animation: none !important;
 .ea-chip.ea-bad { color: var(--danger); border-color: rgba(255, 92, 92, 0.55); }
 .ea-chip.ea-note { color: var(--amber); border-color: rgba(255, 200, 87, 0.45); }
 .ea-chip.ea-ok { color: var(--good); border-color: rgba(109, 255, 176, 0.5); }
+/* ZCSDK content-mod chip (Zero Company Mod SDK builds) */
+.zc-chip { flex-shrink: 0; font-size: 10px; }
+.zc-chip.zc-ok { color: var(--holo); border-color: rgba(79, 209, 255, 0.45); }
+.zc-chip.zc-bad { color: var(--amber); border-color: rgba(255, 200, 87, 0.55); cursor: pointer; background: transparent; font-family: inherit; }
+.zc-chip.zc-bad:hover { color: var(--bg); background: var(--amber); }
+.settings-note { font-size: 11.5px; line-height: 1.5; margin: 6px 2px 0; }
 .build-chip { color: #ff9d7a; background: rgba(255, 157, 122, 0.08); border-color: rgba(255, 157, 122, 0.4); }
 
 .ue4ss-order-section { margin-top: 34px; border-top: 1px solid var(--panel-edge); padding-top: 18px; }
@@ -811,7 +817,20 @@ body.reduced-motion * { transition: none !important; animation: none !important;
 /* Hangar section header keeps its actions inline (the absolute positioning is
    for the old single view-header layout). */
 .hangar-section-head { position: relative; }
-.hangar-section-head .header-actions { position: static; flex-wrap: wrap; justify-content: flex-end; }
+/* Keep the action buttons on a single row: they shrink to fit instead of
+   wrapping to a second line. Labels ellipsize only at extreme narrowness. */
+.hangar-section-head .header-actions {
+  position: static; flex-wrap: nowrap; justify-content: flex-end;
+  min-width: 0; gap: 6px;
+}
+.hangar-section-head .header-actions .btn {
+  flex: 0 1 auto; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding-left: 11px; padding-right: 11px;
+}
+/* The title block gives up horizontal space first (its subtitle reflows), so
+   the buttons keep a comfortable size until the window is quite narrow. */
+.hangar-section-head > div:first-child { min-width: 0; flex: 1 40 auto; }
 
 /* ---------- merged Diagnostics / Load Order ---------- */
 .diag-list.diag-slim {
@@ -824,3 +843,23 @@ body.reduced-motion * { transition: none !important; animation: none !important;
   font-size: 11px; line-height: 1.4;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
+
+/* ---------- slim Command Deck cards ---------- */
+.card-grid.slim-grid { gap: 12px; margin-bottom: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.card.slim { padding: 0 0 8px; }
+.card.slim .card-title { padding: 8px 14px 6px; font-size: 10px; letter-spacing: 2px; }
+.card.slim .card-body { padding: 8px 14px 0; }
+.card.slim .stat-row { padding: 2px 0; }
+.card.slim .stat-label { font-size: 10px; letter-spacing: 1px; }
+.card.slim .stat-value { font-size: 12px; }
+.card.slim .stat-value.small { font-size: 10px; }
+.card.slim .big-stat { padding: 2px 0 4px; gap: 8px; align-items: baseline; }
+.card.slim .big-stat span:first-child { font-size: 26px; text-shadow: 0 0 12px var(--holo-glow); }
+.card.slim .big-stat-label { font-size: 10px; letter-spacing: 2px; }
+.card.slim .stat-row .btn.tiny { padding: 2px 8px; font-size: 10px; }
+
+/* ---------- Config Editor modal ---------- */
+.config-modal-box { width: 1100px; max-width: 94vw; max-height: 88vh; overflow: hidden; display: flex; flex-direction: column; }
+.config-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.config-modal-head .header-actions { position: static; display: flex; gap: 10px; }
+.config-modal-box .config-layout { height: 70vh; margin: 0; }

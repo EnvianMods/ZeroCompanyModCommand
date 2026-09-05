@@ -23,6 +23,7 @@ Windows gets the portable exe; Linux and Steam Deck get the AppImage.[/size][/ce
 [*][b]Every format auto-detected[/b] — pak, IoStore, LogicMods, UE4SS Lua/DLL mods, game-folder replacement mods (e.g. movies), even the UE4SS runtime itself
 [*][b]Guided installers (FOMOD)[/b] — mods that ship an installer script are installed by answering the author's own questions, with descriptions, images, recommended answers and conditional steps. Scripts are read, never executed
 [*][b]Multi-mod archives[/b] — an archive holding several mods installs each as its own entry, so you can enable, order, update and remove them separately; updates replace every entry from the same download
+[*][b]Zero Company Mod SDK content[/b] — mods built with the ZCSDK install like any other pak mod, sidecars and all; the required ZCSDK Runtime is bundled with the app and installs in one click (Settings → ZCSDK Runtime, or straight from the prompt when you install your first SDK mod)
 [*][b]Your mods survive everything[/b] — the mod archive lives in the game folder (movable in Settings): delete or update the app and a fresh install restores every mod, profile and archived version automatically
 [*][b]Bring your existing setup aboard[/b] — a one-time scan runs by itself after the first game connection, and Import existing covers the rest: mods installed by hand, orphaned archive entries, previous Mod Command data, and other managers' libraries (each mod imported separately, Nexus identities reattached by md5); anything matching a Nexus upload gets its updates tracked
 [*][b]Game files protected[/b] — a replacement-style mod backs up the original of every game file it overwrites and restores it on disable/uninstall
@@ -75,8 +76,9 @@ Windows gets the portable exe; Linux and Steam Deck get the AppImage.[/size][/ce
 
 [b][color=#ffc857]Quality of life[/color][/b]
 [list]
-[*][b]Datapad[/b] — built-in config editor for Engine.ini, GameUserSettings.ini, Input.ini, UE4SS-settings.ini and mod config files, with a structured key/value view that preserves comments and formatting, plus automatic first-save backups
+[*][b]Config Editor[/b] — built-in editor (opened from the Command Deck) for Engine.ini, GameUserSettings.ini, Input.ini, UE4SS-settings.ini and mod config files, with a structured key/value view that preserves comments and formatting, plus automatic first-save backups
 [*][b]UE4SS one-click install[/b] — downloads and installs the latest experimental UE4SS runtime for Lua/DLL mod support
+[*][b]ZCSDK Runtime one-click install[/b] — content mods built with the Zero Company Mod SDK (new items and other added content) install like any pak mod; the runtime they need is bundled and installs from Settings or on first use
 [*][b]Diagnostics[/b] — full health scan: game detection, launcher & build, deployed-file audit, tool availability, conflict report
 [*][b]Support reports[/b] — one click copies a complete, [i]sanitized[/i] bug report (mod list, conflicts, health scan, session log) with your paths, username and machine name scrubbed — paste it straight into a Posts-tab report
 [*]Your Nexus API key is stored encrypted with your OS account — never in plain text

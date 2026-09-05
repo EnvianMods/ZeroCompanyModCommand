@@ -941,3 +941,17 @@ body.reduced-motion * { transition: none !important; animation: none !important;
   height: 100%; width: 0%; background: linear-gradient(90deg, var(--holo-dim), var(--holo));
   box-shadow: 0 0 12px var(--holo-glow); transition: width 0.2s ease;
 }
+
+/* Nexus account / sign-in chip in the download panel header */
+.nexus-dl-account {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.4px;
+  color: var(--holo); border: 1px solid var(--panel-edge);
+  background: rgba(79, 209, 255, 0.08); padding: 5px 10px; cursor: pointer;
+  white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis;
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+}
+.nexus-dl-account:hover { background: rgba(79, 209, 255, 0.16); }
+.nexus-dl-account.in {
+  color: var(--good); border-color: rgba(109, 255, 176, 0.5);
+  background: rgba(109, 255, 176, 0.08); cursor: default;
+}

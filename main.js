@@ -1018,10 +1018,14 @@ const handlers = {
     if (!apiKey) throw new Error('A Nexus Mods API key is required. Add one in Settings.');
     if (!nexusUser) { try { nexusUser = await nexus.validateKey(apiKey); } catch (err) { throw new Error(err.message); } }
     if (!nexusUser.isPremium) {
-      // Free accounts: the website must mint the link — the nxm handoff then
-      // installs the exact file the user clicked.
-      await shell.openExternal(`https://www.nexusmods.com/${nexus.GAME_DOMAIN}/mods/${modId}?tab=files`);
-      return { opened: 'website' };
+      // Free accounts: the website mints the link. Open the mod's Files page in
+      // the embedded Nexus panel; the nxm handoff installs the file the user
+      // clicks there — no leaving the app.
+      return {
+        opened: 'embed',
+        url: `https://www.nexusmods.com/${nexus.GAME_DOMAIN}/mods/${modId}?tab=files`,
+        name,
+      };
     }
     const files = await nexus.filesList(modId, apiKey);
     const file = files.find((f) => f.file_id === fileId);
@@ -1152,9 +1156,9 @@ const handlers = {
         }
         return { updated: true, state: fullState() };
       }
-      // Free account: route through the website; the nxm link replaces in place.
-      await shell.openExternal(mod.updateInfo.url);
-      return { opened: 'website' };
+      // Free account: open the mod page in the embedded Nexus panel; the nxm
+      // link from "Mod Manager Download" replaces the mod in place.
+      return { opened: 'embed', url: mod.updateInfo.url, name: mod.name };
     }
     throw new Error('That mod has no update source.');
   },

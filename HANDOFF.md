@@ -2,6 +2,22 @@
 
 Context document for continuing work on this project. Last updated 2026-09-04.
 
+## v1.6.0 RELEASED 2026-09-04 (merged to main, tag v1.6.0) — CURRENT
+
+Nexus: file 562 (Windows zip, main + primary MM) + file 563 (Linux AppImage,
+optional). Archive Release + GitHub mirror (zip + AppImage, CI fully
+hands-off again). Merge brought the whole 6-branch train: api-key-help →
+first-run-setup → import-managers → command-deck-merge → diag-order-merge
+(+ pak/IoStore load order moved to the BOTTOM of Diagnostics, retitled
+"PAK & IOSTORE LOAD ORDER"). UI is now 5 tabs: Command Deck (overview +
+hangar), Holonet, Diagnostics (slim tiles → UE4SS start order → conflicts →
+pak order), Datapad, Settings. USER'S REAL DATA migrated: dev-app boot moved
+their archive to <game>\ZeroCompanyModArchive and encrypted their key
+(plaintext copy preserved at owner-tools/update-featured-authors/nexus-key.txt
+for the upload script — gitignored). STILL OUTSTANDING: Publish + paste
+description + announce 1.6.0; archive-token workflow scope (dev mirror stalled
+at b6efcbd); Steam Deck hardware test; ea-compat.json seed.
+
 ## v1.6.0 (2026-09-04, feat/import-managers branch, NOT released)
 
 Branch lineage: feat/api-key-help → feat/first-run-setup → feat/import-managers.

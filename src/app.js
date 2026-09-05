@@ -2452,6 +2452,92 @@ window.zc.onEvent((payload) => {
   }
 });
 
+// ------------------------------------------------------------------ first-run setup assistant
+
+function refreshSetupModal() {
+  if (!state) return;
+  const det = state.detection || {};
+  $('#setup-game-status').textContent = det.found ? '✔ DETECTED' : '⚠ NOT FOUND';
+  $('#setup-game-status').className = `setup-status ${det.found ? 'good' : 'warn'}`;
+  $('#setup-game-note').textContent = det.found
+    ? `Found the ${{ steam: 'Steam', ea: 'EA App', manual: 'manually installed' }[det.launcher] || ''} edition${det.buildId ? ` (build ${det.buildId})` : ''} — nothing to do here.`
+    : 'The game was not auto-detected. Set the game folder in Settings → Paths after finishing setup.';
+  const hasKey = state.nexus && state.nexus.hasKey;
+  $('#setup-key-status').textContent = hasKey ? '✔ SAVED' : '· NEEDED';
+  $('#setup-key-status').className = `setup-status ${hasKey ? 'good' : ''}`;
+  $('#setup-key-input').disabled = !!hasKey;
+  $('#btn-setup-key-save').disabled = !!hasKey;
+  const nxm = state.nexus && state.nexus.nxmRegistered;
+  $('#setup-nxm-status').textContent = nxm ? '✔ REGISTERED' : '· NEEDED';
+  $('#setup-nxm-status').className = `setup-status ${nxm ? 'good' : ''}`;
+  $('#btn-setup-nxm').disabled = !!nxm;
+  $('#btn-setup-nxm').textContent = nxm ? '✔ One-click downloads active' : 'Register nxm:// handler';
+}
+
+function openSetupModal() {
+  refreshSetupModal();
+  $('#setup-modal').classList.remove('hidden');
+}
+
+async function closeSetupModal(finished) {
+  $('#setup-modal').classList.add('hidden');
+  const data = await call('saveSettings', { onboarded: true });
+  if (data) { state = data; render(); }
+  if (!finished) {
+    toast('Setup skipped — the API key and one-click downloads live in Settings whenever you need them.', 'info', 8000);
+  } else {
+    const ready = state.nexus && state.nexus.hasKey && state.nexus.nxmRegistered;
+    toast(ready
+      ? 'Mission-ready: press “Mod Manager Download” on any Nexus mod and it installs here.'
+      : 'Setup saved — anything you left out is waiting in Settings.', 'info', 8000);
+  }
+}
+
+$('#btn-setup-key-save').addEventListener('click', async () => {
+  const key = $('#setup-key-input').value;
+  if (!key.trim()) { toast('Paste your Nexus API key first.', 'warn'); return; }
+  const btn = $('#btn-setup-key-save');
+  btn.disabled = true;
+  try {
+    const data = await call('setNexusKey', key);
+    if (data) {
+      state = data;
+      $('#setup-key-input').value = '';
+      render();
+      refreshSetupModal();
+      toast(`Nexus key validated — welcome, ${state.nexus.user.name}.`);
+    }
+  } finally {
+    if (!(state.nexus && state.nexus.hasKey)) btn.disabled = false;
+  }
+});
+
+$('#btn-setup-nxm').addEventListener('click', async () => {
+  const data = await call('registerNxm');
+  if (data) {
+    state = data;
+    render();
+    refreshSetupModal();
+    toast('nxm:// links now open in Mod Command.');
+  }
+});
+
+$('#btn-setup-finish').addEventListener('click', () => closeSetupModal(true));
+$('#btn-setup-skip').addEventListener('click', () => closeSetupModal(false));
+$('#btn-rerun-setup').addEventListener('click', () => openSetupModal());
+
 // ------------------------------------------------------------------ boot
 
-refreshState().then(() => runDiagnostics());
+refreshState().then(() => {
+  runDiagnostics();
+  if (!state) return;
+  const ready = state.nexus && state.nexus.hasKey && state.nexus.nxmRegistered;
+  if (!state.settings.onboarded) {
+    if (ready) {
+      // Existing install that's already fully configured — mark and move on.
+      call('saveSettings', { onboarded: true }).then((d) => { if (d) state = d; });
+    } else {
+      openSetupModal();
+    }
+  }
+});

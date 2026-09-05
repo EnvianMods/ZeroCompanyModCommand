@@ -322,7 +322,7 @@
           <div class="card-body settings-body">
             <div class="setting-row">
               <div class="setting-info">
-                <span class="setting-name">API key <span class="dim">(from nexusmods.com → Site preferences → API keys)</span></span>
+                <span class="setting-name">API key</span>
                 <span id="nexus-status" class="setting-value">No key stored</span>
               </div>
               <div class="nexus-key-controls">
@@ -330,6 +330,13 @@
                 <button class="btn tiny" id="btn-nexus-save">Save</button>
                 <button class="btn ghost tiny" id="btn-nexus-clear">Clear</button>
               </div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-name dim">Where do I get the key?</span>
+                <p class="setting-note dim">The key is free with any Nexus Mods account and unlocks one-click downloads and update checking. Press the button to open your Nexus API keys page (log in if asked), scroll to <b>Personal API Key</b> at the bottom, press <b>Request an API key</b> if you don't have one yet, then copy it and paste it into the field above. The key is stored encrypted with your OS account — never in plain text — and is only ever sent to nexusmods.com.</p>
+              </div>
+              <button class="btn" data-url="https://next.nexusmods.com/settings/api-keys">Get my API key ↗</button>
             </div>
             <div class="setting-row">
               <div class="setting-info">

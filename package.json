@@ -1,7 +1,7 @@
 {
   "name": "zero-company-mod-command",
   "productName": "Zero Company Mod Command",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "Mod Command",
   "main": "main.js",
   "scripts": {
@@ -40,6 +40,7 @@
       "target": [
         "portable"
       ],
+      "icon": "build/icon.ico",
       "signAndEditExecutable": false
     },
     "portable": {
@@ -49,6 +50,7 @@
       "target": [
         "AppImage"
       ],
+      "icon": "build/icon.png",
       "artifactName": "ZeroCompanyModCommand.AppImage",
       "category": "Utility",
       "executableName": "zero-company-mod-command"

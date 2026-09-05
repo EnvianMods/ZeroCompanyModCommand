@@ -802,8 +802,19 @@ body.reduced-motion * { transition: none !important; animation: none !important;
 .setup-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
 .setup-row .text-input { flex: 1; min-width: 220px; }
 
-/* ---------- merged Command Deck / Hangar Bay ---------- */
+/* ---------- Hangar action toolbar (Command Deck) ---------- */
+/* The old "HANGAR BAY" heading + subtitle were removed; what remains is a slim
+   action toolbar sitting on a divider between the overview cards and the mod
+   list. Buttons wrap onto a second row only when the window is quite narrow. */
+.hangar-toolbar {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  margin: 22px 0 14px; padding-top: 16px; border-top: 1px solid var(--panel-edge);
+}
+.hangar-toolbar .btn { white-space: nowrap; }
+
+/* ---------- section header with inline actions (Diagnostics load order) ---------- */
 .hangar-section-head {
+  position: relative;
   display: flex; align-items: flex-end; justify-content: space-between; gap: 16px;
   margin: 30px 0 14px; padding-top: 18px; border-top: 1px solid var(--panel-edge);
   flex-wrap: wrap;
@@ -813,12 +824,6 @@ body.reduced-motion * { transition: none !important; animation: none !important;
   text-shadow: 0 0 12px var(--holo-glow); margin: 0 0 4px;
 }
 .hangar-section-head .view-sub { margin: 0; }
-
-/* Hangar section header keeps its actions inline (the absolute positioning is
-   for the old single view-header layout). */
-.hangar-section-head { position: relative; }
-/* Keep the action buttons on a single row: they shrink to fit instead of
-   wrapping to a second line. Labels ellipsize only at extreme narrowness. */
 .hangar-section-head .header-actions {
   position: static; flex-wrap: nowrap; justify-content: flex-end;
   min-width: 0; gap: 6px;
@@ -828,8 +833,6 @@ body.reduced-motion * { transition: none !important; animation: none !important;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   padding-left: 11px; padding-right: 11px;
 }
-/* The title block gives up horizontal space first (its subtitle reflows), so
-   the buttons keep a comfortable size until the window is quite narrow. */
 .hangar-section-head > div:first-child { min-width: 0; flex: 1 40 auto; }
 
 /* ---------- merged Diagnostics / Load Order ---------- */

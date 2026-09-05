@@ -560,6 +560,134 @@ function confOf(score) {
   if (score >= 0.6) return 'strong';
   return 'weak';
 }
+// ---- File-name matching ------------------------------------------------------
+// The loader names an adopted mod after the ARCHIVE it came from ("ZCUnlocked"),
+// which is usually nothing like the Nexus page title ("Full Customization Mod…")
+// but IS the display name of the mod's uploaded file. So a Nexus file whose
+// stem equals the local name identifies the page precisely.
+const { FileIndex, stem: fileStem, stemsMatch } = require('./lib/file-index');
+function fileStemMatches(localName, file) {
+  const want = fileStem(localName);
+  if (want.length < 4) return false;
+  return [file && file.name, file && file.file_name].some((c) => stemsMatch(fileStem(c), want));
+}
+// Catalog-wide file-name index (lib/file-index.js), cached in the data dir.
+let fileIndex = null;
+function getFileIndex() {
+  if (!fileIndex) fileIndex = new FileIndex(path.join(store.dataDir, 'nexus-file-index.json'));
+  return fileIndex;
+}
+
+// A Nexus download is named "<file name> <modId> <version> <ISO stamp> <hash>.zip"
+// ("ZCUnlocked 34 1.3.5.1 2026-09-04T05-11Z kZivb0EtP.zip"). When a mod was
+// installed from such an archive, the mod id is right there — the single most
+// reliable identification we have, and it costs no API call.
+function parseNexusArchive(sourceArchive) {
+  const m = String(sourceArchive || '').match(/^(.*?)\s+(\d+)\s+(\S+)\s+\d{4}-\d\d-\d\dT\d\d-\d\dZ\s+\S+\.\w+$/);
+  return m ? { stem: m[1], modId: Number(m[2]), version: m[3] } : null;
+}
+
+// ---- Unified candidate scoring ----------------------------------------------
+// Reads everything the record knows — its local name, the archive it came
+// from, its author — pulls candidates from every route (md5, archive id, the
+// file-name index, title search, author search), then scores each candidate
+// by ADDING UP the independent evidence for it. The strongest reason becomes
+// its label; the total decides the order. Returns candidates best-first.
+const EVIDENCE = {
+  md5: 3.0,       // identical file hash
+  archive: 3.0,   // Nexus download name carries the mod id
+  file: 2.0,      // an uploaded file is named exactly like the local mod/archive
+  filepart: 0.7,  // …or similarly
+  author: 1.0,    // same author as the record says
+  exact: 1.0,     // page title equals the local name
+  strong: 0.6,    // title mostly overlaps
+  weak: 0.3,      // title partly overlaps
+};
+const LABEL_RANK = ['md5', 'archive', 'file', 'exact', 'author', 'strong', 'filepart', 'weak'];
+
+async function scoreCandidates(m, index, fileCache) {
+  const byId = new Map(); // modId -> { modId, name, author, version, score, reasons:Set }
+  const note = (r, reason, weight) => {
+    if (!r || !r.modId) return;
+    let c = byId.get(r.modId);
+    if (!c) { c = { modId: r.modId, name: r.name || `mod ${r.modId}`, author: r.author || '', version: r.version || null, score: 0, reasons: new Set() }; byId.set(r.modId, c); }
+    if (c.reasons.has(reason)) return;
+    c.reasons.add(reason);
+    c.score += weight != null ? weight : EVIDENCE[reason];
+    if (!c.name.startsWith('mod ') || !r.name) return;
+    c.name = r.name; c.author = c.author || r.author || ''; c.version = c.version || r.version || null;
+  };
+  const entry = (modId) => (index.entries && index.entries[String(modId)]) || null;
+
+  // Signals from the record itself.
+  const localName = m.name || '';
+  const archive = m.sourceArchive || '';
+  const nexusArchive = parseNexusArchive(archive);
+  const archiveStem = archive.replace(/\.(zip|7z|rar|pak)$/i, '');
+  const author = (m.author && String(m.author).trim()) || authorFromName(localName);
+
+  // 1) Archive name carries the Nexus mod id.
+  if (nexusArchive) {
+    const e = entry(nexusArchive.modId);
+    if (e) note(e, 'archive');
+    else if (nexusKey()) {
+      try { const info = await nexus.modInfo(nexusArchive.modId, nexusKey()); note({ modId: nexusArchive.modId, name: info.name, author: info.author, version: info.version }, 'archive'); } catch (_) {}
+    }
+  }
+  // 2) md5 of the library files (loose paks only).
+  try { const hit = await md5Match(m); if (hit) note({ modId: hit.modId, name: hit.modName, version: hit.version }, 'md5'); } catch (_) {}
+  // 3) File-name index, on the archive name and on the local name.
+  for (const q of new Set([nexusArchive ? nexusArchive.stem : archiveStem, localName])) {
+    for (const e of index.find(q)) note(e, e.exact ? 'file' : 'filepart');
+  }
+  // 4) Title search on the local name.
+  try {
+    const q = searchQuery(localName);
+    if (q && q.length >= 2) {
+      const res = await nexus.browseMods({ query: q, sort: 'downloads', count: 25 });
+      for (const r of (res.mods || [])) {
+        const s = titleScore(localName, r.name);
+        if (s >= 0.34) note(r, confOf(s));
+      }
+    }
+  } catch (_) {}
+  // 5) Author: the record's author (modinfo) or a trailing "By <name>" — their
+  //    mods are few, so each gets a live file check for a name match too.
+  if (author) {
+    try {
+      for (const r of (await nexus.modsByAuthors([author])).slice(0, 10)) {
+        note(r, 'author');
+        if (!byId.get(r.modId).reasons.has('file') && await modHasMatchingFile(r.modId, localName, fileCache)) note(r, 'file');
+      }
+    } catch (_) {}
+  }
+  // Credit author agreement on any candidate found another way.
+  if (author) {
+    const want = author.toLowerCase();
+    for (const c of byId.values()) if (c.author && c.author.toLowerCase() === want) note(c, 'author');
+  }
+
+  return [...byId.values()]
+    .map((c) => ({ modId: c.modId, name: c.name, author: c.author, version: c.version, score: c.score,
+      confidence: LABEL_RANK.find((k) => c.reasons.has(k)) || 'weak', reasons: [...c.reasons] }))
+    .sort((a, b) => b.score - a.score);
+}
+// "ZCUnlocked By SmexyXey" -> "SmexyXey"; null when the name carries no author.
+function authorFromName(name) {
+  const m = String(name || '').match(/\bby\s+([^()[\]]+?)\s*$/i);
+  return m ? m[1].trim() : null;
+}
+// Does any of this Nexus mod's files stem-match the local name? Best-effort
+// (v1 filesList needs a key; any failure = no match); memoised per run so the
+// same mod is never fetched twice while one scan/search is underway.
+async function modHasMatchingFile(modId, localName, cache) {
+  if (!nexusKey()) return false;
+  try {
+    if (!cache.has(modId)) cache.set(modId, nexus.filesList(modId, nexusKey()));
+    const files = await cache.get(modId);
+    return (files || []).some((f) => fileStemMatches(localName, f));
+  } catch (_) { return false; }
+}
 
 // Auto-detected import sources: a previous app-side data folder (pre-archive
 // layout), and known locations other managers keep their libraries in.
@@ -1112,75 +1240,59 @@ const handlers = {
   },
 
   // On-demand: find Nexus source candidates for every still-unlinked installed
-  // mod and RETURN them for review — nothing is linked here (the renderer shows a
-  // confirm dialog, then calls 'link-mods-apply'). Two matchers per mod: md5 (the
-  // adoption path, loose paks only) and a name search (GraphQL WILDCARD, catches
-  // UE4SS mods md5 can't). Candidates are scored and sorted best-first.
+  // mod and RETURN them for review — nothing is linked here (the renderer walks
+  // them one at a time in a wizard and links each pick via 'link-origin'). Two
+  // matchers per mod: md5 (the adoption path, loose paks only) and a name search
+  // (GraphQL WILDCARD, catches UE4SS mods md5 can't). Scored, sorted best-first.
   'link-mods': async () => {
     const targets = store.mods.filter((m) => !m.origin || m.origin.type === 'local');
     const total = targets.length;
     if (!total) return { checked: 0, suggestions: [], state: fullState() };
     const hasKey = !!nexusKey();
     const suggestions = [];
+    const fileCache = new Map(); // modId -> Promise<files>, shared across the run
+    // Catalog-wide file-name index: the one matcher that finds a page from a
+    // bare archive name. First build fetches every mod's file list (once a day
+    // at most); later runs only refresh mods that changed.
+    const index = getFileIndex();
+    try {
+      await index.refresh(nexusKey(), (done, all) => sendEvent({ type: 'progress', label: 'Indexing Nexus file names', received: done, total: all }));
+    } catch (_) { /* index stays as it was; the other matchers still run */ }
     let i = 0;
     for (const m of targets) {
       i += 1;
       sendEvent({ type: 'progress', label: 'Matching mods on Nexus', received: i, total });
-      const candidates = [];
-      const seen = new Set();
-      // 1) md5 — exact file match (needs a key; skips UE4SS mods)
-      try {
-        const hit = await md5Match(m);
-        if (hit) {
-          candidates.push({ modId: hit.modId, name: hit.modName || `mod ${hit.modId}`, author: '', version: hit.version || null, confidence: 'md5', score: 1 });
-          seen.add(hit.modId);
-        }
-      } catch (_) {}
-      // 2) name search — anonymous GraphQL, works with or without a key
-      try {
-        const q = searchQuery(m.name);
-        if (q && q.length >= 2) {
-          const res = await nexus.browseMods({ query: q, sort: 'downloads', count: 25 });
-          for (const r of (res.mods || [])) {
-            if (seen.has(r.modId)) continue;
-            const score = titleScore(m.name, r.name);
-            if (score < 0.34) continue;
-            candidates.push({ modId: r.modId, name: r.name, author: r.author || '', version: r.version || null, confidence: confOf(score), score });
-            seen.add(r.modId);
-          }
-        }
-      } catch (_) { /* one mod failing never stops the scan */ }
-      candidates.sort((a, b) => b.score - a.score);
-      suggestions.push({ id: m.id, name: m.name, modType: m.modType, candidates: candidates.slice(0, 6) });
+      let candidates = [];
+      try { candidates = await scoreCandidates(m, index, fileCache); } catch (_) { /* one mod failing never stops the scan */ }
+      suggestions.push({ id: m.id, name: m.name, modType: m.modType, candidates: candidates.slice(0, 5) });
     }
     const withCands = suggestions.filter((s) => s.candidates.length).length;
     log('info', `link-mods: ${withCands}/${total} unlinked mod(s) have candidate source(s)${hasKey ? '' : ' (no API key — linking needs one)'}`);
     return { checked: total, hasKey, suggestions, state: fullState() };
   },
 
-  // Apply the user-approved source picks from the Link mods review dialog.
-  // picks: [{ id, modId }]. Links each as a Nexus origin (same as 'link-origin').
-  'link-mods-apply': async (_e, { picks } = {}) => {
-    if (!nexusKey()) throw new Error('A Nexus Mods API key is required to link. Add one in Settings.');
-    const linked = [];
-    const errors = [];
-    for (const p of (picks || [])) {
-      const mod = store.getMod(p.id);
-      if (!mod) continue;
-      try {
-        const modId = Number(p.modId);
-        if (!modId) throw new Error('missing Nexus mod id');
-        const info = await nexus.modInfo(modId, nexusKey());
-        engine.setOrigin(p.id, { type: 'nexus', modId, fileId: null, version: info.version || null, linked: true });
-        store.getMod(p.id).version = info.version || null;
-        linked.push(store.getMod(p.id).name);
-      } catch (e) {
-        errors.push(`${mod.name}: ${e && e.message ? e.message : String(e)}`);
-      }
+  // Wizard search box: title OR author (anonymous), then flag results whose
+  // uploaded file is named like the local mod so the right page stands out.
+  'link-search': async (_e, { query, modId } = {}) => {
+    const mods = await nexus.searchMods(query, 10);
+    const local = modId ? store.getMod(modId) : null;
+    const fileCache = new Map();
+    const out = [];
+    const seen = new Set();
+    // The typed term may itself be an archive name ("zcunlocked"): the file
+    // index answers that even when no title or author contains it.
+    for (const e of getFileIndex().find(query)) {
+      seen.add(e.modId);
+      out.push({ modId: e.modId, name: e.name, author: e.author, version: e.version, fileMatch: e.exact, filePart: !e.exact });
     }
-    store.save();
-    log('info', `link-mods-apply: linked ${linked.length}/${(picks || []).length} mod(s) to Nexus`);
-    return { linked, errors, state: fullState() };
+    for (const r of mods) {
+      if (seen.has(r.modId)) continue;
+      seen.add(r.modId);
+      const fileMatch = local && out.length < 8 ? await modHasMatchingFile(r.modId, local.name, fileCache) : false;
+      out.push({ modId: r.modId, name: r.name, author: r.author || '', version: r.version || null, fileMatch });
+    }
+    out.sort((a, b) => Number(b.fileMatch) - Number(a.fileMatch));
+    return out;
   },
 
   'link-origin': async (_e, { id, type, ref }) => {

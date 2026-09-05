@@ -2086,13 +2086,19 @@ function setNexusPill(text, kind) {
   status.className = 'nexus-dl-pill' + (kind ? ' ' + kind : '');
 }
 
-function openNexusDownload(name, url) {
+// opts.view: just SHOW a mod page for the user to check (e.g. verifying a link
+// candidate) — same isolated in-app panel, but labelled as a page view rather
+// than a pending download.
+function openNexusDownload(name, url, opts = {}) {
   const modal = $('#nexus-dl-modal');
   const view = $('#nexus-dl-view');
   if (!modal || !view) return;
   nexusDl.open = true; nexusDl.sawProgress = false; nexusDl.done = false; nexusDl.target = url;
+  nexusDl.viewOnly = !!opts.view;
+  const title = $('#nexus-dl-title');
+  if (title) title.textContent = opts.view ? 'NEXUS PAGE' : 'NEXUS DOWNLOAD';
   $('#nexus-dl-sub').textContent = name || 'Nexus Mods';
-  setNexusPill('Loading…', 'busy');
+  setNexusPill(opts.view ? 'Viewing — close to return' : 'Loading…', opts.view ? '' : 'busy');
   $('#nexus-dl-progress').classList.add('hidden');
   $('#nexus-dl-progress-bar').style.width = '0%';
   view.src = url;
@@ -2306,9 +2312,10 @@ async function openImportModal(opts = {}) {
 $('#btn-import').addEventListener('click', () => openImportModal());
 
 // Link mods — find Nexus source candidates for every unlinked installed mod
-// (md5 for loose paks, a name search for UE4SS mods), then open a review dialog
-// so nothing is linked without the user confirming each match.
-const CONF_LABEL = { md5: 'file match', exact: 'exact name', strong: 'likely', weak: 'possible' };
+// (md5 for loose paks, a name search for UE4SS mods), then walk them ONE AT A
+// TIME in a wizard: best match first, a search box for when the recommended
+// matches are wrong, Skip to leave a mod unlinked, Cancel to stop anywhere.
+const CONF_LABEL = { md5: 'file hash match', archive: 'archive name match', file: 'file name match', filepart: 'similar file name', exact: 'exact title', strong: 'likely', weak: 'possible', author: 'same author' };
 $('#btn-link-mods').addEventListener('click', async () => {
   const btn = $('#btn-link-mods');
   const label = btn.textContent;
@@ -2323,12 +2330,11 @@ $('#btn-link-mods').addEventListener('click', async () => {
       toast('Every installed mod is already linked to a source.', 'info', 6000);
       return;
     }
-    const withCands = res.suggestions.filter((s) => s.candidates.length).length;
-    if (withCands === 0) {
-      toast(`Checked ${res.checked} unlinked mod${res.checked === 1 ? '' : 's'} — no Nexus matches found. Link the rest by hand from their LOCAL badge.`, 'warn', 8000);
+    if (!res.hasKey) {
+      toast('A Nexus API key is required to link mods. Add one in Settings.', 'warn', 8000);
       return;
     }
-    openLinkModsModal(res.suggestions, res.hasKey);
+    startLinkWizard(res.suggestions);
   } finally {
     btn.disabled = false;
     btn.textContent = label;
@@ -2336,104 +2342,188 @@ $('#btn-link-mods').addEventListener('click', async () => {
   }
 });
 
-// Build the Link mods review dialog. High-confidence matches (file match / exact
-// name) are pre-ticked; weaker guesses are shown but left unticked for the user.
-function openLinkModsModal(suggestions, hasKey) {
-  const list = $('#link-mods-list');
-  list.innerHTML = '';
-  let anyTickable = false;
-  for (const s of suggestions) {
-    const row = document.createElement('div');
-    row.className = 'link-mods-row';
-    row.dataset.modId = s.id;
+// ---- Link wizard state -----------------------------------------------------
+let lwQueue = [];        // suggestions still to walk ({id, name, modType, candidates})
+let lwIndex = 0;         // position in lwQueue
+let lwSelected = null;   // { modId, label } chosen for the current mod, or null
+let lwLinked = [];       // names linked so far this run
+let lwSearchTimer = null;
 
-    const nameCol = document.createElement('div');
-    nameCol.className = 'lm-name';
-    nameCol.textContent = s.name;
-    if (s.modType === 'ue4ss-mod') {
-      const t = document.createElement('span');
-      t.className = 'lm-type';
-      t.textContent = 'UE4SS';
-      nameCol.appendChild(t);
-    }
+function startLinkWizard(suggestions) {
+  lwQueue = suggestions;
+  lwIndex = 0;
+  lwLinked = [];
+  // Only one dialog may own the screen: close the per-mod LINK UPDATE SOURCE
+  // modal if it is open, and clear a drag overlay left behind by a cancelled
+  // drop, so nothing can sit over the wizard and swallow clicks.
+  $('#link-modal').classList.add('hidden');
+  $('#drop-overlay').classList.add('hidden');
+  dragDepth = 0;
+  $('#link-wizard-modal').classList.remove('hidden');
+  renderLinkWizardStep();
+}
 
-    if (!s.candidates.length) {
-      row.classList.add('lm-nomatch');
-      row.appendChild(nameCol);
-      const none = document.createElement('div');
-      none.className = 'lm-none dim';
-      none.textContent = 'No Nexus match — link by hand from its LOCAL badge.';
-      row.appendChild(none);
-      list.appendChild(row);
-      continue;
-    }
+// One selectable result row; clicking it becomes the pending choice.
+function lwResultRow(modId, label) {
+  const row = document.createElement('button');
+  row.className = 'link-result';
+  row.dataset.modId = String(modId);
+  row.textContent = label;
+  row.addEventListener('click', () => lwSelect(modId, label, row));
+  return row;
+}
 
-    const best = s.candidates[0];
-    const strong = best.confidence === 'md5' || best.confidence === 'exact';
-    anyTickable = true;
+function lwSelect(modId, label, row) {
+  lwSelected = { modId, label };
+  $$('#link-wizard-modal .link-result').forEach((r) => r.classList.remove('selected'));
+  if (row) row.classList.add('selected');
+  $('#lw-selected').textContent = `Will link to: ${label}`;
+  $('#btn-lw-link').disabled = false;
+  $('#btn-lw-view').disabled = false;
+}
 
-    const check = document.createElement('input');
-    check.type = 'checkbox';
-    check.className = 'lm-check';
-    check.checked = strong;
+function renderLinkWizardStep() {
+  const s = lwQueue[lwIndex];
+  if (!s) { finishLinkWizard(); return; }
+  lwSelected = null;
+  $('#lw-step').textContent = String(lwIndex + 1);
+  $('#lw-total').textContent = String(lwQueue.length);
+  $('#lw-mod-name').textContent = `“${s.name}”`;
+  $('#lw-mod-type').textContent = s.modType === 'ue4ss-mod' ? 'UE4SS' : '';
+  $('#lw-selected').textContent = 'Pick a match above, or search for it.';
+  $('#btn-lw-link').disabled = true;
+  $('#lw-search').value = '';
+  $('#lw-search-results').innerHTML = '';
 
-    const left = document.createElement('label');
-    left.className = 'lm-left';
-    left.appendChild(check);
-    left.appendChild(nameCol);
-
-    const sel = document.createElement('select');
-    sel.className = 'lm-select profile-select';
+  // Recommended matches live in a dropdown: only the best shows until opened.
+  const sel = $('#lw-candidates');
+  sel.innerHTML = '';
+  const none = $('#lw-nomatch');
+  if (!s.candidates.length) {
+    none.classList.remove('hidden');
+    sel.disabled = true;
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = '— no recommended match —';
+    sel.appendChild(opt);
+    $('#btn-lw-view').disabled = true;
+  } else {
+    none.classList.add('hidden');
+    sel.disabled = false;
     for (const c of s.candidates) {
       const opt = document.createElement('option');
       opt.value = String(c.modId);
-      const bits = [c.name];
-      if (c.author) bits.push(`— ${c.author}`);
-      if (c.version) bits.push(`· v${c.version}`);
-      bits.push(`· ${CONF_LABEL[c.confidence] || c.confidence}`);
-      opt.textContent = bits.join(' ');
+      opt.textContent = lwCandidateLabel(c);
+      opt.dataset.name = c.name;
       sel.appendChild(opt);
     }
-    // Ticking follows the box; a manual pick of a weaker option still needs a tick.
-
-    row.appendChild(left);
-    row.appendChild(sel);
-    list.appendChild(row);
+    // The best match is pre-selected so the common case is a single click.
+    sel.selectedIndex = 0;
+    lwSelect(s.candidates[0].modId, lwCandidateLabel(s.candidates[0]), null);
   }
-
-  const applyBtn = $('#btn-link-mods-apply');
-  if (!hasKey) {
-    applyBtn.disabled = true;
-    applyBtn.title = 'Add a Nexus API key in Settings to link mods.';
-    toast('Matches found, but a Nexus API key is required to link. Add one in Settings.', 'warn', 8000);
-  } else {
-    applyBtn.disabled = !anyTickable;
-    applyBtn.title = '';
-  }
-  $('#link-mods-modal').classList.remove('hidden');
+  // Put the caret in the search box so typing works the moment a step appears.
+  setTimeout(() => { try { $('#lw-search').focus(); } catch (_) {} }, 0);
 }
 
-$('#btn-link-mods-apply').addEventListener('click', async () => {
-  const picks = $$('#link-mods-list .link-mods-row')
-    .filter((r) => { const c = r.querySelector('.lm-check'); return c && c.checked; })
-    .map((r) => ({ id: r.dataset.modId, modId: r.querySelector('.lm-select').value }));
-  if (!picks.length) { toast('Tick at least one mod to link, or press Cancel.', 'warn'); return; }
-  const btn = $('#btn-link-mods-apply');
+function lwCandidateLabel(c) {
+  const bits = [c.name];
+  if (c.author) bits.push(`— ${c.author}`);
+  if (c.version) bits.push(`· v${c.version}`);
+  bits.push(`· ${CONF_LABEL[c.confidence] || c.confidence}`);
+  return bits.join(' ');
+}
+
+// Choosing another recommendation from the dropdown makes it the pending pick.
+$('#lw-candidates').addEventListener('change', () => {
+  const sel = $('#lw-candidates');
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt || !opt.value) return;
+  lwSelect(Number(opt.value), opt.textContent, null);
+});
+
+// Verify before linking: open the selected mod's Nexus page in the in-app
+// panel (the same isolated webview the download flow uses), never externally.
+$('#btn-lw-view').addEventListener('click', () => {
+  if (!lwSelected) return;
+  const url = `https://www.nexusmods.com/starwarszerocompany/mods/${lwSelected.modId}`;
+  openNexusDownload(lwSelected.label.split(' — ')[0], url, { view: true });
+});
+
+// Search Nexus by name for when none of the recommended matches is right.
+$('#lw-search').addEventListener('input', () => {
+  clearTimeout(lwSearchTimer);
+  lwSearchTimer = setTimeout(async () => {
+    const q = $('#lw-search').value.trim();
+    const box = $('#lw-search-results');
+    box.innerHTML = '';
+    if (q.length < 2) return;
+    const current = lwQueue[lwIndex];
+    const res = await window.zc.searchLinkMods(q, current ? current.id : null);
+    if (!res.ok) return;
+    if ($('#lw-search').value.trim() !== q) return; // a newer search superseded this one
+    if (!res.data.length) {
+      const empty = document.createElement('div');
+      empty.className = 'lm-none dim';
+      empty.textContent = 'No Nexus mods match that title or author.';
+      box.appendChild(empty);
+      return;
+    }
+    for (const m of res.data) {
+      const bits = [m.name, `— ${m.author}`];
+      if (m.version) bits.push(`· v${m.version}`);
+      if (m.fileMatch) bits.push('· file name match');
+      else if (m.filePart) bits.push('· similar file name');
+      const row = lwResultRow(m.modId, bits.join(' '));
+      if (m.fileMatch) row.classList.add('best');
+      box.appendChild(row);
+    }
+  }, 350);
+});
+
+function lwAdvance() {
+  lwIndex += 1;
+  renderLinkWizardStep();
+}
+
+$('#btn-lw-link').addEventListener('click', async () => {
+  const s = lwQueue[lwIndex];
+  if (!s || !lwSelected) return;
+  const btn = $('#btn-lw-link');
   btn.disabled = true;
   try {
-    const res = await call('applyModLinks', picks);
-    if (!res) return;
+    const res = await call('linkOrigin', s.id, 'nexus', String(lwSelected.modId));
+    if (!res) { btn.disabled = false; return; }
     state = res.state;
     render();
-    $('#link-mods-modal').classList.add('hidden');
-    if (res.linked.length) {
-      toast(`Linked ${res.linked.length} mod${res.linked.length === 1 ? '' : 's'} to Nexus — updates now tracked: “${res.linked.join('”, “')}”.`, 'info', 9000);
-    }
-    for (const e of (res.errors || []).slice(0, 3)) toast(e, 'error', 7000);
-  } finally {
+    lwLinked.push(s.name);
+    lwAdvance();
+  } catch (_) {
     btn.disabled = false;
   }
 });
+
+$('#btn-lw-skip').addEventListener('click', () => lwAdvance());
+
+$('#btn-lw-cancel').addEventListener('click', () => {
+  const remaining = lwQueue.length - lwIndex;
+  finishLinkWizard(remaining);
+});
+
+function finishLinkWizard(remaining = 0) {
+  $('#link-wizard-modal').classList.add('hidden');
+  const n = lwLinked.length;
+  if (n) {
+    toast(`Linked ${n} mod${n === 1 ? '' : 's'} to Nexus — updates now tracked: “${lwLinked.join('”, “')}”.${remaining ? ` ${remaining} left unlinked.` : ''}`, 'info', 9000);
+  } else if (remaining) {
+    toast(`Stopped — ${remaining} mod${remaining === 1 ? '' : 's'} left unlinked. Link them any time from their LOCAL badge.`, 'info', 6000);
+  } else {
+    toast('No mods were linked. Link any mod by hand from its LOCAL badge.', 'info', 6000);
+  }
+  lwQueue = [];
+  lwIndex = 0;
+  lwLinked = [];
+  lwSelected = null;
+}
 
 // The automatic first scan waits for the setup wizard to close, so the two
 // dialogs never stack on a brand-new install.
@@ -2491,6 +2581,7 @@ let linkSearchTimer = null;
 
 async function openLinkModal(mod) {
   linkTarget = mod;
+  $('#link-wizard-modal').classList.add('hidden'); // one dialog at a time
   $('#link-mod-name').textContent = `“${mod.name}”`;
   $('#link-nexus-search').value = '';
   $('#link-nexus-ref').value = '';

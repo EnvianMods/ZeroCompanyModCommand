@@ -656,23 +656,23 @@ body.reduced-motion * { transition: none !important; animation: none !important;
 }
 .link-result:hover { border-color: var(--holo); color: var(--holo); }
 
-/* ---------- link mods (bulk review) ---------- */
-.zc-modal-box.wide { width: 720px; }
-.link-mods-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
-.link-mods-row {
-  display: grid; grid-template-columns: 1fr minmax(240px, 46%); gap: 12px; align-items: center;
-  padding: 9px 12px; background: var(--panel); border: 1px solid var(--panel-edge);
-}
-.link-mods-row.lm-nomatch { opacity: 0.7; }
-.lm-left { display: flex; align-items: center; gap: 10px; cursor: pointer; min-width: 0; }
-.lm-check { flex: 0 0 auto; accent-color: var(--holo); }
-.lm-name { font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* ---------- link mods wizard (one mod at a time) ---------- */
+.lw-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.lw-progress { font-size: 11px; font-family: var(--mono); letter-spacing: 1px; white-space: nowrap; }
 .lm-type {
-  margin-left: 8px; font-size: 9px; font-weight: 700; letter-spacing: 1px; color: var(--text-dim);
+  margin-left: 6px; font-size: 9px; font-weight: 700; letter-spacing: 1px; color: var(--text-dim);
   border: 1px solid rgba(111, 139, 160, 0.4); border-radius: 2px; padding: 1px 4px; font-family: var(--mono);
 }
-.lm-select { width: 100%; max-width: none; }
+.lm-type:empty { display: none; }
 .lm-none { font-size: 11px; font-family: var(--mono); }
+.link-result.best { border-color: rgba(255, 200, 87, 0.5); }
+.link-result.selected { border-color: var(--holo); color: var(--holo); background: rgba(79, 209, 255, 0.10); box-shadow: 0 0 10px var(--holo-glow); }
+.lw-actions { align-items: center; }
+.lw-selected { flex: 1; font-size: 11px; font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.lw-cand-row { margin-bottom: 4px; }
+.lw-cand-select { flex: 1; max-width: none; min-width: 0; }
+/* The verify-a-link page view must open ABOVE the wizard (.zc-modal is 240). */
+#nexus-dl-modal { z-index: 260; }
 
 /* ---------- launcher update banner ---------- */
 .launcher-banner {

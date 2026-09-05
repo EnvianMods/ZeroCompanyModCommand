@@ -387,7 +387,7 @@
         <div class="nexus-dl-titlewrap">
           <span class="nexus-dl-glyph">◈</span>
           <div class="nexus-dl-titletext">
-            <div class="nexus-dl-title">NEXUS DOWNLOAD</div>
+            <div id="nexus-dl-title" class="nexus-dl-title">NEXUS DOWNLOAD</div>
             <div id="nexus-dl-sub" class="nexus-dl-sub">—</div>
           </div>
         </div>
@@ -461,15 +461,34 @@
     </div>
   </div>
 
-  <div id="link-mods-modal" class="zc-modal hidden">
-    <div class="zc-modal-box wide">
-      <div class="zc-modal-title">LINK MODS TO NEXUS</div>
-      <p class="zc-modal-sub dim">Candidate sources for your unlinked mods. Review each match and pick the right one —
-        nothing is linked until you press <b>Link selected</b>.</p>
-      <div id="link-mods-list" class="link-mods-list"></div>
-      <div class="zc-modal-actions">
-        <button id="btn-link-mods-apply" class="btn">Link selected</button>
-        <button class="btn ghost" data-close-modal="link-mods-modal">Cancel</button>
+  <div id="link-wizard-modal" class="zc-modal hidden">
+    <div class="zc-modal-box">
+      <div class="lw-head">
+        <div class="zc-modal-title">LINK MODS TO NEXUS</div>
+        <div class="lw-progress dim">Mod <span id="lw-step">1</span> of <span id="lw-total">1</span></div>
+      </div>
+      <p class="zc-modal-sub dim">Linking <span id="lw-mod-name" class="link-mod-name"></span>
+        <span id="lw-mod-type" class="lm-type"></span> — pick its Nexus page so updates get tracked.</p>
+      <div class="link-section">
+        <div class="link-section-title">◈ RECOMMENDED MATCH</div>
+        <div class="link-row lw-cand-row">
+          <select id="lw-candidates" class="profile-select lw-cand-select" title="Best match first — open the list for other candidates"></select>
+          <button id="btn-lw-view" class="btn ghost tiny" title="Open the selected mod's Nexus page in-app to check it before linking" disabled>↗ View page</button>
+        </div>
+        <div id="lw-nomatch" class="lm-none dim hidden">No automatic match — search for it below, or skip.</div>
+      </div>
+      <div class="link-section">
+        <div class="link-section-title">◈ NOT THERE? SEARCH NEXUS</div>
+        <div class="link-row">
+          <input type="search" id="lw-search" class="text-input" placeholder="Search by mod title or author…" />
+        </div>
+        <div id="lw-search-results" class="link-results"></div>
+      </div>
+      <div class="zc-modal-actions lw-actions">
+        <span id="lw-selected" class="lw-selected dim"></span>
+        <button id="btn-lw-link" class="btn primary" disabled>Link</button>
+        <button id="btn-lw-skip" class="btn ghost">Skip</button>
+        <button id="btn-lw-cancel" class="btn ghost">Cancel</button>
       </div>
     </div>
   </div>

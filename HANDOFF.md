@@ -1,15 +1,32 @@
 # HANDOFF — Zero Company Mod Command
 
-Context document for continuing work on this project. Last updated 2026-09-04.
+Context document for continuing work on this project. Last updated 2026-09-05.
 
-## v1.7.0 (2026-09-05, feat/zcsdk-sidecars branch, NOT released) — the SDK bridge
+## v1.7.0 RELEASED 2026-09-05 (merged to main, tag v1.7.0) — CURRENT
 
-Branch lineage: feat/deck-slim-config → feat/zcsdk-sidecars. The deck-slim UI
-commit is unreleased too, and the user's UNCOMMITTED deck/CSS edits
-(src/index.html nav area, src/styles.css slim cards) were left in the working
-tree — only this feature's hunks were staged (HEAD + ours, via the patch-ui
-script's stage mode). Headline: the consumer half of the "two tools, one
-bridge" design with the Zero Company Mod SDK (dev project at
+Nexus: file 575 (Windows zip, main + primary MM download) + file 576 (Linux
+AppImage, optional). Archive Release + GitHub mirror done (both carry the zip;
+the mirror + Nexus also carry the AppImage — CI fully hands-off, 3rd straight).
+The whole feat/zcsdk-sidecars branch merged to main: the SDK bridge (below),
+PLUS the post-1.6.0 UI line — slim Command Deck cards, the config editor
+renamed "Config Editor" and moved out of its own tab into a full-screen modal
+opened by a button in the Hangar Bay action row (the redundant external Nexus
+link was removed from that row), and the Hangar Bay buttons kept on one line
+(shrink-to-fit, no wrap). package.json/nexus.js bumped to 1.7.0; changelog
+dated + given an Interface section; NEXUS_DESCRIPTION.bbcode has a new ZCSDK
+bullet. STILL OUTSTANDING (unchanged): press Publish on the Nexus page + paste
+NEXUS_DESCRIPTION.bbcode + announce (Update Launcher Version.bat 1.7.0 <files
+url>); archive-token still lacks `workflow` scope so the archive repo's dev
+history mirror is stalled (releases are fine); Steam Deck hardware test;
+ea-compat.json seed. NOTE: the user's dev instance was running OLD code mid
+session — after this release they should restart it; and Settings → ZCSDK
+Runtime shows "Update to 0.3" until they press it (their adopted ZCSDKBridge
+library copy is v0.2 while disk is v0.3).
+
+### The SDK bridge (feature detail)
+
+Headline: the consumer half of the "two tools, one bridge" design with the
+Zero Company Mod SDK (dev project at
 G:\Envian Mods and Projects\Zero Company Projects\ZeroCompanyModSDK, its
 docs/HANDOFF.md is the SDK briefing).
 

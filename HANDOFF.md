@@ -2,7 +2,61 @@
 
 Context document for continuing work on this project. Last updated 2026-09-05.
 
-## v1.7.1 RELEASED 2026-09-05 (merged to main, tag v1.7.1) — CURRENT
+## v1.8.0 RELEASED 2026-09-05 (merged to main, tag v1.8.0) — CURRENT
+
+Nexus: file 604 (Windows zip, main + primary MM) + file 605 (Linux AppImage,
+optional). Archive Release + GitHub mirror done (CI hands-off AppImage, 5th
+straight). Off the feat/holonet-embedded-browser branch.
+
+HEADLINE — EMBEDDED NEXUS DOWNLOADS FOR FREE ACCOUNTS. Free Nexus accounts
+can't get download links via the API (premium-only), so the manager now opens
+the mod's REAL Nexus files page INSIDE the app in an isolated, themed <webview>
+and catches the nxm:// the "Mod Manager Download" button emits — no leaving the
+app. Implementation:
+- main.js: `webviewTag: true` on the BrowserWindow; an app-level
+  `web-contents-created` listener watches every webview's will-navigate /
+  will-redirect / setWindowOpenHandler for `nxm://` and routes it into the
+  existing `handleNxm()` install pipeline (untrusted remote content gets NO app
+  IPC). The three free-account IPC paths (`nexus-install-remote`,
+  `nexus-install-file`, `update-mod`) now return `{opened:'embed', url, name}`
+  instead of `shell.openExternal` — premium paths unchanged.
+- src/index.html `#nexus-dl-modal` (themed frame + `<webview partition="persist:nexus">`);
+  src/styles.css `.nexus-dl-*`; src/app.js `openNexusDownload()` +
+  `nexusDl` state. Panel mirrors the shared `progress` events into an in-panel
+  bar, marks "Installed ✓" on the post-download `state` event and auto-closes
+  (1.6s); a header account chip shows "Sign in to Nexus" (loads the login page,
+  returns to the mod) and flips to "Signed in" only on a POSITIVE marker
+  (logout link/avatar — never inferred from a missing login link); "Open in
+  browser" fallback always present.
+- REFERENCE (NOT shipped): reference/holonet-embedded-browser/ — a self-contained
+  "unfaithful" full-browser demo (address bar, nav, domain lock, auto-download
+  toggle, live re-skin + ad-hiding) kept as an evaluation artifact, with a README
+  explaining the ToS reasons it stays unshipped. Chosen design is the FAITHFUL
+  one (page shown untouched, user clicks, we only catch nxm).
+NOTE: the end-to-end nxm→install was NOT verified live (only the UI states were)
+— the panel's "Open in browser" fallback + the OS nxm handler de-risk it, but a
+real logged-in download is still worth a smoke test.
+
+GALLERY RESHOT (docs/screenshots/): the old pre-1.6 shots
+(browse/configs/dashboard/mods) were replaced with current-UI, ZCOM-free shots —
+command-deck, holonet, diagnostics, settings, config-editor — captured from the
+REAL app with live data via a TEMP env-gated `runGalleryCapture` harness in
+main.js (ADDED then REMOVED; it is NOT in the shipped build — verify with
+`grep ZC_GALLERY main.js` = 0). Post-fixes: Holonet's third-party ZCOM watermark
+(on the "Squad Six" mod thumbnail) painted out with a feathered dark fill;
+Config Editor's `C:\Users\<name>\...` path redacted to just the filename. Any
+future embedded-browser feature screenshots must use a NON-ZCOM mod.
+NEXUS_DESCRIPTION.bbcode updated (in-app free downloads; "Hangar Bay" nav refs →
+"Command Deck").
+STILL OUTSTANDING: gallery images + description go to Nexus via the mod page's
+MEDIA MANAGER / description box (WEB UI — the v3 API only uploads FILES, not
+gallery media); page 121 is STILL a draft so press Publish + paste
+NEXUS_DESCRIPTION.bbcode + replace the 5 gallery images + announce (Update
+Launcher Version.bat 1.8.0 <files url>) — no announcement has run for ANY
+version. archive-token still lacks `workflow` scope (dev history mirror stalled);
+Steam Deck hardware test; ea-compat.json seed.
+
+## v1.7.1 RELEASED 2026-09-05 (merged to main, tag v1.7.1)
 
 Nexus: file 588 (Windows zip, main + primary MM) + file 589 (Linux AppImage,
 optional). Archive Release + GitHub mirror done (both carry the zip; the mirror

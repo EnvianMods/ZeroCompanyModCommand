@@ -33,6 +33,9 @@ Updates, handled
 - Mod update checks — every Nexus and GitHub install is tracked;
   outdated mods get flagged in the Hangar Bay (checked automatically,
   or on demand)
+- ZCSDK Runtime one-click install — content mods built with the Zero Company
+  Mod SDK install like any pak mod; the runtime they need is bundled and
+  installs from Settings or on first use
 - One-click updates — GitHub mods (and Nexus premium) update in place,
   keeping your load order, custom names, and enabled state; free Nexus
   accounts get a direct link and the returning download replaces the

@@ -218,24 +218,6 @@
         </header>
         <div id="diag-list" class="diag-list diag-slim"></div>
 
-        <div class="hangar-section-head">
-          <div>
-            <h2 class="hangar-section-title">LOAD ORDER</h2>
-            <p class="view-sub">Drag to reorder pak &amp; IoStore mods — lower entries load later and win conflicts</p>
-          </div>
-          <div class="header-actions">
-            <button id="btn-suggest-order" class="btn">◈ Suggest order</button>
-            <button id="btn-rollback-order" class="btn ghost" disabled title="Restore the load order from before the last Apply">↩ Undo last apply</button>
-            <button id="btn-apply-order" class="btn primary" disabled>Review &amp; apply</button>
-          </div>
-        </div>
-        <div id="order-list" class="order-list"></div>
-        <div id="order-empty" class="empty-state hidden">
-          <div class="empty-glyph">≡</div>
-          <p>No orderable pak mods installed.</p>
-          <p class="dim">Game-folder mods use fixed paths and are not ordered here.</p>
-        </div>
-
         <div id="ue4ss-order-section" class="ue4ss-order-section hidden">
           <div class="ue4ss-order-head">
             <div>
@@ -251,6 +233,24 @@
         <div id="conflict-matrix" class="conflict-matrix"></div>
         <div id="conflict-detail" class="conflict-detail"></div>
         <div id="ue4ss-hook-report" class="conflict-detail"></div>
+
+        <div class="hangar-section-head">
+          <div>
+            <h2 class="hangar-section-title">PAK &amp; IOSTORE LOAD ORDER</h2>
+            <p class="view-sub">Drag to reorder packaged asset mods — lower entries load later and win conflicts</p>
+          </div>
+          <div class="header-actions">
+            <button id="btn-suggest-order" class="btn">◈ Suggest order</button>
+            <button id="btn-rollback-order" class="btn ghost" disabled title="Restore the load order from before the last Apply">↩ Undo last apply</button>
+            <button id="btn-apply-order" class="btn primary" disabled>Review &amp; apply</button>
+          </div>
+        </div>
+        <div id="order-list" class="order-list"></div>
+        <div id="order-empty" class="empty-state hidden">
+          <div class="empty-glyph">≡</div>
+          <p>No orderable pak mods installed.</p>
+          <p class="dim">Packaged asset mods (.pak / .utoc / .ucas) appear here; UE4SS and game-folder mods are ordered above or use fixed paths.</p>
+        </div>
       </section>
 
       <!-- ======================= SETTINGS ======================= -->

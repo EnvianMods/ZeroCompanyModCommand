@@ -37,6 +37,13 @@
 - Settings gains the same API-key guidance and link
 - Holonet default sort is now Most endorsed
 
+**Streamlined layout — five tabs instead of seven**
+- The Command Deck and Hangar Bay are one tab: the operational overview on
+  top, the full mod list (actions, squad profiles, Enable/Disable all) below
+- Diagnostics and Load Order are one tab: compact health tiles on top (hover
+  for full text), the UE4SS start order next, conflict analysis after it, and
+  the pak & IoStore load order at the bottom
+
 ## v1.5.0 (2026-09-04)
 
 **Version vault — roll back mod versions, pin them in profiles**

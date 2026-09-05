@@ -375,6 +375,42 @@
     <div class="drop-box">⊕ RELEASE TO INSTALL</div>
   </div>
 
+  <!-- ============ NEXUS DOWNLOAD (embedded, faithful) ============ -->
+  <!-- Free Nexus accounts can't get download links via the API, so the mod's
+       real Files page is embedded here; the user presses "Mod Manager Download"
+       and the emitted nxm:// link is caught in the main process (see main.js
+       web-contents-created) and installed. The page is rendered faithfully. -->
+  <div id="nexus-dl-modal" class="nexus-dl-modal hidden">
+    <div class="nexus-dl-shell">
+      <div class="nexus-dl-head">
+        <div class="nexus-dl-titlewrap">
+          <span class="nexus-dl-glyph">◈</span>
+          <div class="nexus-dl-titletext">
+            <div class="nexus-dl-title">NEXUS DOWNLOAD</div>
+            <div id="nexus-dl-sub" class="nexus-dl-sub">—</div>
+          </div>
+        </div>
+        <div class="nexus-dl-actions">
+          <button id="nexus-dl-account" class="nexus-dl-account" title="Sign in to Nexus Mods so downloads work">◈ Sign in to Nexus</button>
+          <span id="nexus-dl-status" class="nexus-dl-pill">Awaiting “Mod Manager Download”</span>
+          <button id="nexus-dl-reload" class="btn ghost tiny" title="Reload the page">⟳ Reload</button>
+          <button id="nexus-dl-ext" class="btn ghost tiny" title="Open in your system browser instead">↗ Browser</button>
+          <button class="btn tiny" data-close-modal="nexus-dl-modal">✕ Close</button>
+        </div>
+      </div>
+      <div class="nexus-dl-hint">
+        You’re on the real Nexus Mods page, inside Mod Command. Sign in if asked, then press the
+        mod’s <b>Mod Manager Download</b> button — the file installs here automatically. Free
+        accounts begin on the website; that’s normal.
+      </div>
+      <webview id="nexus-dl-view" class="nexus-dl-view" partition="persist:nexus" allowpopups src="about:blank"></webview>
+      <div id="nexus-dl-progress" class="nexus-dl-progress hidden">
+        <span id="nexus-dl-progress-label" class="nexus-dl-progress-label">Downloading…</span>
+        <div class="nexus-dl-progress-track"><div id="nexus-dl-progress-bar" class="nexus-dl-progress-bar"></div></div>
+      </div>
+    </div>
+  </div>
+
   <div id="import-modal" class="zc-modal hidden">
     <div class="zc-modal-box">
       <div class="zc-modal-title">IMPORT EXISTING MODS</div>

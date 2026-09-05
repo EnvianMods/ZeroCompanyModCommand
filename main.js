@@ -272,6 +272,7 @@ function createWindow() {
     backgroundColor: '#05080f',
     autoHideMenuBar: true,
     title: 'Zero Company Mod Command',
+    icon: path.join(__dirname, 'src', 'assets', 'app-icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

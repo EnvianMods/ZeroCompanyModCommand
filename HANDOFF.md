@@ -286,7 +286,7 @@ temp Store + fake game dir; UI verified via TEMP hook + ZC_DATA_DIR override
 **Zero Company Mod Command** — a Star Wars holo-terminal themed Electron mod manager
 and launcher for STAR WARS: Zero Company (Steam AppID **2075800**), by **Envian Mods**
 (the user; Nexus account **Metanoia707**, non-premium; GitHub org **EnvianMods**;
-Discord https://discord.gg/YNPCA6qRq3; PayPal https://paypal.me/Envian707).
+Discord https://discord.gg/YNPCA6qRq3; PayPal https://www.paypal.biz/envianmn).
 
 - Dev project: `G:\SteamLibrary\steamapps\common\Star Wars Zero Company\ZeroCompanyModManager`
   (run: `Zero Company Mod Command.bat` or `npm start`; dev data in `data/`)

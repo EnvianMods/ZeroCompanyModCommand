@@ -1,5 +1,20 @@
 # Zero Company Mod Command — Changelog
 
+## v1.7.1 (2026-09-05)
+
+**Interface**
+- The Command Deck is decluttered: the leftover "Hangar Bay" heading and its
+  subtitle — a remnant of an earlier window merge — are gone. The installed-mod
+  list now follows the overview cards directly, under a slim divider.
+- The action buttons above the mod list are slimmer, and **Install folder** and
+  **Open ~mods** moved to Settings → Shortcuts, keeping the toolbar focused on
+  everyday actions (Check updates, Install archive, Import existing, Config Editor).
+
+**Polish**
+- New application icon — the app's holo emblem (a cyan hexagon with an amber
+  command hub) now appears on the executable, the window, and the taskbar in
+  place of the default Electron icon.
+
 ## v1.7.0 (2026-09-05)
 
 **Interface**

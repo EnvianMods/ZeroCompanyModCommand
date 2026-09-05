@@ -1,5 +1,24 @@
 # Zero Company Mod Command — Changelog
 
+## v1.8.2 (2026-09-05)
+
+**Link mods finds the right Nexus page — even when the title looks nothing like the mod**
+- The **Link mods** button now walks your unlinked mods one at a time in a
+  wizard. Each step shows the best Nexus match pre-selected in a dropdown (open
+  it for the other top candidates), a **↗ View page** button that opens that
+  mod's Nexus page inside the app so you can check it before committing, and a
+  search box (by title *or* author) for when the recommendations are wrong.
+  **Link** attaches your pick and moves on; **Skip** leaves a mod unlinked;
+  **Cancel** stops at any point.
+- Matching is far smarter. It reads everything a mod record knows — its local
+  name, the archive it was installed from, and its author — and adds up the
+  evidence from every route: file hash, the Nexus download's embedded mod id,
+  a catalog-wide index of every mod's uploaded file names, title search, and
+  author search. A mod named after its archive ("ZCUnlocked") is now found even
+  though its Nexus page is titled something completely different.
+- The file-name index is built once (a progress bar shows it), cached, and only
+  refreshes mods that have changed on Nexus since, so repeat scans are instant.
+
 ## v1.8.1 (2026-09-05)
 
 **Link mods now matches UE4SS mods, and lets you confirm every match**

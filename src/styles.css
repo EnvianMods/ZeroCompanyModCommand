@@ -866,3 +866,78 @@ body.reduced-motion * { transition: none !important; animation: none !important;
 .config-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
 .config-modal-head .header-actions { position: static; display: flex; gap: 10px; }
 .config-modal-box .config-layout { height: 70vh; margin: 0; }
+
+/* ================= Nexus Download panel (embedded webview, faithful) ================= */
+.nexus-dl-modal {
+  position: fixed; inset: 0; z-index: 160;
+  display: flex; align-items: center; justify-content: center;
+  padding: 26px;
+  background: rgba(2, 5, 11, 0.78);
+  backdrop-filter: blur(3px);
+}
+.nexus-dl-shell {
+  display: flex; flex-direction: column;
+  width: min(1180px, 100%); height: min(88vh, 100%);
+  background:
+    linear-gradient(180deg, rgba(13, 22, 38, 0.96), rgba(8, 14, 26, 0.96));
+  border: 1px solid var(--panel-edge);
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(79, 209, 255, 0.05);
+  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+  overflow: hidden;
+}
+.nexus-dl-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 14px 18px; border-bottom: 1px solid var(--panel-edge);
+  background: rgba(79, 209, 255, 0.04);
+}
+.nexus-dl-titlewrap { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.nexus-dl-glyph {
+  font-size: 26px; color: var(--holo); text-shadow: 0 0 14px var(--holo-glow);
+  line-height: 1;
+}
+.nexus-dl-titletext { min-width: 0; }
+.nexus-dl-title {
+  font-size: 13px; font-weight: 800; letter-spacing: 4px; color: var(--holo);
+  text-shadow: 0 0 10px var(--holo-glow);
+}
+.nexus-dl-sub {
+  font-size: 13px; color: var(--text); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 46vw;
+}
+.nexus-dl-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.nexus-dl-pill {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.5px;
+  color: var(--amber); border: 1px solid var(--amber-dim);
+  background: rgba(255, 200, 87, 0.08); padding: 5px 10px;
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  white-space: nowrap;
+}
+.nexus-dl-pill.busy { color: var(--holo); border-color: var(--panel-edge); background: rgba(79, 209, 255, 0.08); }
+.nexus-dl-pill.done { color: var(--good); border-color: rgba(109, 255, 176, 0.5); background: rgba(109, 255, 176, 0.08); }
+.nexus-dl-hint {
+  padding: 9px 18px; font-size: 12px; line-height: 1.5; color: var(--text-dim);
+  border-bottom: 1px solid rgba(79, 209, 255, 0.10);
+  background: rgba(5, 8, 15, 0.6);
+}
+.nexus-dl-hint b { color: var(--amber); }
+.nexus-dl-view {
+  flex: 1 1 auto; width: 100%; min-height: 0;
+  border: 0; background: #10141c;
+  display: inline-flex;   /* webview needs an explicit display to fill */
+}
+.nexus-dl-progress {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 18px; border-top: 1px solid var(--panel-edge);
+  background: rgba(5, 8, 15, 0.85);
+}
+.nexus-dl-progress-label {
+  font-family: var(--mono); font-size: 12px; color: var(--holo); white-space: nowrap;
+}
+.nexus-dl-progress-track {
+  flex: 1; height: 8px; background: rgba(79, 209, 255, 0.10);
+  border: 1px solid var(--panel-edge); overflow: hidden;
+}
+.nexus-dl-progress-bar {
+  height: 100%; width: 0%; background: linear-gradient(90deg, var(--holo-dim), var(--holo));
+  box-shadow: 0 0 12px var(--holo-glow); transition: width 0.2s ease;
+}

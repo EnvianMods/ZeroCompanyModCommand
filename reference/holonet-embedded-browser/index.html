@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Holonet Browser — UNFAITHFUL reference (not shipped)</title>
+<style>
+  /* Theme tokens mirrored from ../../src/styles.css so this reference reads
+     on-theme in isolation. */
+  :root {
+    --bg: #05080f; --bg-raise: #0a111f; --panel: rgba(13, 22, 38, 0.92);
+    --panel-edge: rgba(79, 209, 255, 0.22); --holo: #4fd1ff; --holo-dim: #2a7fa8;
+    --holo-glow: rgba(79, 209, 255, 0.35); --amber: #ffc857;
+    --amber-dim: rgba(255, 200, 87, 0.65); --danger: #ff5c5c; --good: #6dffb0;
+    --text: #cfe9f7; --text-dim: #6f8ba0;
+    --mono: "Cascadia Mono", "Consolas", monospace; --sans: "Segoe UI", "Inter", sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; background: var(--bg); color: var(--text);
+    font-family: var(--sans); overflow: hidden; }
+  .app { display: flex; flex-direction: column; height: 100%; }
+
+  /* ---- browser chrome (the "unfaithful" full browser) ---- */
+  .browserbar {
+    display: flex; align-items: center; gap: 8px; padding: 9px 12px;
+    background: linear-gradient(180deg, rgba(13,22,38,0.98), rgba(8,14,26,0.98));
+    border-bottom: 1px solid var(--panel-edge);
+  }
+  .navbtn {
+    width: 34px; height: 30px; display: grid; place-items: center;
+    background: rgba(79,209,255,0.08); color: var(--holo);
+    border: 1px solid rgba(79,209,255,0.4); cursor: pointer; font-size: 14px;
+    clip-path: polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);
+  }
+  .navbtn:hover { background: rgba(79,209,255,0.18); }
+  .omni {
+    flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0;
+    background: rgba(5,8,15,0.85); border: 1px solid var(--panel-edge);
+    padding: 6px 12px; clip-path: polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+  }
+  .lock { color: var(--good); font-size: 12px; white-space: nowrap; }
+  .omni input {
+    flex: 1; min-width: 0; background: transparent; border: 0; outline: none;
+    color: var(--text); font-family: var(--mono); font-size: 12.5px;
+  }
+  .domainlock {
+    font-family: var(--mono); font-size: 11px; color: var(--holo);
+    border: 1px solid var(--panel-edge); background: rgba(79,209,255,0.08);
+    padding: 5px 9px; white-space: nowrap;
+    clip-path: polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);
+  }
+  .autopill {
+    font-family: var(--mono); font-size: 11px; color: var(--amber);
+    border: 1px solid var(--amber-dim); background: rgba(255,200,87,0.10);
+    padding: 5px 9px; white-space: nowrap; cursor: pointer;
+    clip-path: polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);
+  }
+  .closebtn {
+    background: transparent; color: var(--text-dim); border: 1px solid rgba(79,209,255,0.22);
+    padding: 6px 10px; cursor: pointer; font-size: 12px;
+    clip-path: polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);
+  }
+  .refbar {
+    display: flex; align-items: center; gap: 10px; padding: 6px 14px;
+    font-family: var(--mono); font-size: 11px; color: var(--danger);
+    background: rgba(255,92,92,0.06); border-bottom: 1px solid rgba(255,92,92,0.25);
+  }
+  .refbar b { color: var(--amber); }
+  webview { flex: 1; width: 100%; min-height: 0; display: inline-flex; background: #0b0f16; }
+</style>
+</head>
+<body>
+  <div class="app">
+    <div class="browserbar">
+      <button class="navbtn" id="back" title="Back">‹</button>
+      <button class="navbtn" id="fwd" title="Forward">›</button>
+      <button class="navbtn" id="reload" title="Reload">⟳</button>
+      <button class="navbtn" id="home" title="Zero Company mods">⌂</button>
+      <div class="omni">
+        <span class="lock">🔒</span>
+        <input id="addr" spellcheck="false" />
+      </div>
+      <span class="domainlock">◈ nexusmods.com only</span>
+      <span class="autopill" id="autopill">⚡ Auto-download: ON</span>
+      <button class="closebtn">✕ Close</button>
+    </div>
+    <div class="refbar">
+      REFERENCE / NOT SHIPPED — “unfaithful” mode: re-skins the Nexus page to the holo theme,
+      hides ad slots, and can auto-advance the free download. Kept for evaluation only; see
+      <b>README.md</b>.
+    </div>
+    <webview id="view" partition="persist:nexus-ref" allowpopups
+             src="https://www.nexusmods.com/games/starwarszerocompany/mods"></webview>
+  </div>
+
+<script>
+  const view = document.getElementById('view');
+  const addr = document.getElementById('addr');
+  const HOME = 'https://www.nexusmods.com/games/starwarszerocompany/mods';
+
+  document.getElementById('back').onclick = () => { try { view.goBack(); } catch (_) {} };
+  document.getElementById('fwd').onclick = () => { try { view.goForward(); } catch (_) {} };
+  document.getElementById('reload').onclick = () => { try { view.reload(); } catch (_) {} };
+  document.getElementById('home').onclick = () => { view.src = HOME; };
+  let auto = true;
+  document.getElementById('autopill').onclick = (e) => {
+    auto = !auto;
+    e.target.textContent = auto ? '⚡ Auto-download: ON' : '○ Auto-download: OFF';
+    e.target.style.opacity = auto ? '1' : '0.5';
+  };
+  addr.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      let u = addr.value.trim();
+      if (!/^https?:\/\//.test(u)) u = 'https://' + u;
+      if (/nexusmods\.com/i.test(u)) view.src = u;   // domain-locked
+    }
+  });
+  view.addEventListener('did-navigate', (e) => { addr.value = e.url; });
+  view.addEventListener('did-navigate-in-page', (e) => { addr.value = e.url; });
+
+  // The "unfaithful" part: re-skin + de-clutter the live Nexus page so it reads
+  // like part of the app. This is what a shipped build must NOT do (it strips the
+  // ad-supported free tier and restyles a third-party site).
+  const RESKIN = `
+    :root { color-scheme: dark; }
+    html, body { background: #070b13 !important; color: #cfe9f7 !important; }
+    #headerwrapper, #header, .header, footer, #footer,
+    .adunitwrapper, .ad-container, [id*="google_ads"], [class*="advert"],
+    iframe[src*="doubleclick"], iframe[src*="googlesyndication"], .comments,
+    #sidebargglayout, .banner, .premium-banner { display: none !important; }
+    a, a:visited { color: #4fd1ff !important; }
+    .btn, button, .accordion-heading, .tabbed .active a { border-color: rgba(79,209,255,0.4) !important; }
+    #pagetitle, h1, h2, h3 { color: #ffc857 !important; }
+    .file-expander-header, .mod_files, .modpagecontent, .container {
+      background: rgba(13,22,38,0.7) !important; border-color: rgba(79,209,255,0.22) !important;
+    }
+    .btn-download, a[href*="mod_manager_download"] {
+      background: rgba(255,200,87,0.15) !important; color: #ffc857 !important;
+      border: 1px solid rgba(255,200,87,0.6) !important;
+    }
+  `;
+  view.addEventListener('dom-ready', () => {
+    try { view.insertCSS(RESKIN); } catch (_) {}
+    // (In a real unfaithful build this is where an auto-advance script would run
+    //  when `auto` is on — deliberately omitted here; the re-skin shows the intent.)
+  });
+</script>
+</body>
+</html>

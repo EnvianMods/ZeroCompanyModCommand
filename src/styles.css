@@ -817,7 +817,20 @@ body.reduced-motion * { transition: none !important; animation: none !important;
 /* Hangar section header keeps its actions inline (the absolute positioning is
    for the old single view-header layout). */
 .hangar-section-head { position: relative; }
-.hangar-section-head .header-actions { position: static; flex-wrap: wrap; justify-content: flex-end; }
+/* Keep the action buttons on a single row: they shrink to fit instead of
+   wrapping to a second line. Labels ellipsize only at extreme narrowness. */
+.hangar-section-head .header-actions {
+  position: static; flex-wrap: nowrap; justify-content: flex-end;
+  min-width: 0; gap: 6px;
+}
+.hangar-section-head .header-actions .btn {
+  flex: 0 1 auto; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding-left: 11px; padding-right: 11px;
+}
+/* The title block gives up horizontal space first (its subtitle reflows), so
+   the buttons keep a comfortable size until the window is quite narrow. */
+.hangar-section-head > div:first-child { min-width: 0; flex: 1 40 auto; }
 
 /* ---------- merged Diagnostics / Load Order ---------- */
 .diag-list.diag-slim {

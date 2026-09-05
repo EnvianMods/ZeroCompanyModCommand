@@ -1,5 +1,20 @@
 # Zero Company Mod Command — Changelog
 
+## v1.8.1 (2026-09-05)
+
+**Link mods now matches UE4SS mods, and lets you confirm every match**
+- The **Link mods** button (Command Deck toolbar) used to only recognise mods
+  Nexus indexes by file hash — in practice loose-pak uploads — so it couldn't
+  identify UE4SS mods at all. It now also searches Nexus by name, so mods like
+  script and DLL tweaks get candidate sources too.
+- Because a name match is a best guess, nothing is linked automatically. Link
+  mods now opens a review panel listing each unlinked mod with its candidate
+  Nexus sources (with author, version, and a confidence label). Tick the ones
+  you want, pick the right source from the dropdown, and press **Link selected**.
+  Strong matches are pre-ticked for you; weaker guesses are shown but left for
+  you to decide. Mods with no match tell you to link them by hand from their
+  LOCAL badge.
+
 ## v1.8.0 (2026-09-05)
 
 **Free Nexus accounts can now download and install without leaving the app**

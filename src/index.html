@@ -78,20 +78,12 @@
           </div>
         </div>
 
-        <div class="hangar-section-head">
-          <div>
-            <h2 class="hangar-section-title">HANGAR BAY</h2>
-            <p class="view-sub">Installed modifications — drop archives anywhere to install</p>
-          </div>
-          <div class="header-actions">
-            <button id="btn-update-all" class="btn primary hidden">⬆ Update all</button>
-            <button id="btn-check-updates" class="btn ghost">⟳ Check updates</button>
-            <button class="btn" data-action="install-archive">⊕ Install archive</button>
-            <button class="btn ghost" data-action="install-folder">⊞ Install folder</button>
-            <button id="btn-import" class="btn ghost">⇲ Import existing</button>
-            <button class="btn ghost" data-open="mods">Open ~mods</button>
-            <button id="btn-open-config" class="btn ghost">⌸ Config Editor</button>
-          </div>
+        <div class="hangar-toolbar">
+          <button id="btn-update-all" class="btn primary tiny hidden">⬆ Update all</button>
+          <button id="btn-check-updates" class="btn ghost tiny">⟳ Check updates</button>
+          <button class="btn tiny" data-action="install-archive">⊕ Install archive</button>
+          <button id="btn-import" class="btn ghost tiny">⇲ Import existing</button>
+          <button id="btn-open-config" class="btn ghost tiny">⌸ Config Editor</button>
         </div>
         <div class="profile-bar">
           <span class="profile-label">SQUAD PROFILE</span>
@@ -359,6 +351,8 @@
         <div class="card holo wide">
           <div class="card-title">SHORTCUTS</div>
           <div class="card-body actions-row">
+            <button class="btn ghost" data-action="install-folder">⊞ Install folder</button>
+            <button class="btn ghost" data-open="mods">Open ~mods</button>
             <button class="btn ghost" data-open="library">Open mod library</button>
             <button class="btn ghost" data-open="data">Open manager data</button>
             <button class="btn ghost" data-open="ue4ssMods">Open UE4SS mods</button>

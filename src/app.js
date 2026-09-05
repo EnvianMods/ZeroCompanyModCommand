@@ -249,6 +249,22 @@ function renderMods() {
       eaChip.title = compat.note || 'Confirmed working on the EA App edition.';
     }
 
+    // ZCSDK chip — content built with the Zero Company Mod SDK; warns (and
+    // offers the install) when the runtime it needs isn't active.
+    let zcChip = null;
+    if (mod.zcsdk) {
+      const rtOk = !!(state.zcsdk && state.zcsdk.healthy);
+      zcChip = document.createElement(rtOk ? 'span' : 'button');
+      zcChip.className = `mod-badge zc-chip ${rtOk ? 'zc-ok' : 'zc-bad'}`;
+      zcChip.textContent = rtOk ? '◆ SDK' : '◆ SDK: RUNTIME MISSING';
+      const grants = mod.zcsdk.grants;
+      zcChip.title = (rtOk
+        ? 'Built with the Zero Company Mod SDK. Its asset registry and manifest deploy beside the paks; the ZCSDK Runtime loads them at startup'
+        : 'Built with the Zero Company Mod SDK — needs the ZCSDK Runtime (Settings → ZCSDK Runtime) or the game will not discover its content. Click to install')
+        + (grants ? ` · ${grants} item${grants === 1 ? '' : 's'} granted once per save` : '') + '.';
+      if (!rtOk) zcChip.addEventListener('click', () => installZcsdkRuntime());
+    }
+
     const toggle = document.createElement('input');
     toggle.type = 'checkbox';
     toggle.className = 'switch';
@@ -330,6 +346,7 @@ function renderMods() {
 
     row.append(badge, srcBadge, main, flag);
     if (eaChip) row.appendChild(eaChip);
+    if (zcChip) row.appendChild(zcChip);
     if (buildChip) row.appendChild(buildChip);
     if (updateEl) row.appendChild(updateEl);
     row.append(toggle, actions);
@@ -1025,6 +1042,13 @@ function renderSettings() {
   // UE4SS
   $('#ue4ss-settings-status').textContent = state.ue4ss.message;
   $('#btn-install-ue4ss').textContent = state.ue4ss.healthy ? 'Reinstall latest' : 'Download & install';
+  // ZCSDK Runtime (bundled with the app)
+  const zc = state.zcsdk || {};
+  $('#zcsdk-settings-status').textContent = zc.message || '—';
+  const zcBtn = $('#btn-install-zcsdk');
+  zcBtn.disabled = !zc.bundled;
+  zcBtn.textContent = !zc.bundled ? 'Not bundled'
+    : (zc.installed ? (zc.updateAvailable ? `Update to ${zc.bundled.version}` : 'Reinstall') : `Install ${zc.bundled.version || ''}`.trim());
   $('#set-game-path').textContent = state.settings.gamePath || 'Not set';
   const storage = state.storage || {};
   $('#set-storage-path').textContent = storage.root
@@ -1133,6 +1157,54 @@ $('#btn-install-ue4ss').addEventListener('click', async () => {
     $('#progress-toast').classList.add('hidden');
   }
 });
+$('#btn-install-zcsdk').addEventListener('click', async () => {
+  const btn = $('#btn-install-zcsdk');
+  btn.disabled = true;
+  try { await installZcsdkRuntime(); } finally {
+    btn.disabled = false;
+    $('#progress-toast').classList.add('hidden');
+  }
+});
+
+// Install the bundled ZCSDK Runtime; fetches UE4SS first when it is missing.
+// Returns true when the runtime ended up installed.
+async function installZcsdkRuntime() {
+  if (!state.ue4ss || !state.ue4ss.installed) {
+    const go = window.confirm(
+      'The ZCSDK Runtime runs on UE4SS, which is not installed yet.\n\n' +
+      'Download and install UE4SS from GitHub first, then the runtime?');
+    if (!go) return false;
+    const r = await call('installUe4ss');
+    if (!r) return false;
+    state = r.state;
+    render();
+    toast(`UE4SS installed (${r.version}).`);
+  }
+  const res = await call('installZcsdkRuntime');
+  if (!res) return false;
+  state = res.state;
+  pendingUe4ssOrder = null;
+  render();
+  toast(`ZCSDK Runtime ${res.version ? res.version + ' ' : ''}installed — content mods built with the Zero Company Mod SDK are now discovered by the game.`);
+  return true;
+}
+
+// After installs: SDK-built mods that found no working runtime → one offer.
+async function offerZcsdkRuntime(needing) {
+  if (!needing.length || (state.zcsdk && state.zcsdk.healthy)) return;
+  const names = needing.map((r) => `“${r.name}”`).join(', ');
+  const rt = state.zcsdk || {};
+  const why = rt.installed ? 'is installed but not active' : 'is not installed';
+  const one = needing.length === 1;
+  const go = window.confirm(
+    `${names} ${one ? 'is' : 'are'} built with the Zero Company Mod SDK and need${one ? 's' : ''} the ZCSDK Runtime, which ${why}.\n\n` +
+    'Install the bundled ZCSDK Runtime now? (Two UE4SS mods: ZCSDKBridge + ZCSDKLoader.)');
+  if (!go) {
+    toast('You can install the ZCSDK Runtime any time from Settings → ZCSDK Runtime.', 'warn', 8000);
+    return;
+  }
+  await installZcsdkRuntime();
+}
 $('#chk-close-on-launch').addEventListener('change', (e) => saveSetting({ closeOnLaunch: e.target.checked }));
 $('#chk-reduced-motion').addEventListener('change', (e) => saveSetting({ reducedMotion: e.target.checked }));
 
@@ -1154,9 +1226,12 @@ function installResultsToToasts(payload) {
   pendingOrder = null;
   pendingUe4ssOrder = null;
   render();
+  const needZcsdk = [];
   for (const r of payload.results) {
     if (r.ok && r.pendingFomod) {
       fomodQueue.push(r);
+    } else if (r.ok && r.needsZcsdk) {
+      needZcsdk.push(r);
     } else if (r.ok && r.note) {
       toast(r.message, 'info', 8000);
     } else if (r.ok) {
@@ -1167,6 +1242,7 @@ function installResultsToToasts(payload) {
     }
   }
   processFomodQueue();
+  offerZcsdkRuntime(needZcsdk);
 }
 
 $$('[data-action="install-archive"]').forEach((b) =>

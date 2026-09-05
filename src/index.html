@@ -344,6 +344,20 @@
         </div>
 
         <div class="card holo wide">
+          <div class="card-title">ZCSDK RUNTIME</div>
+          <div class="card-body settings-body">
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-name">Content-mod runtime <span class="dim">(needed by mods built with the Zero Company Mod SDK — new items, gear, and other added content)</span></span>
+                <span id="zcsdk-settings-status" class="setting-value">—</span>
+              </div>
+              <button class="btn" id="btn-install-zcsdk">Install</button>
+            </div>
+            <p class="dim settings-note">Two UE4SS mods (ZCSDKBridge + ZCSDKLoader) bundled with Mod Command — nothing to download. At startup they load each SDK-built mod's asset registry so the game can discover its new content, and grant the mod's items once per save. Requires UE4SS; installed mods that need it show a ◆ SDK chip in the Hangar.</p>
+          </div>
+        </div>
+
+        <div class="card holo wide">
           <div class="card-title">SHORTCUTS</div>
           <div class="card-body actions-row">
             <button class="btn ghost" data-open="library">Open mod library</button>

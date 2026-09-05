@@ -1,5 +1,36 @@
 # Zero Company Mod Command — Changelog
 
+## v1.7.0 (unreleased)
+
+**Content mods built with the Zero Company Mod SDK install like any other pak mod**
+- SDK packages ship two sidecars beside the pak trio — `<Mod>.AssetRegistry.bin`
+  (the mod's asset registry, so the game can enumerate its new items) and
+  `<Mod>.zcsdk.lua` (the runtime manifest). They now install and deploy to
+  `~mods` next to the renamed paks, keeping their exact names (the runtime finds
+  the manifest by suffix and resolves the registry relative to it); previously
+  they were dropped as "non-pak files". Enable/disable, profiles, the version
+  vault, multi-mod archives, loose-pak installs (when the folder holds one pak
+  group), and Import existing (a hand-copied package in `~mods`) all carry them
+- Hangar rows show a ◆ SDK chip on such mods; it turns amber ("RUNTIME MISSING")
+  and installs the runtime on click while the game can't discover the content
+
+**ZCSDK Runtime — one-click prerequisite, bundled with the app**
+- Settings → ZCSDK Runtime installs the two UE4SS mods that SDK-built content
+  mods need (ZCSDKBridge + ZCSDKLoader) from a package bundled with Mod Command —
+  nothing to download. UE4SS is fetched first when it is missing. Installing an
+  SDK-built mod without a working runtime offers the install right away
+- Re-running replaces earlier copies by name (including adopted dev copies whose
+  files drifted on disk) after vaulting them, keeps their UE4SS start-order
+  slots, and never leaves duplicate folders; the card offers "Update to x.y"
+  when the bundled package is newer or the installed copy is unversioned
+- Diagnostics and support reports include the runtime's state
+
+**Fixes**
+- Zip extraction now uses Windows' own bsdtar by its full path, then the built-in
+  extractor, then 7-Zip when present. A bare `tar` on the PATH could be GNU tar
+  (which can't read zips), and the built-in extractor rejects the `./` directory
+  entry some tools put in zips — SDK-built packages included
+
 ## v1.6.0 (2026-09-04)
 
 **Your mod archive now lives in the game folder — and survives everything**

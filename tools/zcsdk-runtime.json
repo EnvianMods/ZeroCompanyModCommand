@@ -1,0 +1,7 @@
+{
+  "version": "0.3",
+  "bridge": "0.3.0",
+  "loader": "1.0.0",
+  "file": "ZCSDKRuntime.zip",
+  "source": "Zero Company Mod SDK — tools/ue4ss-bridge + tools/ue4ss-loader (build/ZCSDKRuntime_v0.3.zip)"
+}

@@ -112,6 +112,9 @@
           <button id="btn-profile-apply" class="btn tiny">Apply</button>
           <button id="btn-profile-save" class="btn tiny primary">Save current as…</button>
           <button id="btn-profile-delete" class="btn tiny danger">Delete</button>
+          <span class="profile-bar-spacer"></span>
+          <button id="btn-enable-all" class="btn tiny">⏻ Enable all</button>
+          <button id="btn-disable-all" class="btn tiny ghost">⭘ Disable all</button>
         </div>
         <div id="mod-list" class="mod-list"></div>
         <div id="mods-empty" class="empty-state hidden">
@@ -345,6 +348,20 @@
         </div>
 
         <div class="card holo wide">
+          <div class="card-title">GAME UPDATE FREEZE</div>
+          <div class="card-body settings-body">
+            <label class="setting-row toggle-row">
+              <div class="setting-info">
+                <span class="setting-name">Freeze game updates <span class="dim">(experimental — protects modded playthroughs from overnight patches)</span></span>
+                <span id="freeze-status" class="setting-value">—</span>
+              </div>
+              <input type="checkbox" id="chk-update-freeze" class="switch" />
+            </label>
+            <p class="dim freeze-note">Steam installs only: sets the game to "update only on launch" and locks the Steam manifest so no update can be scheduled; the Launch button then starts the game directly. Turn it off before playing online modes that need the current build — launching from the Steam UI itself can still force an update. EA App users: disable automatic game updates in the EA App's own settings.</p>
+          </div>
+        </div>
+
+        <div class="card holo wide">
           <div class="card-title">UE4SS RUNTIME</div>
           <div class="card-body settings-body">
             <div class="setting-row">
@@ -431,6 +448,17 @@
       <div class="zc-modal-actions">
         <button id="prompt-ok" class="btn primary">Confirm</button>
         <button id="prompt-cancel" class="btn ghost">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="versions-modal" class="zc-modal hidden">
+    <div class="zc-modal-box">
+      <div class="zc-modal-title">VERSION VAULT</div>
+      <p class="zc-modal-sub dim" id="versions-sub"></p>
+      <div id="versions-list" class="import-list"></div>
+      <div class="zc-modal-actions">
+        <button class="btn ghost" data-close-modal="versions-modal">Close</button>
       </div>
     </div>
   </div>

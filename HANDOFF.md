@@ -2,7 +2,41 @@
 
 Context document for continuing work on this project. Last updated 2026-09-05.
 
-## v1.7.0 RELEASED 2026-09-05 (merged to main, tag v1.7.0) — CURRENT
+## v1.7.1 RELEASED 2026-09-05 (merged to main, tag v1.7.1) — CURRENT
+
+Nexus: file 588 (Windows zip, main + primary MM) + file 589 (Linux AppImage,
+optional). Archive Release + GitHub mirror done (both carry the zip; the mirror
++ Nexus also carry the AppImage — CI fully hands-off, 4th straight). A pure
+UI-polish release off the feat/command-deck-cleanup branch:
+- COMMAND DECK DECLUTTER: the leftover "HANGAR BAY" heading + subtitle (filler
+  left by the earlier window merge) were REMOVED — the overview cards now flow
+  straight into a slim `.hangar-toolbar` of tiny buttons (Update all, Check
+  updates, Install archive, Import existing, Config Editor). "Install folder" and
+  "Open ~mods" MOVED to Settings → SHORTCUTS (their handlers bind by
+  [data-action]/[data-open] selector, so DOM location is irrelevant). The shared
+  `.hangar-section-head` CSS is KEPT — Diagnostics' "PAK & IOSTORE LOAD ORDER"
+  section still uses it (src/index.html ~line 192).
+- NEW APP ICON: `build/make-icon.py` (Pillow, 4× supersample) renders the app's
+  holo emblem (cyan hexagon + amber six-spoke command hub on a dark space tile
+  with HUD corner brackets) → `build/icon.ico` (16–256), `build/icon.png` (512,
+  Linux), `src/assets/app-icon.png` (256, runtime window icon). Wired
+  win.icon=build/icon.ico + linux.icon=build/icon.png in package.json, and the
+  BrowserWindow icon in main.js. VERIFIED by extracting the icon back out of the
+  built exe: the shipping PORTABLE exe embeds the branded icon; the inner
+  win-unpacked electron exe keeps the DEFAULT icon because signAndEditExecutable
+  stays false (rcedit skipped) — not user-facing, and BrowserWindow.icon covers
+  the running window/taskbar. Regenerate with `python build/make-icon.py`.
+package.json + lib/nexus.js Application-Version bumped to 1.7.1; CHANGELOG dated.
+STILL OUTSTANDING (unchanged): press Publish on the Nexus page + paste
+NEXUS_DESCRIPTION.bbcode + announce (Update Launcher Version.bat 1.7.1 <files
+url>) — page 121 is STILL a draft, so NO announcement has run for any version;
+archive-token still lacks `workflow` scope (dev history mirror stalled, release
+assets fine); Steam Deck hardware test; ea-compat.json seed.
+NEXT FEATURE (discussed, not started): a built-in browser in the Holonet page so
+NON-PREMIUM Nexus users can download/install mods without leaving the app —
+solving the free-account gap where premium is required for API-driven downloads.
+
+## v1.7.0 RELEASED 2026-09-05 (merged to main, tag v1.7.0)
 
 Nexus: file 575 (Windows zip, main + primary MM download) + file 576 (Linux
 AppImage, optional). Archive Release + GitHub mirror done (both carry the zip;
@@ -73,7 +107,7 @@ follow-up is to name paks after the mod. User's real setup: Mod Command's
 adopted ZCSDKBridge library copy was v0.2 while disk had v0.3 → the Settings
 card shows "Update to 0.3" (unversioned copy) until the user presses it.
 
-## v1.6.0 RELEASED 2026-09-04 (merged to main, tag v1.6.0) — CURRENT
+## v1.6.0 RELEASED 2026-09-04 (merged to main, tag v1.6.0)
 
 Nexus: file 562 (Windows zip, main + primary MM) + file 563 (Linux AppImage,
 optional). Archive Release + GitHub mirror (zip + AppImage, CI fully

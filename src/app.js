@@ -1044,13 +1044,18 @@ function renderSettings() {
   // UE4SS
   $('#ue4ss-settings-status').textContent = state.ue4ss.message;
   $('#btn-install-ue4ss').textContent = state.ue4ss.healthy ? 'Reinstall latest' : 'Download & install';
-  // ZCSDK Runtime (bundled with the app)
+  // ZCSDK Runtime (newest GitHub release; bundled copy as the offline fallback)
   const zc = state.zcsdk || {};
+  const zcPkg = zc.available || null;
   $('#zcsdk-settings-status').textContent = zc.message || '—';
   const zcBtn = $('#btn-install-zcsdk');
-  zcBtn.disabled = !zc.bundled;
-  zcBtn.textContent = !zc.bundled ? 'Not bundled'
-    : (zc.installed ? (zc.updateAvailable ? `Update to ${zc.bundled.version}` : 'Reinstall') : `Install ${zc.bundled.version || ''}`.trim());
+  zcBtn.disabled = !zcPkg;
+  zcBtn.textContent = !zcPkg ? 'Unavailable'
+    : (zc.installed ? (zc.updateAvailable ? `Update to ${zcPkg.version}` : 'Reinstall') : `Install ${zcPkg.version || ''}`.trim());
+  zcBtn.title = !zcPkg ? 'GitHub is unreachable and this build has no bundled runtime copy.'
+    : (zcPkg.source === 'github'
+      ? `Downloads ZCSDK Runtime ${zcPkg.version} from the EnvianMods/ZCSDK-Runtime-Release GitHub repo`
+      : `Installs the bundled ZCSDK Runtime ${zcPkg.version || ''}`.trim());
   $('#set-game-path').textContent = state.settings.gamePath || 'Not set';
   const storage = state.storage || {};
   $('#set-storage-path').textContent = storage.root
@@ -1168,8 +1173,28 @@ $('#btn-install-zcsdk').addEventListener('click', async () => {
   }
 });
 
-// Install the bundled ZCSDK Runtime; fetches UE4SS first when it is missing.
-// Returns true when the runtime ended up installed.
+// Settings → ZCSDK Runtime → Check for updates: re-read latest.json now.
+$('#btn-check-zcsdk').addEventListener('click', async () => {
+  const btn = $('#btn-check-zcsdk');
+  btn.disabled = true;
+  try {
+    const res = await call('checkZcsdkRuntime');
+    if (!res) return;
+    state = res.state;
+    render();
+    const zc = res.status || {};
+    if (!res.remote) toast('Could not reach GitHub (EnvianMods/ZCSDK-Runtime-Release) — the bundled runtime copy is still available.', 'warn', 7000);
+    else if (zc.installed && zc.updateAvailable) toast(`ZCSDK Runtime ${res.remote.version} is available — press Update.`, 'info', 7000);
+    else if (zc.installed) toast(`ZCSDK Runtime is up to date (latest release ${res.remote.version}).`);
+    else toast(`Latest ZCSDK Runtime release: ${res.remote.version}. Press Install when an SDK mod needs it.`);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// Install the ZCSDK Runtime (newest GitHub release, else the bundled copy);
+// fetches UE4SS first when it is missing. Returns true when the runtime ended
+// up installed.
 async function installZcsdkRuntime() {
   if (!state.ue4ss || !state.ue4ss.installed) {
     const go = window.confirm(
@@ -1187,7 +1212,7 @@ async function installZcsdkRuntime() {
   state = res.state;
   pendingUe4ssOrder = null;
   render();
-  toast(`ZCSDK Runtime ${res.version ? res.version + ' ' : ''}installed — content mods built with the Zero Company Mod SDK are now discovered by the game.`);
+  toast(`ZCSDK Runtime ${res.version ? res.version + ' ' : ''}installed${res.source === 'github' ? ' from GitHub' : ''} — content mods built with the Zero Company Mod SDK are now discovered by the game.`);
   return true;
 }
 
@@ -1200,7 +1225,7 @@ async function offerZcsdkRuntime(needing) {
   const one = needing.length === 1;
   const go = window.confirm(
     `${names} ${one ? 'is' : 'are'} built with the Zero Company Mod SDK and need${one ? 's' : ''} the ZCSDK Runtime, which ${why}.\n\n` +
-    'Install the bundled ZCSDK Runtime now? (Two UE4SS mods: ZCSDKBridge + ZCSDKLoader.)');
+    'Install the ZCSDK Runtime now? (Two UE4SS mods, ZCSDKBridge + ZCSDKLoader — the newest release from GitHub, or the bundled copy when offline.)');
   if (!go) {
     toast('You can install the ZCSDK Runtime any time from Settings → ZCSDK Runtime.', 'warn', 8000);
     return;

@@ -1,5 +1,16 @@
 # Zero Company Mod Command — Changelog
 
+## v1.8.3 (2026-09-05)
+
+**Linked the wrong page? Unlink or relink any mod**
+- Clicking a linked mod's **◈ NEXUS** or **⎇ GITHUB** badge now opens the
+  source dialog instead of jumping straight to the website. A new **Current
+  source** section shows what the mod is linked to, with **↗ View page** to
+  check it (Nexus pages open inside the app) and **⊘ Unlink** to detach the mod
+  back to LOCAL. Pick a different match in the sections below to relink it.
+- Unlinking also clears any pending update prompt, so a mistaken link can't
+  keep offering updates from the wrong page.
+
 ## v1.8.2 (2026-09-05)
 
 **Link mods finds the right Nexus page — even when the title looks nothing like the mod**

@@ -1295,6 +1295,19 @@ const handlers = {
     return out;
   },
 
+  // Detach a mod from its update source (back to LOCAL). setOrigin also clears
+  // any pending updateInfo, so a wrong link can't keep prompting for updates.
+  'unlink-origin': async (_e, { id }) => {
+    const mod = store.getMod(id);
+    if (!mod) throw new Error('That mod is no longer installed.');
+    const was = mod.origin && mod.origin.type !== 'local'
+      ? (mod.origin.type === 'nexus' ? `Nexus mod ${mod.origin.modId}` : mod.origin.repo)
+      : null;
+    engine.setOrigin(id, { type: 'local' });
+    log('info', `unlink-origin: ${mod.name} detached from ${was || 'no source'}`);
+    return { unlinked: was, state: fullState() };
+  },
+
   'link-origin': async (_e, { id, type, ref }) => {
     const mod = store.getMod(id);
     if (!mod) throw new Error('That mod is no longer installed.');

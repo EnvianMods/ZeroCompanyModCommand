@@ -160,20 +160,20 @@ function renderMods() {
     badge.className = `mod-badge badge-${mod.modType}`;
     badge.textContent = TYPE_LABEL[mod.modType] || mod.modType;
 
-    // Source badge: where the mod came from; click opens its page.
+    // Source badge: where the mod came from. Click opens the source dialog —
+    // view the page, relink to a different source, or unlink back to LOCAL —
+    // so a wrong link is never locked in.
     const originType = mod.origin ? mod.origin.type : 'local';
     const srcBadge = document.createElement('button');
     srcBadge.className = `mod-badge src-badge src-${originType}`;
     if (originType === 'nexus') {
       srcBadge.textContent = '◈ NEXUS';
-      srcBadge.title = `Nexus mod ${mod.origin.modId}${mod.origin.version ? ` · v${mod.origin.version}` : ''} — click to open the mod page`;
-      srcBadge.addEventListener('click', () =>
-        call('openExternal', `https://www.nexusmods.com/starwarszerocompany/mods/${mod.origin.modId}`));
+      srcBadge.title = `Nexus mod ${mod.origin.modId}${mod.origin.version ? ` · v${mod.origin.version}` : ''} — click to view, relink or unlink`;
+      srcBadge.addEventListener('click', () => openLinkModal(mod));
     } else if (originType === 'github') {
       srcBadge.textContent = '⎇ GITHUB';
-      srcBadge.title = `${mod.origin.repo}${mod.origin.tag ? ` · ${mod.origin.tag}` : ''} — click to open the repository`;
-      srcBadge.addEventListener('click', () =>
-        call('openExternal', `https://github.com/${mod.origin.repo}`));
+      srcBadge.title = `${mod.origin.repo}${mod.origin.tag ? ` · ${mod.origin.tag}` : ''} — click to view, relink or unlink`;
+      srcBadge.addEventListener('click', () => openLinkModal(mod));
     } else {
       srcBadge.textContent = 'LOCAL · link?';
       srcBadge.title = 'No update source — click to link this mod to its Nexus page or Forge repo so updates can be tracked';
@@ -2583,6 +2583,18 @@ async function openLinkModal(mod) {
   linkTarget = mod;
   $('#link-wizard-modal').classList.add('hidden'); // one dialog at a time
   $('#link-mod-name').textContent = `“${mod.name}”`;
+  // Already linked? Show the current source with View / Unlink; the sections
+  // below then act as "relink" (link-origin simply replaces the origin).
+  const cur = $('#link-current');
+  const o = mod.origin && mod.origin.type !== 'local' ? mod.origin : null;
+  if (o) {
+    $('#link-current-text').textContent = o.type === 'nexus'
+      ? `◈ Nexus mod ${o.modId}${o.version ? ` · v${o.version}` : ''}`
+      : `⎇ ${o.repo}${o.tag ? ` · ${o.tag}` : ''}`;
+    cur.classList.remove('hidden');
+  } else {
+    cur.classList.add('hidden');
+  }
   $('#link-nexus-search').value = '';
   $('#link-nexus-ref').value = '';
   $('#link-nexus-results').innerHTML = '';
@@ -2630,6 +2642,31 @@ async function doLink(type, ref) {
   $('#link-modal').classList.add('hidden');
   toast(`Linked to ${res.linked} — updates are now tracked.`);
 }
+
+// Current-source actions (linked mods only). View keeps Nexus in-app via the
+// isolated panel; GitHub has no in-app viewer so it opens externally.
+$('#btn-link-open').addEventListener('click', () => {
+  const o = linkTarget && linkTarget.origin;
+  if (!o || o.type === 'local') return;
+  if (o.type === 'nexus') openNexusDownload(linkTarget.name, `https://www.nexusmods.com/starwarszerocompany/mods/${o.modId}`, { view: true });
+  else call('openExternal', `https://github.com/${o.repo}`);
+});
+
+$('#btn-link-unlink').addEventListener('click', async () => {
+  if (!linkTarget) return;
+  const btn = $('#btn-link-unlink');
+  btn.disabled = true;
+  try {
+    const res = await call('unlinkOrigin', linkTarget.id);
+    if (!res) return;
+    state = res.state;
+    render();
+    $('#link-modal').classList.add('hidden');
+    toast(`“${linkTarget.name}” is now LOCAL — no update source${res.unlinked ? ` (was ${res.unlinked})` : ''}. Link it again any time from its badge.`, 'info', 7000);
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 $('#btn-link-nexus').addEventListener('click', () => {
   const ref = $('#link-nexus-ref').value.trim();

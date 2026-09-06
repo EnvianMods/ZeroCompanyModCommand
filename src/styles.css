@@ -643,6 +643,9 @@ body.reduced-motion * { transition: none !important; animation: none !important;
 .import-meta { font-size: 11px; color: var(--text-dim); font-family: var(--mono); }
 
 .link-mod-name { color: var(--amber); font-weight: 700; }
+.link-current { border-top: none; padding-top: 0; }
+.link-current-text { flex: 1; min-width: 0; font-size: 12px; font-family: var(--mono); color: var(--holo); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.link-current .lm-none { margin-top: 2px; }
 .link-section { margin-bottom: 14px; padding-top: 8px; border-top: 1px solid rgba(79, 209, 255, 0.12); }
 .link-section-title { font-size: 11px; font-weight: 700; letter-spacing: 2px; color: var(--amber); margin-bottom: 8px; }
 .link-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }

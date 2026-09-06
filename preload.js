@@ -59,6 +59,7 @@ contextBridge.exposeInMainWorld('zc', {
   scanUnmanaged: () => invoke('scan-unmanaged'),
   adoptMods: (ids) => invoke('adopt-mods', { ids }),
   linkOrigin: (id, type, ref) => invoke('link-origin', { id, type, ref }),
+  unlinkOrigin: (id) => invoke('unlink-origin', { id }),
   linkMods: () => invoke('link-mods'),
   searchLinkMods: (query, modId) => invoke('link-search', { query, modId }),
   promotedMods: () => invoke('nexus-promoted'),

@@ -50,6 +50,7 @@ contextBridge.exposeInMainWorld('zc', {
   unregisterNxm: () => invoke('unregister-nxm'),
   installUe4ss: () => invoke('install-ue4ss'),
   installZcsdkRuntime: () => invoke('install-zcsdk-runtime'),
+  checkZcsdkRuntime: () => invoke('check-zcsdk-runtime'),
   browseNexus: (opts) => invoke('nexus-browse', opts),
   browseGithub: (opts) => invoke('github-browse', opts),
   installGithub: (fullName) => invoke('github-install', { fullName }),

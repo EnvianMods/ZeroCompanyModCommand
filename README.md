@@ -154,11 +154,15 @@ automatically for IoStore package inspection; a different copy can be selected i
   latest experimental UE4SS runtime zip from GitHub (UE4SS-RE/RE-UE4SS) and installs
   it into `Binaries/Win64`.
 - **ZCSDK Runtime one-click install** — Settings → ZCSDK Runtime installs the two
-  UE4SS mods (ZCSDKBridge + ZCSDKLoader) that SDK-built content mods need, from
-  `tools/ZCSDKRuntime.zip` bundled with the app (`tools/zcsdk-runtime.json` holds
-  the bundled version). Existing copies are vaulted and replaced by name; installing
-  an SDK-built mod without a working runtime offers the install immediately, and
-  UE4SS is fetched first when it is missing.
+  UE4SS mods (ZCSDKBridge + ZCSDKLoader) that SDK-built content mods need. The SDK
+  publishes every runtime build to `github.com/EnvianMods/ZCSDK-Runtime-Release`
+  (a Release zip + `latest.json` at the repo root); Mod Command reads `latest.json`
+  at startup (and on "Check for updates"), downloads the newest release, and offers
+  "Update to x" when the installed copy is behind — no Mod Command release needed
+  for a runtime update. `tools/ZCSDKRuntime.zip` (+ `tools/zcsdk-runtime.json`)
+  stays bundled as the offline fallback. Existing copies are vaulted and replaced
+  by name; installing an SDK-built mod without a working runtime offers the install
+  immediately, and UE4SS is fetched first when it is missing.
 - **Incompatibility check** — pairwise conflict detection between enabled mods:
   **CONFIRMED** pairs modify the same game assets (asset paths extracted from each mod's
   `.utoc` via `retoc list --path`); **SUSPECTED** pairs ship identically named files.

@@ -384,6 +384,20 @@ app.whenReady().then(() => {
     const info = await checkLauncherUpdate();
     if (info.available) sendEvent({ type: 'launcher-update', info });
   });
+  // ZCSDK Runtime: learn the newest GitHub release (the Settings card and the
+  // install path use it); nudge once per version when an installed runtime is
+  // behind it.
+  win.webContents.once('did-finish-load', async () => {
+    const remote = await zcsdkRt.latestRuntime();
+    if (!remote) return;
+    const st = engine.zcsdkStatus();
+    if (st.available && st.available.source === 'github') sendEvent({ type: 'state', state: fullState() });
+    if (st.installed && st.updateAvailable && store.settings.zcsdkNoticedVersion !== remote.version) {
+      store.settings.zcsdkNoticedVersion = remote.version;
+      store.save();
+      sendEvent({ type: 'toast', message: `ZCSDK Runtime ${remote.version} is available — update it from Settings → ZCSDK Runtime.` });
+    }
+  });
   // Fresh store + existing archive → restore mods/profiles/vault from it.
   win.webContents.once('did-finish-load', async () => {
     const results = await autoRestoreFromArchive();
@@ -1480,14 +1494,51 @@ const handlers = {
   },
 
   // One-click prerequisite for content mods built with the Zero Company Mod
-  // SDK: installs the bundled ZCSDK Runtime (two UE4SS mods) from tools/.
+  // SDK: installs the ZCSDK Runtime (two UE4SS mods) — the newest release from
+  // the EnvianMods/ZCSDK-Runtime-Release repo when GitHub is reachable, else
+  // the copy bundled in tools/.
   'install-zcsdk-runtime': async () => {
     if (!store.settings.gamePath) throw new Error('Locate the game folder in Settings first.');
-    const bundled = zcsdkRt.bundledRuntime();
-    if (!bundled) throw new Error('This build ships without the ZCSDK Runtime package (tools/ZCSDKRuntime.zip).');
-    const res = await engine.installZcsdkRuntime(bundled.zip, bundled.version);
-    log('info', `ZCSDK Runtime ${bundled.version || ''} installed (${res.replaced} previous cop${res.replaced === 1 ? 'y' : 'ies'} replaced)`);
-    return { state: fullState(), version: bundled.version, replaced: res.replaced };
+    await zcsdkRt.latestRuntime(); // cached for an hour; makes the pick below current
+    const pkg = zcsdkRt.availableRuntime();
+    if (!pkg) throw new Error('No ZCSDK Runtime package is available — GitHub is unreachable and this build ships without tools/ZCSDKRuntime.zip.');
+    let zipPath = pkg.zip || null;
+    let version = pkg.version;
+    let source = pkg.source;
+    let downloaded = null;
+    if (pkg.source === 'github') {
+      try {
+        sendEvent({ type: 'toast', message: `Downloading ZCSDK Runtime ${pkg.version} from GitHub…` });
+        downloaded = await nexus.downloadToFile(pkg.url, store.stagingDir, pkg.asset, (got, total) => {
+          sendEvent({ type: 'progress', label: 'ZCSDK Runtime', received: got, total });
+        });
+        zipPath = downloaded;
+      } catch (e) {
+        const bundled = zcsdkRt.bundledRuntime();
+        if (!bundled) throw new Error(`Could not download ZCSDK Runtime ${pkg.version} from GitHub: ${e.message}`);
+        log('warn', `ZCSDK Runtime ${pkg.version} download failed (${e.message}) — installing the bundled ${bundled.version || 'copy'} instead`);
+        sendEvent({ type: 'toast', kind: 'warn', message: `GitHub download failed — installing the bundled ZCSDK Runtime ${bundled.version || ''} instead.` });
+        zipPath = bundled.zip;
+        version = bundled.version;
+        source = 'bundled';
+      }
+    }
+    let res;
+    try {
+      res = await engine.installZcsdkRuntime(zipPath, version);
+    } finally {
+      if (downloaded) fs.rmSync(downloaded, { force: true });
+    }
+    store.settings.zcsdkNoticedVersion = version || null;
+    store.save();
+    log('info', `ZCSDK Runtime ${version || ''} installed from ${source} (${res.replaced} previous cop${res.replaced === 1 ? 'y' : 'ies'} replaced)`);
+    return { state: fullState(), version, source, replaced: res.replaced };
+  },
+
+  // Settings → ZCSDK Runtime → Check for updates: re-reads latest.json now.
+  'check-zcsdk-runtime': async () => {
+    const remote = await zcsdkRt.latestRuntime({ force: true });
+    return { state: fullState(), remote, status: engine.zcsdkStatus() };
   },
 };
 

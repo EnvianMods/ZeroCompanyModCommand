@@ -1,5 +1,25 @@
 # Zero Company Mod Command — Changelog
 
+## v1.9.1 (2026-09-06)
+
+**ZCSDK Runtime updates come from GitHub**
+- The runtime that SDK-built content mods need (ZCSDKBridge + ZCSDKLoader) is
+  now published by the Zero Company Mod SDK to the
+  `EnvianMods/ZCSDK-Runtime-Release` repo. Mod Command reads that repo's
+  `latest.json` at startup and installs the newest release from there, so a
+  runtime update no longer waits for a Mod Command release.
+- Settings → ZCSDK Runtime shows which version an install would use and where
+  it comes from, offers "Update to x" when the installed copy is behind the
+  newest release, and gained a "Check for updates" button that re-reads the
+  repo immediately. A one-time notice appears at startup when an installed
+  runtime is behind a new release.
+- The copy bundled with the app (`tools/ZCSDKRuntime.zip`, now 0.5) stays as
+  the offline fallback: when GitHub is unreachable, or the download fails, the
+  bundled copy installs instead.
+- "Update available" now means a part is genuinely behind (numeric compare)
+  or unversioned; a hand-deployed dev copy that is newer than the package no
+  longer shows as an update.
+
 ## v1.9.0 (2026-09-06)
 
 **Installing another version of a mod joins its existing entry**

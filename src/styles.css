@@ -320,6 +320,7 @@ body.reduced-motion * { transition: none !important; animation: none !important;
   padding: 13px 0; border-bottom: 1px solid rgba(79, 209, 255, 0.08);
 }
 .setting-row:last-child { border-bottom: none; }
+.setting-actions { display: flex; gap: 8px; flex-shrink: 0; }
 .setting-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .setting-name { font-size: 13px; font-weight: 600; }
 .setting-value { font-size: 11px; color: var(--text-dim); word-break: break-all; }

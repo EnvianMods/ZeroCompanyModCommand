@@ -19,14 +19,25 @@ const { checkLauncherUpdate } = require('./lib/launcher-update');
 const { log, logText } = require('./lib/log');
 const report = require('./lib/report');
 
-// Data lives next to the portable exe, or in ./data when running from source.
+// App data (settings, staging, indexes) lives in the OS per-user app-data
+// folder — %APPDATA%\ZeroCompanyModCommand on Windows — never beside the exe.
+// (The mod ARCHIVE is separate: it lives in the game folder, see below.)
+// Running from source keeps using ./data so a dev checkout stays self-contained.
+const APPDATA_DIR_NAME = 'ZeroCompanyModCommand';
+
 function resolveDataDir() {
   if (process.env.ZC_DATA_DIR) return process.env.ZC_DATA_DIR; // test harness override
-  if (process.env.PORTABLE_EXECUTABLE_DIR) {
-    return path.join(process.env.PORTABLE_EXECUTABLE_DIR, 'ZeroCompanyModCommand-data');
-  }
-  if (app.isPackaged) return path.join(app.getPath('userData'), 'data');
-  return path.join(__dirname, 'data');
+  if (!app.isPackaged && !process.env.PORTABLE_EXECUTABLE_DIR) return path.join(__dirname, 'data');
+  const dir = path.join(app.getPath('appData'), APPDATA_DIR_NAME);
+  // A pre-1.9.0 data folder (next to the portable exe, or under userData) is
+  // moved into place once — copied, verified, then renamed aside as a backup.
+  const { migrateLegacyDataDir } = require('./lib/storage');
+  const legacy = [
+    process.env.PORTABLE_EXECUTABLE_DIR && path.join(process.env.PORTABLE_EXECUTABLE_DIR, 'ZeroCompanyModCommand-data'),
+    path.join(app.getPath('userData'), 'data'),
+  ].filter(Boolean);
+  for (const old of legacy) if (migrateLegacyDataDir(old, dir)) break;
+  return dir;
 }
 
 const store = new Store(resolveDataDir());
@@ -35,7 +46,7 @@ let win = null;
 
 // ---------------------------------------------------------- mod archive location
 // The archive (library/backups/versions + a mirrored manifest) lives in the
-// GAME folder by default — <game>\ZeroCompanyModArchive — so mods survive app
+// GAME folder by default — <game>\ModCommandArchive — so mods survive app
 // updates and deletions, and a fresh install can restore everything from it.
 // settings.storageDir overrides with a custom location.
 
@@ -51,6 +62,36 @@ function resolveStorageRoot() {
 function ensureStorage() {
   const desired = resolveStorageRoot();
   if (path.resolve(desired) === path.resolve(store.storageRoot)) return null;
+  // A pre-1.9.0 archive under the old folder name sits beside where the new
+  // one belongs: rename it in place (same volume, atomic, keeps everything
+  // including the mirrored manifest) rather than copying it entry by entry.
+  if (store.settings.gamePath && !store.settings.storageDir) {
+    const legacy = path.join(store.settings.gamePath, storageLib.LEGACY_ARCHIVE_DIR_NAME);
+    if (fs.existsSync(legacy)) {
+      // Files in the legacy folder other than its mirrored manifest.
+      const legacyContent = () => storageLib.countFilesRec(legacy) - (fs.existsSync(path.join(legacy, 'manager-data.json')) ? 1 : 0);
+      if (!fs.existsSync(desired)) {
+        try {
+          fs.renameSync(legacy, desired);
+          log('info', `mod archive renamed ${storageLib.LEGACY_ARCHIVE_DIR_NAME} -> ${storageLib.ARCHIVE_DIR_NAME}`);
+        } catch (err) {
+          log('warn', `could not rename the legacy archive folder (${err.message}); migrating entries instead`);
+          fs.mkdirSync(desired, { recursive: true });
+          storageLib.migrateStorage(legacy, desired);
+        }
+      } else if (legacyContent() === 0) {
+        // An older build ran after the rename and re-created an empty legacy
+        // folder (plus, at most, a stale mirror): drop it so nothing lingers.
+        try { fs.rmSync(legacy, { recursive: true, force: true }); log('info', `removed empty legacy archive folder ${storageLib.LEGACY_ARCHIVE_DIR_NAME}`); } catch (_) {}
+      } else {
+        // Both populated: merge the legacy entries in (never clobbering an
+        // entry that already exists under the new name), then drop the shell.
+        const res = storageLib.migrateStorage(legacy, desired);
+        log('info', `merged ${res.moved} entr(y/ies) from a re-created ${storageLib.LEGACY_ARCHIVE_DIR_NAME} into ${storageLib.ARCHIVE_DIR_NAME}`);
+        try { if (legacyContent() === 0) fs.rmSync(legacy, { recursive: true, force: true }); } catch (_) {}
+      }
+    }
+  }
   fs.mkdirSync(desired, { recursive: true });
   const res = storageLib.migrateStorage(store.storageRoot, desired);
   store.setStorageRoot(desired);
@@ -1466,6 +1507,19 @@ async function installPaths(paths) {
       for (const mod of installedMods(res)) {
         log('info', `installed "${mod.name}" (${mod.modType}) from ${path.basename(p)}`);
         results.push({ source: path.basename(p), ok: true, name: mod.name, modType: mod.modType, warnings: mod.warnings || [] });
+        // Same mod (modinfo title + author) at another version — it joined the
+        // existing line instead of becoming a new entry; say what happened.
+        const va = mod.versionAction;
+        if (va) {
+          const v = (x) => (x ? `v${x}` : 'an unversioned copy');
+          const message = va.action === 'archived'
+            ? `“${mod.name}”: ${v(va.version)} is older than the installed ${v(va.current)}, so it was archived as an alternate version — pick it any time from the ⧗ versions button.`
+            : va.action === 'updated'
+              ? `“${mod.name}” updated ${v(va.previous)} → ${v(va.version)}; the previous version is kept in ⧗ versions.`
+              : `“${mod.name}” ${v(va.version)} reinstalled; the previous copy is kept in ⧗ versions.`;
+          log('info', `version-aware install: ${message}`);
+          results.push({ source: path.basename(p), ok: true, note: true, name: mod.name, modType: mod.modType, message });
+        }
         // SDK-built content needs the ZCSDK Runtime to be discovered by the game.
         if (mod.zcsdk) {
           const rt = engine.zcsdkStatus();

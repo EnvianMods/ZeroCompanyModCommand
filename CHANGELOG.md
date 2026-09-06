@@ -1,5 +1,28 @@
 # Zero Company Mod Command — Changelog
 
+## v1.9.0 (2026-09-06)
+
+**Installing another version of a mod joins its existing entry**
+- When a mod's `modinfo.json` names the same title (and author) as a mod you
+  already have, installing it no longer creates a second entry. A **newer**
+  version replaces the installed one and archives the old version; an **older**
+  version is archived as an alternate without touching your install; the
+  **same** version is a reinstall. The mod keeps its name, enabled state, load
+  and start-order slots, and its place in your profiles.
+- Every archived version shows in the mod's **⧗ versions** button, so you can
+  roll back or load a different version for testing in one click. Version
+  history now follows the title the author shipped, so renaming a mod no longer
+  strands its archived versions.
+
+**Nothing is stored beside the app any more**
+- Settings and working data now live in your per-user app-data folder
+  (`%APPDATA%\ZeroCompanyModCommand` on Windows). A data folder from an
+  earlier version found next to the exe is copied there on first start and
+  left behind renamed `.migrated-<date>`, never deleted.
+- The mod archive in the game folder is now `ModCommandArchive`. An existing
+  `ZeroCompanyModArchive` is renamed in place on first start, with everything
+  in it (library, backups, archived versions, mirrored manifest) untouched.
+
 ## v1.8.3 (2026-09-05)
 
 **Linked the wrong page? Unlink or relink any mod**

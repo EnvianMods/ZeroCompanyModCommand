@@ -214,20 +214,29 @@ lib/store.js       portable JSON store  → data/manager-data.json
 lib/mods.js        mod engine: classify/install/deploy/order/conflicts/UE4SS
 lib/archive.js     zip (extract-zip) + 7z/rar (7-Zip CLI)
 src/               UI (index.html / styles.css / app.js) — holo-terminal theme
-data/              settings + mod library (canonical copies of installed mods)
+data/              settings when running from source (shipped builds use %APPDATA%\ZeroCompanyModCommand)
 ```
 
 Mods keep their canonical files in the **mod archive** — by default
-`<game>\ZeroCompanyModArchive\` (library/ + backups/ + versions/ + a mirrored
+`<game>\ModCommandArchive\` (library/ + backups/ + versions/ + a mirrored
 manifest), so mods survive app updates and deletions; Settings → Paths can move
-it anywhere (copy-verify-delete migration) or reset it. Enabling copies files
-into the game, disabling removes them, uninstalling deletes the library copy.
-A fresh install that finds an archive restores everything from it
-automatically, and a one-time scan after the first game connection offers any
-unmanaged/orphaned/other-manager mods for adoption (also on demand:
-Import existing → "Import from a manager folder…"). The settings file itself
-stays app-side (`data/manager-data.json` in dev, `ZeroCompanyModCommand-data`
-next to the portable exe).
+it anywhere (copy-verify-delete migration) or reset it. A pre-1.9.0 archive
+under the old `ZeroCompanyModArchive` name is renamed in place on startup.
+Enabling copies files into the game, disabling removes them, uninstalling
+deletes the library copy. A fresh install that finds an archive restores
+everything from it automatically, and a one-time scan after the first game
+connection offers any unmanaged/orphaned/other-manager mods for adoption (also
+on demand: Import existing → "Import from a manager folder…"). The settings
+file itself lives in the per-user app-data folder —
+`%APPDATA%\ZeroCompanyModCommand` on Windows — never beside the exe
+(`data/manager-data.json` when running from source).
+
+Installs are **version-aware**: a mod whose `modinfo.json` names the same
+title (and author) as an installed mod joins that mod's line instead of
+becoming a new entry. A newer version replaces the install and vaults the old
+one; an older version is vaulted as an alternate without touching the install;
+the same version is a reinstall. The ⧗ versions button then offers every
+archived version for rollback or testing.
 
 ## Releases
 
@@ -236,9 +245,12 @@ npm run dist
 ```
 
 produces `release/ZeroCompanyModCommand.exe` — a single portable executable. When run,
-it keeps its settings and mod library in a `ZeroCompanyModCommand-data` folder next to
-the exe (the dev `data/` folder is separate). The `nxm://` registration from a portable
-exe points at the exe's on-disk location, so keep it somewhere permanent.
+it keeps its settings in `%APPDATA%\ZeroCompanyModCommand` and the mod archive in the
+game folder under `ModCommandArchive` — nothing is written beside the exe (the dev
+`data/` folder is separate). A pre-1.9.0 `ZeroCompanyModCommand-data` folder next to
+the exe is copied into app-data on first start and left behind renamed `.migrated-<date>`.
+The `nxm://` registration from a portable exe points at the exe's on-disk location, so
+keep it somewhere permanent.
 
 Shipping structure (v1.0.0 onward):
 - version lives in `package.json`; per-version notes in `CHANGELOG.md`

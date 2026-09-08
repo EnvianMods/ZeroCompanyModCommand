@@ -1,5 +1,22 @@
 # Zero Company Mod Command — Changelog
 
+## v1.9.2 (2026-09-07)
+
+**Update checks follow the file you actually installed**
+- A Nexus-linked mod is flagged for update only when the site's own
+  "update of an existing file" chain says a newer file replaced the one you
+  installed. The page-level "Mod version" field (free text that authors rarely
+  keep in sync) is no longer consulted, so a page whose field still says 1.0.1
+  can't offer a "downgrade" from 1.0.2, and an old file line's number can't
+  masquerade as an update for a different line.
+- Mods linked by name without a file id, or whose file was retired without a
+  chain, fall back to the newest main file — and only when it is strictly newer.
+- Premium in-place updates download the file the chain points at, never a
+  different file line. Installs via a Nexus download link record the file's
+  version instead of the page's.
+- GitHub-linked mods are flagged only for a newer release tag, not merely a
+  different one.
+
 ## v1.9.1 (2026-09-06)
 
 **ZCSDK Runtime updates come from GitHub**

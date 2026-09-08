@@ -6,7 +6,7 @@ const { spawn } = require('child_process');
 
 const { Store } = require('./lib/store');
 const steam = require('./lib/steam');
-const { ModEngine, MODS_REL, LOGIC_MODS_REL, WIN64_REL, UE4SS_MODS_REL } = require('./lib/mods');
+const { ModEngine, compareVersions, MODS_REL, LOGIC_MODS_REL, WIN64_REL, UE4SS_MODS_REL } = require('./lib/mods');
 const { findSevenZip } = require('./lib/archive');
 const nexus = require('./lib/nexus');
 const ue4ssDl = require('./lib/ue4ss');
@@ -213,9 +213,11 @@ async function handleNxm(rawUrl) {
     sendEvent({ type: 'toast', message: `Nexus download requested (mod ${link.modId})…` });
     let info = null;
     try { info = await nexus.modInfo(link.modId, apiKey); } catch (_) {}
-    // Authoritative filename from the file API — CDN URLs aren't reliable for it.
-    let fileName = null;
-    try { fileName = (await nexus.fileInfo(link.modId, link.fileId, apiKey)).file_name || null; } catch (_) {}
+    // Authoritative filename + version from the file API — CDN URLs aren't
+    // reliable for the name, and the page-level mod version is free text.
+    let fileMeta = null;
+    try { fileMeta = await nexus.fileInfo(link.modId, link.fileId, apiKey); } catch (_) {}
+    const fileName = (fileMeta && fileMeta.file_name) || null;
     const uri = await nexus.downloadLink(link, apiKey);
     const dest = await nexus.downloadToFile(uri, store.stagingDir, fileName, (got, total) => {
       sendEvent({ type: 'progress', label: info ? info.name : `mod ${link.modId}`, received: got, total });
@@ -224,8 +226,8 @@ async function handleNxm(rawUrl) {
       // Same Nexus mod already installed? This is an update — replace in place
       // (all entries, when the archive holds several mods).
       const existing = store.mods.some((m) => m.origin && m.origin.type === 'nexus' && m.origin.modId === link.modId);
-      const origin = { type: 'nexus', modId: link.modId, fileId: link.fileId, version: info ? info.version : null };
-      const version = info ? info.version : null;
+      const version = (fileMeta && fileMeta.version) || (info ? info.version : null);
+      const origin = { type: 'nexus', modId: link.modId, fileId: link.fileId, version };
       if (existing) {
         const res = await engine.replaceOrigin({ type: 'nexus', modId: link.modId }, dest, origin, version);
         if (res.pendingFomod) {
@@ -269,11 +271,14 @@ async function checkForUpdates() {
     results.checked += 1;
     try {
       if (origin.type === 'nexus' && nexusKey()) {
-        const info = await nexus.modInfo(origin.modId, nexusKey());
-        const latest = info.version || null;
-        if (latest && origin.version && latest !== origin.version) {
+        // The site's file-update chain decides (see nexus.resolveUpdate) — the
+        // page-level "Mod version" field is free text authors rarely maintain.
+        const data = await nexus.filesData(origin.modId, nexusKey());
+        const r = nexus.resolveUpdate(data, origin, compareVersions);
+        if (r.target) {
           mod.updateInfo = {
-            available: true, latest, current: origin.version,
+            available: true, latest: r.target.version || r.target.name, current: r.current,
+            fileId: r.target.file_id, fileName: r.target.file_name || null,
             auto: !!(nexusUser && nexusUser.isPremium), source: 'nexus',
             url: `https://www.nexusmods.com/${nexus.GAME_DOMAIN}/mods/${origin.modId}?tab=files`,
           };
@@ -283,7 +288,9 @@ async function checkForUpdates() {
         }
       } else if (origin.type === 'github') {
         const release = await github.latestReleaseFor(origin.repo);
-        if (release && origin.tag && release.tag !== origin.tag) {
+        // Only a NEWER tag counts; unorderable tags fall back to "different".
+        const cmp = release && origin.tag ? compareVersions(release.tag, origin.tag) : null;
+        if (release && origin.tag && (cmp === null ? release.tag !== origin.tag : cmp > 0)) {
           mod.updateInfo = {
             available: true, latest: release.tag, current: origin.tag,
             auto: true, source: 'github',
@@ -1450,8 +1457,11 @@ const handlers = {
     }
     if (origin.type === 'nexus') {
       if (nexusUser && nexusUser.isPremium) {
-        const files = await nexus.filesList(origin.modId, nexusKey());
-        const file = nexus.pickPrimaryFile(files);
+        // The file the update chain pointed at (so a mod with several file
+        // lines never jumps lines); newest main file only as a fallback.
+        const data = await nexus.filesData(origin.modId, nexusKey());
+        const file = (mod.updateInfo.fileId && data.files.find((f) => f.file_id === mod.updateInfo.fileId))
+          || nexus.pickPrimaryFile(data.files);
         if (!file) throw new Error('The updated mod has no downloadable main file.');
         const uri = await nexus.downloadLink({ modId: origin.modId, fileId: file.file_id }, nexusKey());
         const dest = await nexus.downloadToFile(uri, store.stagingDir, file.file_name, (got, total) => {

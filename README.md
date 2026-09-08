@@ -19,7 +19,7 @@ automatically for IoStore package inspection; a different copy can be selected i
 
 - **Command Deck** — game detection (path, Steam build ID), mod/conflict counts,
   UE4SS / retoc / 7-Zip status, quick actions, Steam launch (`steam://run/2075800`).
-- **Hangar Bay** — install mods from `.zip` (native), `.7z`/`.rar` (via 7-Zip), loose
+- **Hangar Bay** — install mods from `.zip` (native), `.7z`/`.rar` (7-Zip, bundled on Windows), loose
   `.pak`/`.utoc`/`.ucas` files (same-name siblings are picked up automatically), or
   extracted folders. Drag & drop anywhere in the window. Enable/disable, rename, uninstall.
 - **Mod types** (auto-classified):
@@ -216,7 +216,7 @@ preload.js         contextBridge API (window.zc)
 lib/steam.js       Steam library scan + appmanifest parsing (AppID 2075800)
 lib/store.js       portable JSON store  → data/manager-data.json
 lib/mods.js        mod engine: classify/install/deploy/order/conflicts/UE4SS
-lib/archive.js     zip (extract-zip) + 7z/rar (7-Zip CLI)
+lib/archive.js     zip (bsdtar / extract-zip) + 7z/rar (7-Zip CLI — tools/7-Zip on Windows, system copy on Linux)
 src/               UI (index.html / styles.css / app.js) — holo-terminal theme
 data/              settings when running from source (shipped builds use %APPDATA%\ZeroCompanyModCommand)
 ```

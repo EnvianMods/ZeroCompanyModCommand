@@ -1,0 +1,3 @@
+7-Zip 25.01 (x64) command-line build, unmodified, from https://www.7-zip.org/a/7z2501-x64.exe
+(7z.exe + 7z.dll + License.txt). Bundled so .7z/.rar mod archives install without a separate
+7-Zip install. License: GNU LGPL + unRAR restriction + BSD 3-clause (see License.txt).

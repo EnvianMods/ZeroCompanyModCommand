@@ -1,7 +1,7 @@
 {
   "name": "zero-company-mod-command",
   "productName": "Zero Company Mod Command",
-  "version": "1.9.2",
+  "version": "1.9.3",
   "description": "Mod Command",
   "main": "main.js",
   "scripts": {

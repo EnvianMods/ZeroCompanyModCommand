@@ -1063,7 +1063,8 @@ function renderSettings() {
     : '—';
   $('#btn-storage-reset').disabled = !state.settings.gamePath || storage.inGameFolder;
   $('#set-retoc-path').textContent = state.settings.retocPath || (state.retoc.found ? `Auto: ${state.retoc.path}` : 'Auto-detect (not found)');
-  $('#set-7z-path').textContent = state.settings.sevenZipPath || (state.sevenZip ? 'Auto-detected' : 'Auto-detect (not found)');
+  $('#set-7z-path').textContent = state.settings.sevenZipPath
+    || (state.sevenZipBundled ? 'Bundled with Mod Command (7-Zip 25.01)' : (state.sevenZip ? 'Auto-detected' : 'Auto-detect (not found)'));
   $('#chk-close-on-launch').checked = !!state.settings.closeOnLaunch;
   $('#chk-reduced-motion').checked = !!state.settings.reducedMotion;
   // Game update freeze

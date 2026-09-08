@@ -1,5 +1,15 @@
 # Zero Company Mod Command — Changelog
 
+## v1.9.3 (2026-09-07)
+
+**7-Zip ships with the app**
+- `.7z` and `.rar` mod archives no longer need a separate 7-Zip install on
+  Windows: the unmodified 7-Zip 25.01 command-line build (7z.exe + 7z.dll,
+  LGPL, license included) rides along in `tools/7-Zip`. A path you set in
+  Settings still wins, then the bundled copy, then an installed 7-Zip, then
+  PATH. Settings and Diagnostics say which copy is in use.
+- Linux builds keep using the system 7-Zip (p7zip / 7zz) for now.
+
 ## v1.9.2 (2026-09-07)
 
 **Update checks follow the file you actually installed**

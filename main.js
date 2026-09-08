@@ -7,7 +7,7 @@ const { spawn } = require('child_process');
 const { Store } = require('./lib/store');
 const steam = require('./lib/steam');
 const { ModEngine, compareVersions, MODS_REL, LOGIC_MODS_REL, WIN64_REL, UE4SS_MODS_REL } = require('./lib/mods');
-const { findSevenZip } = require('./lib/archive');
+const { findSevenZip, bundledSevenZip } = require('./lib/archive');
 const nexus = require('./lib/nexus');
 const ue4ssDl = require('./lib/ue4ss');
 const zcsdkRt = require('./lib/zcsdk');
@@ -531,6 +531,7 @@ function fullState() {
     zcsdk: engine.zcsdkStatus(),
     retoc: engine.retocStatus(),
     sevenZip: !!findSevenZip(store.settings.sevenZipPath),
+    sevenZipBundled: !store.settings.sevenZipPath && findSevenZip(null) === bundledSevenZip() && !!bundledSevenZip(),
     appId: steam.APP_ID,
     paths: {
       mods: MODS_REL,
@@ -1699,8 +1700,11 @@ function diagnostics() {
   const retoc = engine.retocStatus();
   add(retoc.found ? 'good' : 'info', 'retoc',
     retoc.found ? `Found at ${retoc.path}${retoc.version ? ` (${retoc.version})` : ''}` : 'Not found (optional — used for IoStore package inspection).');
-  add(findSevenZip(store.settings.sevenZipPath) ? 'good' : 'info', '7-Zip',
-    findSevenZip(store.settings.sevenZipPath) ? 'Available for .7z/.rar archives' : 'Not found — only .zip archives can be installed.');
+  {
+    const sz = findSevenZip(store.settings.sevenZipPath);
+    add(sz ? 'good' : 'info', '7-Zip',
+      sz ? `Available for .7z/.rar archives (${sz === bundledSevenZip() ? 'bundled with Mod Command' : sz})` : 'Not found — only .zip archives can be installed.');
+  }
   const missing = store.settings.gamePath ? engine.auditDeployedFiles() : [];
   if (missing.length) {
     add('warning', 'Deployed files', `${missing.length} deployed file(s) are missing: ${missing.map((m) => m.file).join(', ')}`);
@@ -1771,6 +1775,7 @@ function buildSupportReport() {
     zcsdkStatus: engine.zcsdkStatus(),
     retoc: engine.retocStatus(),
     sevenZip: !!findSevenZip(store.settings.sevenZipPath),
+    sevenZipBundled: !store.settings.sevenZipPath && findSevenZip(null) === bundledSevenZip() && !!bundledSevenZip(),
     diagItems: diagnostics().items,
     logText: logText(250),
     paths: { gamePath: store.settings.gamePath, dataDir: store.dataDir },

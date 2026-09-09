@@ -13,3 +13,4 @@ token.txt
 # Backups and temp
 *.zcbak
 *.log
+/ZeroCompanyModCommand.exe

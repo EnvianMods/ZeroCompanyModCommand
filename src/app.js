@@ -1293,6 +1293,24 @@ $$('[data-url]').forEach((b) =>
   b.addEventListener('click', () => call('openExternal', b.dataset.url)));
 
 $('#btn-launch').addEventListener('click', async () => {
+  // Freeze on + Steam install: a Steam launch runs Steam's update check, which
+  // fails with "Disk write error" while an update is pending. Say so first.
+  const det = state.detection || {};
+  const uf = state.updateFreeze || {};
+  if (uf.wanted && det.launcher === 'steam') {
+    const go = window.confirm(
+      'Update freeze is ON.\n\n' +
+      'LAUNCH GAME goes through Steam, so Steam runs its update check first. While a game update is pending, Steam will refuse to start the game and show:\n' +
+      '    "An error occurred while launching this game : Disk write error - ...\\appmanifest_2075800.acf"\n' +
+      'That is the freeze blocking the update, not a broken install.\n\n' +
+      'To play WITHOUT updating, use DIRECT LAUNCH instead (local exe, no update check).\n' +
+      'To take the update, turn the freeze off in Settings first.\n\n' +
+      'Launch through Steam anyway?');
+    if (!go) {
+      toast('Launch cancelled — use DIRECT LAUNCH to play on your current build.', 'info', 6000);
+      return;
+    }
+  }
   const data = await call('launchGame');
   if (data) toast('Launch signal sent to Steam. May the Force be with you.');
 });

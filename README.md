@@ -113,13 +113,14 @@ automatically for IoStore package inspection; a different copy can be selected i
   history.
 - **Game update freeze** — opt-in Settings toggle (Steam installs only): sets
   `AutoUpdateBehavior "1"` in the appmanifest, locks the manifest read-only,
-  and routes the Launch button to a direct exe start while frozen. Re-asserted
+  and (since 1.9.6) leaves LAUNCH GAME as a real Steam launch — DIRECT LAUNCH is the no-update path. Re-asserted
   at startup, reported in Diagnostics, fully reversible. EA App has no per-game
   mechanism — users are pointed at the EA App's global auto-update setting.
-  While frozen, launch from Mod Command (LAUNCH GAME or the slimmer DIRECT LAUNCH
-  button both start the local exe); Steam's own Play button fails with "Disk write
-  error – appmanifest_2075800.acf" whenever an update is pending — that is the freeze
-  working, and turning it off lets Steam update.
+  While frozen, play with the slimmer DIRECT LAUNCH button (local exe, started with
+  Steam's app-id environment so the game does not relaunch itself through Steam — no
+  update check). LAUNCH GAME always goes through Steam; it and Steam's own Play button
+  fail with "Disk write error – appmanifest_2075800.acf" whenever an update is pending —
+  that is the freeze working, and turning it off lets Steam update.
 - **Installed badges in Holonet/Forge** — cards for mods already in the hangar
   show a green IN HANGAR tag; the Install button becomes ✓ Installed, or
   ⬆ Update when one is waiting.

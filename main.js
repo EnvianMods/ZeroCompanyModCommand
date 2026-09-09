@@ -904,8 +904,7 @@ const handlers = {
     } else if (store.settings.updateFreeze && detection.launcher === 'steam' && process.platform === 'win32') {
       // Frozen updates: a steam:// launch is exactly what triggers the update
       // check, so start the exe directly while the freeze is on.
-      const child = spawn(detection.exePath, [], { detached: true, stdio: 'ignore', cwd: path.dirname(detection.exePath) });
-      child.unref();
+      spawnGameExe(detection);
       sendEvent({ type: 'toast', message: 'Update freeze is on — launched the local exe directly. (While an update is pending, Steam\'s own Play button would show "Disk write error".)' });
     } else {
       // Prefer a Steam launch so overlay/cloud saves work (also correct under
@@ -922,8 +921,7 @@ const handlers = {
     if (process.platform === 'linux') {
       throw new Error('The game is a Windows build — on Linux, launch it through Steam (Proton) instead.');
     }
-    const child = spawn(detection.exePath, [], { detached: true, stdio: 'ignore', cwd: path.dirname(detection.exePath) });
-    child.unref();
+    spawnGameExe(detection);
     if (store.settings.closeOnLaunch) setTimeout(() => app.quit(), 1500);
     return fullState();
   },
@@ -1552,6 +1550,22 @@ const handlers = {
     return { state: fullState(), remote, status: engine.zcsdkStatus() };
   },
 };
+
+// Start the game exe directly, bypassing Steam's launch path (and therefore
+// its update check). The game calls SteamAPI_RestartAppIfNecessary() on boot;
+// without Steam's app-id environment that returns true, the exe exits and
+// asks Steam to relaunch it — which runs the update check we wanted to skip
+// (measured 2026-09-09: the spawned pid died in <5s and a steam.exe-parented
+// copy appeared). With SteamAppId/SteamGameId set, as the Steam client itself
+// sets them, the check returns false and the game keeps running under our pid.
+function spawnGameExe(detection) {
+  const env = detection.launcher === 'steam'
+    ? { ...process.env, SteamAppId: String(steam.APP_ID), SteamGameId: String(steam.APP_ID) }
+    : process.env;
+  const child = spawn(detection.exePath, [], { detached: true, stdio: 'ignore', cwd: path.dirname(detection.exePath), env });
+  child.unref();
+  return child;
+}
 
 async function installPaths(paths) {
   const results = [];

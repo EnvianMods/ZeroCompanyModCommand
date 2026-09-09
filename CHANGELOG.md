@@ -1,5 +1,20 @@
 # Zero Company Mod Command — Changelog
 
+## v1.9.5 (2026-09-09)
+
+**Direct launches now really bypass Steam**
+- Measured while building 1.9.4: the game calls Steam's "restart if
+  necessary" check on boot, so an exe started directly exited within five
+  seconds and Steam relaunched it — through Steam's normal launch path,
+  update check included. Every direct launch since the update freeze was
+  introduced (1.5.0) behaved this way.
+- Direct launches (the DIRECT LAUNCH button, the Settings shortcut, and the
+  frozen LAUNCH GAME path) now start the exe with Steam's own app-id
+  environment set, exactly as the Steam client does. The check then passes,
+  the game keeps running under Mod Command's launch, and no update check
+  runs. Verified: the launched process stays alive with no Steam-parented
+  copy appearing.
+
 ## v1.9.4 (2026-09-09)
 
 **Backup launch button + a clear explanation of the update-freeze error**

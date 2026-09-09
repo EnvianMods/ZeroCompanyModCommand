@@ -116,6 +116,10 @@ automatically for IoStore package inspection; a different copy can be selected i
   and routes the Launch button to a direct exe start while frozen. Re-asserted
   at startup, reported in Diagnostics, fully reversible. EA App has no per-game
   mechanism — users are pointed at the EA App's global auto-update setting.
+  While frozen, launch from Mod Command (LAUNCH GAME or the slimmer DIRECT LAUNCH
+  button both start the local exe); Steam's own Play button fails with "Disk write
+  error – appmanifest_2075800.acf" whenever an update is pending — that is the freeze
+  working, and turning it off lets Steam update.
 - **Installed badges in Holonet/Forge** — cards for mods already in the hangar
   show a green IN HANGAR tag; the Install button becomes ✓ Installed, or
   ⬆ Update when one is waiting.

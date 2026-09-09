@@ -120,6 +120,18 @@ body.reduced-motion * { transition: none !important; animation: none !important;
 }
 .launch-sub { display: block; margin-top: 2px; color: var(--amber-dim); font-size: 10px; letter-spacing: 2px; }
 
+/* Backup launch (local exe, no Steam update check): same width, slimmer, muted. */
+.launch-btn-alt {
+  margin-top: 8px; padding: 7px 10px 6px;
+  background: linear-gradient(180deg, rgba(157, 180, 198, 0.12), rgba(157, 180, 198, 0.03));
+  border: 1px solid rgba(157, 180, 198, 0.32);
+  clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
+}
+.launch-btn-alt:hover { background: rgba(157, 180, 198, 0.2); box-shadow: 0 0 12px rgba(157, 180, 198, 0.2); }
+.launch-btn-alt .launch-label { color: #9db4c6; font-size: 11px; font-weight: 700; letter-spacing: 3px; text-shadow: none; }
+.launch-btn-alt .launch-sub { margin-top: 1px; color: rgba(157, 180, 198, 0.6); font-size: 9px; letter-spacing: 1.5px; }
+.launch-btn-alt[hidden] { display: none; }
+
 .status-pip { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 11px; color: var(--text-dim); }
 .pip {
   width: 8px; height: 8px; border-radius: 50%; background: var(--text-dim);

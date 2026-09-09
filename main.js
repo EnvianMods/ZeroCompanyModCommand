@@ -906,7 +906,7 @@ const handlers = {
       // check, so start the exe directly while the freeze is on.
       const child = spawn(detection.exePath, [], { detached: true, stdio: 'ignore', cwd: path.dirname(detection.exePath) });
       child.unref();
-      sendEvent({ type: 'toast', message: 'Update freeze is on — launched the game directly (Steam launches would trigger the update check).' });
+      sendEvent({ type: 'toast', message: 'Update freeze is on — launched the local exe directly. (While an update is pending, Steam\'s own Play button would show "Disk write error".)' });
     } else {
       // Prefer a Steam launch so overlay/cloud saves work (also correct under
       // Proton on Linux/Steam Deck — Steam applies the configured launch options).
@@ -1666,7 +1666,7 @@ function diagnostics() {
     const freeze = steam.updateFreezeStatus(store.settings.gamePath);
     if (store.settings.updateFreeze) {
       if (freeze.supported && freeze.frozen && freeze.behavior === '1') {
-        add('warning', 'Game update freeze', 'ACTIVE — the game will not auto-update. Remember to unfreeze before playing online modes that require the current build, and use the manager\'s Launch button (a Steam-UI launch can still force an update).');
+        add('warning', 'Game update freeze', 'ACTIVE — the game will not auto-update. Launch from Mod Command only: while a game update is pending, Steam\'s Play button fails with "Disk write error – appmanifest_2075800.acf" (the freeze blocking the update, not damage). Turn the freeze off to let Steam update; unfreeze before online modes that need the current build.');
       } else if (freeze.supported) {
         add('warning', 'Game update freeze', 'Enabled in Settings but the manifest is not fully locked — toggle it off and on again to re-apply.');
       } else {

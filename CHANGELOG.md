@@ -1,5 +1,13 @@
 # Zero Company Mod Command — Changelog
 
+## v1.9.7 (2026-09-09)
+
+- With the update freeze on, LAUNCH GAME now stops and explains before going
+  to Steam: Steam will run its update check and, while an update is pending,
+  refuse with "Disk write error – appmanifest_2075800.acf" (the freeze at
+  work, not a broken install). OK launches through Steam exactly as before;
+  Cancel keeps you on your current build and points at DIRECT LAUNCH.
+
 ## v1.9.6 (2026-09-09)
 
 **Two launch buttons, two clear jobs**

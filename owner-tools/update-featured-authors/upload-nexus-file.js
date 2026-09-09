@@ -13,8 +13,21 @@
 // Usage: node upload-nexus-file.js <version> <zipPath> [--mod-id 121]
 //        [--name "Zero Company Mod Command"] [--category main|optional]
 //        [--no-primary] [--dry-run]
+//        [--update] [--archive-old] [--set-mod-version] [--description "..."]
 // The Windows zip stays the main + primary Mod Manager Download; extra
 // platform files (e.g. the Linux AppImage) go up as --category optional --no-primary.
+//
+// UPDATE MODE (--update, found 2026-09-09 by reading the site's own upload
+// form): instead of creating a new file row, the upload becomes a new VERSION
+// of the existing file line whose name equals --name — the same thing as the
+// form's "Update existing file" choice. Flow:
+//   GraphQL v2 modFiles(modId, gameId) → the current non-archived file with
+//   that name → { groupId, uid }
+//   POST /v3/mod-files/<groupId>/versions {upload_id, previous_version_id:<uid>,
+//        name, version, file_category, primary_mod_manager_download,
+//        archive_existing_file, update_mod_version, description, …}
+// --archive-old ticks "Archive existing file"; --set-mod-version ticks "Update
+// mod version" (the page's Mod version field becomes <version>).
 // API key: nexus-key.txt beside this script, env NEXUS_API_KEY, or the dev
 // store's plaintext nexusApiKey (pre-1.1.0 stores only — 1.1.0 encrypts it).
 
@@ -68,6 +81,11 @@ async function api(method, pathname, apiKey, body) {
   const modId = Number(arg('--mod-id', '121'));
   const fileName = arg('--name', null);
   const dryRun = process.argv.includes('--dry-run');
+  const updateMode = process.argv.includes('--update');
+  const archiveOld = process.argv.includes('--archive-old');
+  const setModVersion = process.argv.includes('--set-mod-version');
+  const description = arg('--description', null);
+  if (updateMode && !fileName) { console.error('--update needs --name "<existing file name>" to pick the file line to update.'); process.exit(1); }
   if (!version || !zipPath) {
     console.error('Usage: node upload-nexus-file.js <version> <zipPath> [--mod-id 121] [--name "..."] [--dry-run]');
     process.exit(1);
@@ -86,6 +104,21 @@ async function api(method, pathname, apiKey, body) {
   const globalId = mod.data ? mod.data.id : (mod.uid || mod.id);
   if (!globalId) throw new Error(`could not read the global mod id from: ${JSON.stringify(mod).slice(0, 200)}`);
   console.log(`mod ${modId} -> global id ${globalId}`);
+
+  // Update mode: find the live file line to become the previous version.
+  let target = null;
+  if (updateMode) {
+    const gameId = mod.data ? mod.data.game_id : mod.game_id;
+    const gql = await fetch('https://api-router.nexusmods.com/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': 'zero-company-mod-command-owner-tools' },
+      body: JSON.stringify({ query: `{ modFiles(modId:${modId}, gameId:${gameId}){ uid fileId groupId name version category } }` }),
+    }).then((r) => r.json());
+    const live = ((gql.data && gql.data.modFiles) || []).filter((f) => f.category !== 'ARCHIVED' && f.name === fileName);
+    if (live.length !== 1) throw new Error(`--update: expected exactly one live file named "${fileName}", found ${live.length}: ${JSON.stringify(live)}`);
+    target = live[0];
+    console.log(`update mode: "${target.name}" ${target.version} (file ${target.fileId}, group ${target.groupId}, uid ${target.uid}) -> ${version}${archiveOld ? ', old version archived' : ''}${setModVersion ? ', page Mod version set' : ''}`);
+  }
   if (dryRun) { console.log('dry-run: stopping before upload.'); return; }
 
   // Files over 100 MiB must go through the multipart flow (50 MiB parts).
@@ -144,14 +177,26 @@ async function api(method, pathname, apiKey, body) {
     if (i === 59) throw new Error(`upload never became available (last state: ${state})`);
   }
 
-  const file = await api('POST', '/mod-files', apiKey, {
+  const body = {
     upload_id: upload.id,
-    mod_id: globalId,
     name: fileName || basename.replace(/\.zip$/i, ''),
     version,
     file_category: arg('--category', 'main'),
     primary_mod_manager_download: !process.argv.includes('--no-primary'),
-  });
+    allow_mod_manager_download: true,
+    show_requirements_pop_up: false,
+    update_mod_version: setModVersion,
+  };
+  if (description) body.description = description;
+  let file;
+  if (target) {
+    body.previous_version_id = target.uid;
+    body.archive_existing_file = archiveOld;
+    file = await api('POST', `/mod-files/${target.groupId}/versions`, apiKey, body);
+  } else {
+    body.mod_id = globalId;
+    file = await api('POST', '/mod-files', apiKey, body);
+  }
   console.log('mod file created:', JSON.stringify(file).slice(0, 300));
   console.log(`done — https://www.nexusmods.com/${GAME_DOMAIN}/mods/${modId}?tab=files`);
 })().catch((e) => { console.error('FAILED:', e.message); process.exit(1); });

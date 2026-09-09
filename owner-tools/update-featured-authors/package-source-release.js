@@ -31,10 +31,13 @@ fs.mkdirSync(root);
 // Folders and files that never ship: dev state, secrets, build output, and
 // every binary (fetched by Build.bat instead).
 const XD = ['node_modules', 'release', 'data', '.git', 'zcbak', 'owner-tools', 'docs', '7-Zip'];
-const XF = ['*token*.txt', 'nexus-key.txt', '*.exe', '*.dll', 'ZCSDKRuntime.zip', 'zcsdk-runtime.json', 'BUNDLED.txt', 'HANDOFF.md', 'DESCRIPTION.txt', 'NEXUS_DESCRIPTION.bbcode', '*.log', 'Thumbs.db', '.DS_Store'];
+// No script-type files either: Nexus's scan quarantined the package for a
+// trivial .bat (files 752/753, 2026-09-09). Build.bat ships as Build.bat.txt.
+const XF = ['*token*.txt', 'nexus-key.txt', '*.exe', '*.dll', '*.bat', '*.cmd', '*.ps1', '*.py', '*.vbs', 'ZCSDKRuntime.zip', 'zcsdk-runtime.json', 'BUNDLED.txt', 'HANDOFF.md', 'DESCRIPTION.txt', 'NEXUS_DESCRIPTION.bbcode', '*.log', 'Thumbs.db', '.DS_Store'];
 const rc = spawnSync('robocopy', [REPO, root, '/E', '/XD', ...XD, '/XF', ...XF, '/NFL', '/NDL', '/NJH', '/NJS'], { stdio: 'inherit' });
 if (rc.status >= 8) { console.error('robocopy failed'); process.exit(1); }
 
+fs.copyFileSync(path.join(REPO, 'Build.bat'), path.join(root, 'Build.bat.txt'));
 fs.writeFileSync(path.join(root, 'README-BUILD.txt'), [
   `ZERO COMPANY MOD COMMAND v${version} - BUILD FROM SOURCE`,
   'A dedicated mod manager & launcher for STAR WARS: Zero Company, by Envian Mods',
@@ -44,17 +47,25 @@ fs.writeFileSync(path.join(root, 'README-BUILD.txt'), [
   'yourself in a couple of minutes and get exactly the build we publish on GitHub',
   `(release v${internal}: https://github.com/EnvianMods/ZeroCompanyModCommand/releases).`,
   '',
-  'HOW TO BUILD',
+  'HOW TO BUILD (one command)',
   '1. Install Node.js LTS from https://nodejs.org/ (accept the defaults). Once only.',
   '2. Unzip this package anywhere - for example Documents\\ZeroCompanyModCommand.',
-  '3. Double-click Build.bat. It installs the build dependencies (about 150 MB, once),',
-  '   fetches the bundled tools from their official sources (7-Zip, retoc, the',
-  '   ZCSDK Runtime) and builds ZeroCompanyModCommand.exe into this folder.',
-  '4. Run ZeroCompanyModCommand.exe. Your mods and settings live in',
-  '   %APPDATA%\\ZeroCompanyModCommand, so rebuilding or updating never touches them.',
+  '3. Open a command prompt IN this folder: click the folder\'s address bar in File',
+  '   Explorer, type   cmd   and press Enter.',
+  '4. Type   npm run build   and press Enter. It installs the build dependencies',
+  '   (about 150 MB, once), fetches the bundled tools from their official sources',
+  '   (7-Zip, retoc, the ZCSDK Runtime) and builds release\\ZeroCompanyModCommand.exe.',
+  '5. Run release\\ZeroCompanyModCommand.exe (move it anywhere you like). Your mods',
+  '   and settings live in %APPDATA%\\ZeroCompanyModCommand, so rebuilding or',
+  '   updating never touches them.',
+  '',
+  'PREFER DOUBLE-CLICK? Nexus\'s file scan does not allow batch files in uploads, so',
+  'the one-click script ships as Build.bat.txt: rename it to Build.bat (File Explorer',
+  '> View > "File name extensions" makes the .txt visible) and double-click it. It',
+  'does the same steps and puts ZeroCompanyModCommand.exe next to itself.',
   '',
   'UPDATING LATER',
-  'Unzip the new package over the old folder (or into a fresh one) and run Build.bat',
+  'Unzip the new package over the old folder (or into a fresh one) and run the build',
   'again. The launcher also shows an update banner when a new version is out.',
   '',
   'PREFER A READY-MADE EXE?',

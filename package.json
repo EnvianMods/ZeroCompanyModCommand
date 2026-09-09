@@ -6,7 +6,10 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win portable"
+    "dist": "electron-builder --win portable",
+    "fetch-tools": "node build/fetch-tools.js",
+    "build-exe": "node build/fetch-tools.js && electron-builder --win portable --publish never",
+    "build": "npm ci --no-audit --no-fund && node build/fetch-tools.js && electron-builder --win portable --publish never"
   },
   "author": "Fulme",
   "license": "MIT",

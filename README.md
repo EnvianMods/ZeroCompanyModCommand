@@ -276,15 +276,20 @@ counts toward download stats, rankings, and Donation Points. GitHub gets a silen
 mirror release (source + zip) for backup and transparency, with no announcement.
 
 **Nexus ships the BUILD-FROM-SOURCE package (2026-09-09):** Nexus's automated
-scan quarantines unsigned exes for days, so the Nexus file is
-`ZeroCompanyModCommand-Source-v<public>.zip` = the source tree + `Build.bat` +
-`README-BUILD.txt`, with every binary left out (no exe/dll, no nested zip). Users
-install Node.js LTS once and double-click `Build.bat`, which runs `npm ci`,
-fetches 7-Zip (official MSI, administrative extract), retoc (GitHub release) and
-the newest ZCSDK Runtime, then runs electron-builder and drops
-`ZeroCompanyModCommand.exe` next to the batch. GitHub keeps shipping the ready
-exe + AppImage. `owner-tools/update-featured-authors/package-source-release.js`
-builds the package and refuses to produce one that contains a binary.
+scan quarantines unsigned exes for days — and, as measured, ANY package that
+contains a batch/script file, however trivial (only a package with no
+exe/dll/bat/cmd/ps1/py and no nested archive came back VERIFIED). So the Nexus
+file is `ZeroCompanyModCommand-Source-v<public>.zip` = the source tree +
+`README-BUILD.txt` + `Build.bat.txt` (the one-click script, renamed so it is a
+plain text file). Users install Node.js LTS once, open a command prompt in the
+folder and run `npm run build` — which runs `npm ci`, then `build/fetch-tools.js`
+(7-Zip from the official MSI via an administrative extract, retoc from its GitHub
+release, the newest ZCSDK Runtime; the Oodle dll from the game folder if it is
+ever there), then electron-builder → `release\ZeroCompanyModCommand.exe`.
+Renaming `Build.bat.txt` to `Build.bat` gives the double-click version of the
+same steps. GitHub keeps shipping the ready exe + AppImage.
+`owner-tools/update-featured-authors/package-source-release.js` builds the
+package and refuses to produce one that contains a binary or nested archive.
 
 The project is a git repo with `origin` set to
 `github.com/EnvianMods/ZeroCompanyModCommand`. Full release flow:

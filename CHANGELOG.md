@@ -1,5 +1,21 @@
 # Zero Company Mod Command — Changelog
 
+## v1.9.4 (2026-09-09)
+
+**Backup launch button + a clear explanation of the update-freeze error**
+- New DIRECT LAUNCH button under LAUNCH GAME in the sidebar: starts the game's
+  local exe with no Steam update check. Slimmer and muted so it reads as the
+  backup option. Hidden on Linux (Proton launches go through Steam) and for
+  the EA App edition (whose main button already starts the exe).
+- The game's first patch showed what the update freeze looks like from
+  Steam's side: pressing Play in Steam while the manifest is locked fails
+  with "An error occurred while launching this game: Disk write error –
+  appmanifest_2075800.acf". That is the freeze blocking the update, not a
+  broken install. The freeze card, its confirmation, the status line, the
+  Diagnostics entry and the launch toast now say so and tell you the two ways
+  out: turn the freeze off to let Steam update, or keep launching from Mod
+  Command to stay on your current build.
+
 ## v1.9.3 (2026-09-07)
 
 **7-Zip ships with the app**

@@ -32,6 +32,10 @@
           <span class="launch-label">LAUNCH GAME</span>
           <span class="launch-sub">via Steam</span>
         </button>
+        <button id="btn-launch-local" class="launch-btn launch-btn-alt" title="Backup launch: starts the game's local exe directly, with no Steam update check. Use it while the update freeze is on, or whenever Steam refuses to launch.">
+          <span class="launch-label">DIRECT LAUNCH</span>
+          <span class="launch-sub">local exe · no update check</span>
+        </button>
         <div id="game-status-pip" class="status-pip">
           <span class="pip"></span><span id="game-status-text">Scanning…</span>
         </div>
@@ -318,7 +322,7 @@
               </div>
               <input type="checkbox" id="chk-update-freeze" class="switch" />
             </label>
-            <p class="dim freeze-note">Steam installs only: sets the game to "update only on launch" and locks the Steam manifest so no update can be scheduled; the Launch button then starts the game directly. Turn it off before playing online modes that need the current build — launching from the Steam UI itself can still force an update. EA App users: disable automatic game updates in the EA App's own settings.</p>
+            <p class="dim freeze-note">Steam installs only: sets the game to "update only on launch" and locks the Steam manifest so Steam cannot apply an update. While it is on, launch from Mod Command — both sidebar buttons start the local exe. If you press Play in Steam while a game update is pending, Steam shows <em>"An error occurred while launching this game: Disk write error – appmanifest_2075800.acf"</em>. That is the freeze blocking the update, not damage to your install: turn the freeze off here to let Steam update, or keep launching from Mod Command to stay on your current build. Online modes may need the current build. EA App users: disable automatic game updates in the EA App's own settings.</p>
           </div>
         </div>
 

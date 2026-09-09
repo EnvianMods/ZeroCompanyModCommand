@@ -106,6 +106,12 @@ function render() {
     ? `Game located${det.buildId ? ` · build ${det.buildId}` : ''}`
     : 'Game not located';
   $('#btn-launch').disabled = !det.found;
+  // Backup launch: direct exe, Windows only (Linux runs the Windows build
+  // through Proton, so Steam must launch it); pointless for the EA App
+  // edition, whose main button already starts the exe directly.
+  const localBtn = $('#btn-launch-local');
+  localBtn.hidden = state.platform === 'linux' || det.launcher === 'ea';
+  localBtn.disabled = !det.found;
   const launchSub = $('#btn-launch .launch-sub');
   if (launchSub) {
     launchSub.textContent = det.launcher === 'ea'
@@ -1078,7 +1084,7 @@ function renderSettings() {
       : 'Not available (needs a Steam-manifest install)')
     : uf.wanted
       ? (uf.frozen && uf.behavior === '1'
-        ? 'ACTIVE — manifest locked, updates only on launch, direct-exe launching'
+        ? 'ACTIVE — manifest locked. Launch from Mod Command only: Steam\'s Play button shows "Disk write error" while a game update is pending (that is the freeze working)'
         : 'Enabled but not fully applied — toggle off and on to re-apply')
       : 'Off — Steam updates the game normally';
 }
@@ -1088,7 +1094,9 @@ $('#chk-update-freeze').addEventListener('change', async (e) => {
   if (enabling && !window.confirm(
     'Freeze game updates?\n\nThe game will stop auto-updating (protecting your modded playthrough), but:\n' +
     '• online modes may require the current build\n' +
-    '• launching from the Steam UI itself can still force an update — use the Launch button here\n\n' +
+    '• launch from Mod Command only: while an update is pending, Steam\'s own Play button shows\n' +
+    '  "An error occurred while launching this game: Disk write error" — that is the freeze\n' +
+    '  blocking the update, not a broken install\n\n' +
     'You can turn this off any time.')) {
     e.target.checked = false;
     return;
@@ -1290,6 +1298,10 @@ $('#btn-launch').addEventListener('click', async () => {
 $('#btn-launch-direct').addEventListener('click', async () => {
   const data = await call('launchGameDirect');
   if (data) toast('Game launched directly.');
+});
+$('#btn-launch-local').addEventListener('click', async () => {
+  const data = await call('launchGameDirect');
+  if (data) toast('Game launched from the local exe — no Steam update check.');
 });
 
 // ------------------------------------------------------------------ drag & drop install

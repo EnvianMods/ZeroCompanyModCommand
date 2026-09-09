@@ -1,5 +1,17 @@
 # Zero Company Mod Command — Changelog
 
+## v1.9.6 (2026-09-09)
+
+**Two launch buttons, two clear jobs**
+- LAUNCH GAME always launches through Steam now, even with the update freeze
+  on (it used to switch to a direct start silently). Steam runs its update
+  check on that path; with the freeze on and an update pending it shows
+  "Disk write error", and Mod Command warns you first.
+- DIRECT LAUNCH is the no-update path: local exe, Steam's app-id environment
+  set, no relaunch through Steam, no update check.
+- The freeze card, its confirmation, Diagnostics and the README say which
+  button does what.
+
 ## v1.9.5 (2026-09-09)
 
 **Direct launches now really bypass Steam**

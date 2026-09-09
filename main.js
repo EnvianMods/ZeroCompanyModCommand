@@ -901,14 +901,14 @@ const handlers = {
       if (process.platform !== 'win32') throw new Error('The EA App edition can only be launched on Windows.');
       const child = spawn(detection.exePath, [], { detached: true, stdio: 'ignore', cwd: path.dirname(detection.exePath) });
       child.unref();
-    } else if (store.settings.updateFreeze && detection.launcher === 'steam' && process.platform === 'win32') {
-      // Frozen updates: a steam:// launch is exactly what triggers the update
-      // check, so start the exe directly while the freeze is on.
-      spawnGameExe(detection);
-      sendEvent({ type: 'toast', message: 'Update freeze is on — launched the local exe directly. (While an update is pending, Steam\'s own Play button would show "Disk write error".)' });
     } else {
-      // Prefer a Steam launch so overlay/cloud saves work (also correct under
-      // Proton on Linux/Steam Deck — Steam applies the configured launch options).
+      // Always a real Steam launch (overlay/cloud saves; correct under Proton
+      // on Linux/Steam Deck). Steam runs its update check on this path — with
+      // the update freeze on and an update pending it fails with "Disk write
+      // error". DIRECT LAUNCH is the no-update path.
+      if (store.settings.updateFreeze && detection.launcher === 'steam') {
+        sendEvent({ type: 'toast', kind: 'warn', message: 'Update freeze is on — Steam will run its update check now (it shows "Disk write error" while an update is pending). Use DIRECT LAUNCH to play without updating.' });
+      }
       await shell.openExternal(`steam://run/${steam.APP_ID}`);
     }
     if (store.settings.closeOnLaunch) setTimeout(() => app.quit(), 1500);
@@ -1680,7 +1680,7 @@ function diagnostics() {
     const freeze = steam.updateFreezeStatus(store.settings.gamePath);
     if (store.settings.updateFreeze) {
       if (freeze.supported && freeze.frozen && freeze.behavior === '1') {
-        add('warning', 'Game update freeze', 'ACTIVE — the game will not auto-update. Launch from Mod Command only: while a game update is pending, Steam\'s Play button fails with "Disk write error – appmanifest_2075800.acf" (the freeze blocking the update, not damage). Turn the freeze off to let Steam update; unfreeze before online modes that need the current build.');
+        add('warning', 'Game update freeze', 'ACTIVE — the game will not auto-update. Play with DIRECT LAUNCH (local exe, no update check). LAUNCH GAME and Steam\'s own Play button run Steam\'s update check, which fails with "Disk write error – appmanifest_2075800.acf" while an update is pending (the freeze blocking the update, not damage). Turn the freeze off to let Steam update; unfreeze before online modes that need the current build.');
       } else if (freeze.supported) {
         add('warning', 'Game update freeze', 'Enabled in Settings but the manifest is not fully locked — toggle it off and on again to re-apply.');
       } else {

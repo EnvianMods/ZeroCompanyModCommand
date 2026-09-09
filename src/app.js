@@ -1084,7 +1084,7 @@ function renderSettings() {
       : 'Not available (needs a Steam-manifest install)')
     : uf.wanted
       ? (uf.frozen && uf.behavior === '1'
-        ? 'ACTIVE — manifest locked. Launch from Mod Command only: Steam\'s Play button shows "Disk write error" while a game update is pending (that is the freeze working)'
+        ? 'ACTIVE — manifest locked. Play with DIRECT LAUNCH (no update check); LAUNCH GAME and Steam\'s Play button run Steam\'s update check and show "Disk write error" while an update is pending (that is the freeze working)'
         : 'Enabled but not fully applied — toggle off and on to re-apply')
       : 'Off — Steam updates the game normally';
 }
@@ -1094,9 +1094,10 @@ $('#chk-update-freeze').addEventListener('change', async (e) => {
   if (enabling && !window.confirm(
     'Freeze game updates?\n\nThe game will stop auto-updating (protecting your modded playthrough), but:\n' +
     '• online modes may require the current build\n' +
-    '• launch from Mod Command only: while an update is pending, Steam\'s own Play button shows\n' +
-    '  "An error occurred while launching this game: Disk write error" — that is the freeze\n' +
-    '  blocking the update, not a broken install\n\n' +
+    '• play with DIRECT LAUNCH (local exe, no update check). LAUNCH GAME and Steam\'s own Play\n' +
+    '  button run Steam\'s update check — while an update is pending they show "An error occurred\n' +
+    '  while launching this game: Disk write error", which is the freeze blocking the update,\n' +
+    '  not a broken install\n\n' +
     'You can turn this off any time.')) {
     e.target.checked = false;
     return;

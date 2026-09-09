@@ -1,5 +1,20 @@
 # Zero Company Mod Command — Changelog
 
+## v1.9.8 (2026-09-09)
+
+**Swap UE4SS builds**
+- Settings → UE4SS gained a ⧗ Versions button. Every UE4SS install now keeps
+  the build it replaces (Binaries\Win64\dwmapi.dll + ue4ss\*, never your
+  mods), and the picker restores any kept build in one click — so a frozen
+  game version can keep the UE4SS that worked with it. Restoring keeps the
+  current build too, so every swap is reversible. Up to five builds are kept.
+- The picker also lists the GitHub releases, newest build first, with the
+  recommended rolling experimental build marked. The stable 3.0.x zips are
+  shown but not installable: they use a flat layout this manager cannot
+  deploy and predate UE 5.6 support.
+- The Settings card shows which build Mod Command installed. "Download &
+  install" still fetches the recommended build.
+
 ## v1.9.7 (2026-09-09)
 
 - With the update freeze on, LAUNCH GAME now stops and explains before going

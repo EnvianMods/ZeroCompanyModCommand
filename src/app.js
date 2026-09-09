@@ -1048,7 +1048,9 @@ function renderSettings() {
     : 'Not registered';
   $('#btn-nxm-register').textContent = nx.nxmRegistered ? 'Unregister' : 'Register handler';
   // UE4SS
-  $('#ue4ss-settings-status').textContent = state.ue4ss.message;
+  const ue4ssRel = state.ue4ss.release;
+  $('#ue4ss-settings-status').textContent = state.ue4ss.message
+    + (state.ue4ss.installed && ue4ssRel ? ` Installed: ${ue4ssRel.name}${ue4ssRel.tag && ue4ssRel.tag !== ue4ssRel.name ? ` (${ue4ssRel.tag})` : ''}.` : '');
   $('#btn-install-ue4ss').textContent = state.ue4ss.healthy ? 'Reinstall latest' : 'Download & install';
   // ZCSDK Runtime (newest GitHub release; bundled copy as the offline fallback)
   const zc = state.zcsdk || {};
@@ -1159,6 +1161,105 @@ $('#btn-nxm-register').addEventListener('click', async () => {
     toast(registered ? 'nxm:// handler removed.' : 'nxm:// links now open in Mod Command.');
   }
 });
+// UE4SS version picker: every GitHub release with a runtime zip, newest
+// first. Installing any of them replaces the runtime files in Binaries\Win64;
+// installed UE4SS mods and their start order are untouched.
+$('#btn-ue4ss-versions').addEventListener('click', () => openUe4ssVersionsModal());
+async function openUe4ssVersionsModal() {
+  const data = await call('ue4ssVersions');
+  if (!data) return;
+  const cur = data.installed;
+  $('#ue4ss-versions-sub').textContent =
+    (cur ? `Installed by Mod Command: ${cur.name}${cur.restored ? ' (restored)' : ''}. ` : (data.status.installed ? 'The installed copy was not placed by Mod Command, so its build is unknown. ' : 'UE4SS is not installed. ')) +
+    'Every install keeps the build it replaces, so you can go back to the UE4SS that matched a frozen game version. GitHub itself keeps only one rolling experimental build; the stable 3.0.x zips use a flat layout this manager cannot deploy and predate UE 5.6.';
+  const list = $('#ue4ss-versions-list');
+  list.innerHTML = '';
+  const section = (title) => {
+    const h = document.createElement('div');
+    h.className = 'dim';
+    h.style.cssText = 'padding:10px 4px 4px;letter-spacing:2px;font-size:11px;';
+    h.textContent = title;
+    list.appendChild(h);
+  };
+  const row = (title, sub, btnLabel, onClick, disabledNote) => {
+    const r = document.createElement('div');
+    r.className = 'import-row';
+    const info = document.createElement('div');
+    info.className = 'import-info';
+    const name = document.createElement('div');
+    name.className = 'import-name';
+    name.textContent = title;
+    const meta = document.createElement('div');
+    meta.className = 'import-meta';
+    meta.textContent = sub;
+    info.append(name, meta);
+    const act = document.createElement('button');
+    act.className = disabledNote ? 'btn tiny' : 'btn tiny primary';
+    act.textContent = btnLabel;
+    if (disabledNote) { act.disabled = true; act.title = disabledNote; }
+    else {
+      act.addEventListener('click', async () => {
+        act.disabled = true;
+        try { await onClick(); } finally { act.disabled = false; $('#progress-toast').classList.add('hidden'); }
+      });
+    }
+    r.append(info, act);
+    list.appendChild(r);
+  };
+
+  section('BUILDS KEPT ON THIS PC');
+  if (!data.vault.length) {
+    const empty = document.createElement('div');
+    empty.className = 'dim';
+    empty.style.padding = '4px 4px 8px';
+    empty.textContent = 'None yet — the next UE4SS install keeps the build it replaces here.';
+    list.appendChild(empty);
+  }
+  for (const v of data.vault) {
+    row(`${v.name || v.label}${v.tag && v.tag !== (v.name || v.label) ? ` (${v.tag})` : ''}`,
+      `${v.asset || 'build placed by hand'} · kept ${new Date(v.savedAt).toLocaleString()}${v.files ? ` · ${v.files} files` : ''}`,
+      '↶ Restore', async () => {
+        const res = await call('ue4ssRestore', v.entryId);
+        if (!res) return;
+        state = res.state;
+        render();
+        $('#ue4ss-versions-modal').classList.add('hidden');
+        toast(`UE4SS restored: ${res.label}. The build it replaced is kept too. Your UE4SS mods and start order are unchanged.`);
+      });
+  }
+
+  section('GITHUB RELEASES');
+  if (data.releasesError) {
+    const err = document.createElement('div');
+    err.className = 'dim';
+    err.style.padding = '4px 4px 8px';
+    err.textContent = `GitHub could not be reached: ${data.releasesError}`;
+    list.appendChild(err);
+  }
+  for (const r of data.releases) {
+    const tags = [];
+    if (r.recommended) tags.push('recommended');
+    if (r.prerelease) tags.push('pre-release');
+    if (cur && cur.tag === r.tag) tags.push('installed');
+    // Only the rolling experimental builds (asset names carry a commit suffix)
+    // use the ue4ss\ folder layout this manager deploys.
+    const flat = r.tag !== 'experimental-latest' && !/-\d+-g[0-9a-f]+\.zip$/i.test(r.name);
+    row(`${r.releaseName}${r.tag !== r.releaseName ? ` (${r.tag})` : ''}${tags.length ? ` — ${tags.join(' · ')}` : ''}`,
+      `${r.name} · ${(r.size / 1048576).toFixed(1)} MB${r.publishedAt ? ` · ${new Date(r.publishedAt).toLocaleDateString()}` : ''}${flat ? ' · flat layout, not installable here (predates UE 5.6)' : ''}`,
+      cur && cur.tag === r.tag ? '⭳ Reinstall' : '⭳ Install',
+      async () => {
+        const res = await call('installUe4ss', r.tag);
+        if (!res) return;
+        state = res.state;
+        render();
+        $('#ue4ss-versions-modal').classList.add('hidden');
+        toast(`UE4SS ${res.version} installed; the build it replaced is kept in ⧗ Versions. Your UE4SS mods and start order are unchanged.`);
+      },
+      flat ? 'This release uses the flat layout (UE4SS.dll beside dwmapi.dll) that this manager cannot deploy, and it predates UE 5.6 support.' : null);
+  }
+  $('#ue4ss-versions-modal').classList.remove('hidden');
+}
+
 $('#btn-install-ue4ss').addEventListener('click', async () => {
   const btn = $('#btn-install-ue4ss');
   btn.disabled = true;

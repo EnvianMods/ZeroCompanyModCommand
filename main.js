@@ -527,7 +527,9 @@ function fullState() {
     mods: store.mods,
     conflicts,
     ue4ssHooks,
-    ue4ss: engine.ue4ssStatus(),
+    // release = the GitHub release this app installed (null for a copy the
+    // user placed by hand or one installed before 1.9.8 recorded it).
+    ue4ss: { ...engine.ue4ssStatus(), release: store.settings.ue4ssInstalled || null },
     zcsdk: engine.zcsdkStatus(),
     retoc: engine.retocStatus(),
     sevenZip: !!findSevenZip(store.settings.sevenZipPath),
@@ -1484,12 +1486,20 @@ const handlers = {
     throw new Error('That mod has no update source.');
   },
 
-  'install-ue4ss': async () => {
+  // UE4SS runtime: the default pick (experimental-latest, else latest stable)
+  // or, with { tag }, any published release — Settings → UE4SS → ⧗ Versions,
+  // so a user who has frozen game updates can match UE4SS to their game build.
+  'install-ue4ss': async (_e, payload) => {
     if (!store.settings.gamePath) throw new Error('Locate the game folder in Settings first.');
-    const asset = await ue4ssDl.latestRuntime();
+    const tag = payload && payload.tag ? String(payload.tag) : null;
+    const asset = tag ? await ue4ssDl.runtimeByTag(tag) : await ue4ssDl.latestRuntime();
+    // Keep the build that is there now, so it can be restored from ⧗ Versions.
+    const cur = store.settings.ue4ssInstalled || null;
+    const kept = engine.ue4ssSnapshot(ue4ssLabel(cur), cur);
+    if (kept) log('info', `UE4SS runtime kept before update: ${kept}`);
     sendEvent({ type: 'toast', message: `Downloading ${asset.name} (${(asset.size / 1048576).toFixed(1)} MB) from GitHub…` });
     const dest = await nexus.downloadToFile(asset.url, store.stagingDir, asset.name, (got, total) => {
-      sendEvent({ type: 'progress', label: 'UE4SS runtime', received: got, total });
+      sendEvent({ type: 'progress', label: `UE4SS ${asset.releaseName}`, received: got, total });
     });
     try {
       const result = await engine.install(dest);
@@ -1499,7 +1509,36 @@ const handlers = {
     } finally {
       fs.rmSync(dest, { force: true });
     }
-    return { state: fullState(), version: asset.releaseName };
+    store.settings.ue4ssInstalled = {
+      tag: asset.tag, name: asset.releaseName, asset: asset.name, prerelease: !!asset.prerelease,
+      publishedAt: asset.publishedAt || null, installedAt: new Date().toISOString(),
+    };
+    store.save();
+    log('info', `UE4SS ${asset.releaseName} (${asset.tag}) installed from GitHub`);
+    return { state: fullState(), version: asset.releaseName, tag: asset.tag };
+  },
+
+  // Every UE4SS release that carries a runtime zip, newest build first, plus
+  // the builds kept on this PC (the version swap for frozen game versions).
+  'ue4ss-versions': async () => {
+    let releases = [];
+    let releasesError = null;
+    try { releases = await ue4ssDl.listRuntimes(30); } catch (e) { releasesError = e.message; }
+    const installed = store.settings.ue4ssInstalled || null;
+    return { releases, releasesError, installed, status: engine.ue4ssStatus(), vault: engine.ue4ssListVault() };
+  },
+
+  // Put a kept UE4SS build back (the current one is kept first).
+  'ue4ss-restore': async (_e, { entryId }) => {
+    if (!store.settings.gamePath) throw new Error('Locate the game folder in Settings first.');
+    const cur = store.settings.ue4ssInstalled || null;
+    const m = engine.ue4ssRestore(entryId, ue4ssLabel(cur), cur);
+    store.settings.ue4ssInstalled = m.tag || m.asset
+      ? { tag: m.tag || null, name: m.name || m.label, asset: m.asset || null, publishedAt: m.publishedAt || null, installedAt: new Date().toISOString(), restored: true }
+      : null;
+    store.save();
+    log('info', `UE4SS runtime restored from the kept build ${entryId}`);
+    return { state: fullState(), label: m.name || m.label };
   },
 
   // One-click prerequisite for content mods built with the Zero Company Mod
@@ -1565,6 +1604,12 @@ function spawnGameExe(detection) {
   const child = spawn(detection.exePath, [], { detached: true, stdio: 'ignore', cwd: path.dirname(detection.exePath), env });
   child.unref();
   return child;
+}
+
+// Human label for the runtime build a settings record describes.
+function ue4ssLabel(rec) {
+  if (!rec) return 'unknown build';
+  return (rec.asset && rec.asset.replace(/\.zip$/i, '')) || rec.name || rec.tag || 'unknown build';
 }
 
 async function installPaths(paths) {

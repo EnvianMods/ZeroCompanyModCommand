@@ -334,7 +334,10 @@
                 <span class="setting-name">Script/DLL mod loader <span class="dim">(needed for Lua &amp; DLL mods)</span></span>
                 <span id="ue4ss-settings-status" class="setting-value">—</span>
               </div>
-              <button class="btn" id="btn-install-ue4ss">Download &amp; install</button>
+              <div class="setting-actions">
+                <button class="btn ghost" id="btn-ue4ss-versions" title="Pick any UE4SS release — for example an older build that matches a frozen game version">⧗ Versions</button>
+                <button class="btn" id="btn-install-ue4ss">Download &amp; install</button>
+              </div>
             </div>
           </div>
         </div>
@@ -602,6 +605,17 @@
       <div id="nexus-versions-list" class="import-list"></div>
       <div class="zc-modal-actions">
         <button class="btn ghost" data-close-modal="nexus-versions-modal">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="ue4ss-versions-modal" class="zc-modal hidden">
+    <div class="zc-modal-box">
+      <div class="zc-modal-title">UE4SS VERSIONS</div>
+      <p class="zc-modal-sub dim" id="ue4ss-versions-sub"></p>
+      <div id="ue4ss-versions-list" class="import-list"></div>
+      <div class="zc-modal-actions">
+        <button class="btn ghost" data-close-modal="ue4ss-versions-modal">Close</button>
       </div>
     </div>
   </div>

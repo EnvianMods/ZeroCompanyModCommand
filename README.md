@@ -157,7 +157,13 @@ automatically for IoStore package inspection; a different copy can be selected i
   the website button (the nxm link carries the required key/expires).
 - **UE4SS one-click install** — Settings → UE4SS → Download & install fetches the
   latest experimental UE4SS runtime zip from GitHub (UE4SS-RE/RE-UE4SS) and installs
-  it into `Binaries/Win64`.
+  it into `Binaries/Win64`. Every runtime install snapshots the build it
+  replaces (dwmapi.dll + ue4ss\* minus Mods/logs) into `versions/ue4ss-runtime/`
+  (5 kept); ⧗ Versions restores any kept build (the current one is kept first) and
+  lists the GitHub releases (only the rolling experimental builds use the ue4ss\
+  layout this manager deploys — stable 3.0.x zips are flat and shown as not
+  installable). The card shows the build Mod Command installed
+  (`settings.ue4ssInstalled`).
 - **ZCSDK Runtime one-click install** — Settings → ZCSDK Runtime installs the two
   UE4SS mods (ZCSDKBridge + ZCSDKLoader) that SDK-built content mods need. The SDK
   publishes every runtime build to `github.com/EnvianMods/ZCSDK-Runtime-Release`

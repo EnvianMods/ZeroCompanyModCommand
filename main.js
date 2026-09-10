@@ -305,9 +305,16 @@ async function checkForUpdates() {
       results.errors.push(`${mod.name}: ${err.message}`);
     }
   }
+  // The UE4SS runtime rides along: refresh the rolling build and report when
+  // the installed build is behind it (counted separately from mod updates).
+  try {
+    await ue4ssDl.refreshLatest(true);
+    const u = ue4ssDl.updateInfo(store.settings.ue4ssInstalled);
+    results.ue4ssUpdate = u.available ? { currentBuild: u.currentBuild, latestBuild: u.latestBuild, latestDate: u.latestDate } : null;
+  } catch (_) { results.ue4ssUpdate = null; }
   store.settings.lastUpdateCheck = new Date().toISOString();
   store.save();
-  log('info', `update check: ${results.checked} checked, ${results.updates} update(s), ${results.errors.length} error(s)`);
+  log('info', `update check: ${results.checked} checked, ${results.updates} update(s), ${results.errors.length} error(s)${results.ue4ssUpdate ? ', UE4SS build update available' : ''}`);
   return results;
 }
 
@@ -403,6 +410,19 @@ app.whenReady().then(() => {
       store.settings.zcsdkNoticedVersion = remote.version;
       store.save();
       sendEvent({ type: 'toast', message: `ZCSDK Runtime ${remote.version} is available — update it from Settings → ZCSDK Runtime.` });
+    }
+  });
+  // UE4SS: learn the newest rolling build; the Settings card compares the
+  // installed build against it. Nudge once per new build.
+  win.webContents.once('did-finish-load', async () => {
+    const latest = await ue4ssDl.refreshLatest();
+    if (!latest) return;
+    const u = ue4ssDl.updateInfo(store.settings.ue4ssInstalled);
+    sendEvent({ type: 'state', state: fullState() });
+    if (u.available && store.settings.ue4ssNoticedBuild !== u.latest) {
+      store.settings.ue4ssNoticedBuild = u.latest;
+      store.save();
+      sendEvent({ type: 'toast', message: `A newer UE4SS build is out (${u.latestBuild}, ${new Date(u.latestDate).toLocaleDateString()}) — you have ${u.currentBuild}. Update from Settings → UE4SS.` });
     }
   });
   // Fresh store + existing archive → restore mods/profiles/vault from it.
@@ -529,7 +549,7 @@ function fullState() {
     ue4ssHooks,
     // release = the GitHub release this app installed (null for a copy the
     // user placed by hand or one installed before 1.9.8 recorded it).
-    ue4ss: { ...engine.ue4ssStatus(), release: store.settings.ue4ssInstalled || null },
+    ue4ss: { ...engine.ue4ssStatus(), release: store.settings.ue4ssInstalled || null, update: ue4ssDl.updateInfo(store.settings.ue4ssInstalled) },
     zcsdk: engine.zcsdkStatus(),
     retoc: engine.retocStatus(),
     sevenZip: !!findSevenZip(store.settings.sevenZipPath),
@@ -1513,6 +1533,7 @@ const handlers = {
       tag: asset.tag, name: asset.releaseName, asset: asset.name, prerelease: !!asset.prerelease,
       publishedAt: asset.publishedAt || null, installedAt: new Date().toISOString(),
     };
+    store.settings.ue4ssNoticedBuild = asset.name;
     store.save();
     log('info', `UE4SS ${asset.releaseName} (${asset.tag}) installed from GitHub`);
     return { state: fullState(), version: asset.releaseName, tag: asset.tag };
@@ -1525,7 +1546,9 @@ const handlers = {
     let releasesError = null;
     try { releases = await ue4ssDl.listRuntimes(30); } catch (e) { releasesError = e.message; }
     const installed = store.settings.ue4ssInstalled || null;
-    return { releases, releasesError, installed, status: engine.ue4ssStatus(), vault: engine.ue4ssListVault() };
+    const latest = releases.find((r) => r.recommended) || null;
+    if (latest) await ue4ssDl.refreshLatest(true);
+    return { releases, releasesError, installed, status: engine.ue4ssStatus(), vault: engine.ue4ssListVault(), update: ue4ssDl.updateInfo(installed, latest || undefined) };
   },
 
   // Put a kept UE4SS build back (the current one is kept first).
@@ -1750,7 +1773,13 @@ function diagnostics() {
     add('info', 'Steam Deck', 'On Steam Deck, run the manager in Desktop Mode; mods deployed here work in Gaming Mode.');
   }
   const ue4ss = engine.ue4ssStatus();
-  add(ue4ss.healthy ? 'good' : (ue4ss.installed ? 'warning' : 'info'), 'UE4SS runtime', ue4ss.message);
+  {
+    const u = ue4ssDl.updateInfo(store.settings.ue4ssInstalled);
+    const rec = store.settings.ue4ssInstalled;
+    const tail = u.available ? ` Newer build available: ${u.latestBuild} (you have ${u.currentBuild}) — Settings → UE4SS.`
+      : (ue4ss.installed && rec ? ` Build ${u.currentBuild || rec.asset || rec.name}${u.latest && !u.available ? ' — current' : ''}.` : (ue4ss.installed ? ' Build unknown (not installed by Mod Command) — reinstall from Settings → UE4SS to be on the newest build.' : ''));
+    add(u.available ? 'warning' : (ue4ss.healthy ? 'good' : (ue4ss.installed ? 'warning' : 'info')), 'UE4SS runtime', ue4ss.message + tail);
+  }
   const zc = engine.zcsdkStatus();
   if (zc.installed || zc.neededBy.length) {
     const needed = zc.neededBy.some((n) => n.enabled);

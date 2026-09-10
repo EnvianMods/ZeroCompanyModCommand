@@ -452,6 +452,7 @@ $('#btn-check-updates').addEventListener('click', async () => {
     const { checked, updates, errors } = res.results;
     if (!checked) toast('No mods have an update source (Nexus/GitHub installs are tracked).', 'info', 6000);
     else toast(updates ? `${updates} update(s) available.` : `All ${checked} tracked mod(s) are up to date.`, updates ? 'warn' : 'info', 6000);
+    if (res.results.ue4ssUpdate) toast(`Newer UE4SS build available: ${res.results.ue4ssUpdate.latestBuild} (you have ${res.results.ue4ssUpdate.currentBuild}) — Settings → UE4SS.`, 'warn', 8000);
     for (const e of errors.slice(0, 3)) toast(e, 'error', 6000);
   } finally {
     btn.disabled = false;
@@ -1049,9 +1050,20 @@ function renderSettings() {
   $('#btn-nxm-register').textContent = nx.nxmRegistered ? 'Unregister' : 'Register handler';
   // UE4SS
   const ue4ssRel = state.ue4ss.release;
-  $('#ue4ss-settings-status').textContent = state.ue4ss.message
-    + (state.ue4ss.installed && ue4ssRel ? ` Installed: ${ue4ssRel.name}${ue4ssRel.tag && ue4ssRel.tag !== ue4ssRel.name ? ` (${ue4ssRel.tag})` : ''}.` : '');
-  $('#btn-install-ue4ss').textContent = state.ue4ss.healthy ? 'Reinstall latest' : 'Download & install';
+  const ue4ssUp = state.ue4ss.update || {};
+  const fmtDate = (d) => (d ? new Date(d).toLocaleDateString() : '');
+  let ue4ssTail = '';
+  if (state.ue4ss.installed && ue4ssRel) {
+    ue4ssTail = ` Installed: ${ue4ssRel.name}${ue4ssUp.currentBuild ? ` build ${ue4ssUp.currentBuild}` : ''}${ue4ssRel.installedAt ? ` (${fmtDate(ue4ssRel.installedAt)})` : ''}.`;
+    if (ue4ssUp.available) ue4ssTail += ` NEWER BUILD AVAILABLE: ${ue4ssUp.latestBuild} from ${fmtDate(ue4ssUp.latestDate)}.`;
+    else if (ue4ssUp.latest) ue4ssTail += ' Up to date.';
+  } else if (state.ue4ss.installed) {
+    ue4ssTail = ' Build unknown (not installed by Mod Command) — Download & install to be on the newest build.';
+  }
+  $('#ue4ss-settings-status').textContent = state.ue4ss.message + ue4ssTail;
+  const ue4ssBtn = $('#btn-install-ue4ss');
+  ue4ssBtn.textContent = !state.ue4ss.healthy ? 'Download & install' : (ue4ssUp.available ? `Update to build ${ue4ssUp.latestBuild}` : 'Reinstall latest');
+  ue4ssBtn.classList.toggle('primary', !!ue4ssUp.available);
   // ZCSDK Runtime (newest GitHub release; bundled copy as the offline fallback)
   const zc = state.zcsdk || {};
   const zcPkg = zc.available || null;
@@ -1240,7 +1252,7 @@ async function openUe4ssVersionsModal() {
     const tags = [];
     if (r.recommended) tags.push('recommended');
     if (r.prerelease) tags.push('pre-release');
-    if (cur && cur.tag === r.tag) tags.push('installed');
+    if (cur && cur.tag === r.tag) tags.push(data.update && data.update.available && r.tag === data.update.tag ? `installed: older build ${data.update.currentBuild} — newer ${data.update.latestBuild} available` : 'installed');
     // Only the rolling experimental builds (asset names carry a commit suffix)
     // use the ue4ss\ folder layout this manager deploys.
     const flat = r.tag !== 'experimental-latest' && !/-\d+-g[0-9a-f]+\.zip$/i.test(r.name);

@@ -166,7 +166,11 @@ automatically for IoStore package inspection; a different copy can be selected i
   lists the GitHub releases (only the rolling experimental builds use the ue4ss\
   layout this manager deploys — stable 3.0.x zips are flat and shown as not
   installable). The card shows the build Mod Command installed
-  (`settings.ue4ssInstalled`).
+  (`settings.ue4ssInstalled`) and, because the experimental channel is rolling
+  (same tag, new zip every CI build), compares its recorded build id (from the
+  zip name, e.g. `g2bfa839f`) with the current asset at startup / in the update
+  check — "Update to build …" when behind, a once-per-build toast, and the
+  Diagnostics line names the build.
 - **ZCSDK Runtime one-click install** — Settings → ZCSDK Runtime installs the two
   UE4SS mods (ZCSDKBridge + ZCSDKLoader) that SDK-built content mods need. The SDK
   publishes every runtime build to `github.com/EnvianMods/ZCSDK-Runtime-Release`

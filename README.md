@@ -284,21 +284,19 @@ NEXUS — update announcements always point at the Nexus mod page, so update tra
 counts toward download stats, rankings, and Donation Points. GitHub gets a silent
 mirror release (source + zip) for backup and transparency, with no announcement.
 
-**Nexus ships the BUILD-FROM-SOURCE package (2026-09-09):** Nexus's automated
-scan quarantines unsigned exes for days — and, as measured, ANY package that
-contains a batch/script file, however trivial (only a package with no
-exe/dll/bat/cmd/ps1/py and no nested archive came back VERIFIED). So the Nexus
-file is `ZeroCompanyModCommand-Source-v<public>.zip` = the source tree +
-`README-BUILD.txt` + `Build.bat.txt` (the one-click script, renamed so it is a
-plain text file). Users install Node.js LTS once, open a command prompt in the
-folder and run `npm run build` — which runs `npm ci`, then `build/fetch-tools.js`
-(7-Zip from the official MSI via an administrative extract, retoc from its GitHub
-release, the newest ZCSDK Runtime; the Oodle dll from the game folder if it is
-ever there), then electron-builder → `release\ZeroCompanyModCommand.exe`.
-Renaming `Build.bat.txt` to `Build.bat` gives the double-click version of the
-same steps. GitHub keeps shipping the ready exe + AppImage.
-`owner-tools/update-featured-authors/package-source-release.js` builds the
-package and refuses to produce one that contains a binary or nested archive.
+**Nexus ships the SAME exe as GitHub (policy restored 2026-09-10, in
+anticipation of the mod being accepted by Nexus):** the Nexus main file is the
+Windows exe zip (`ZeroCompanyModCommand-v<public>.zip`, identical bytes to the
+GitHub release asset), the optional file is the Linux AppImage zip. Nexus's
+automated scan quarantines unsigned exes until a human reviews them, and — as
+measured on 2026-09-09 — any package with a batch/script file too (only a
+package with no exe/dll/bat/cmd/ps1/py and no nested archive came back
+VERIFIED). While that review is pending, the build-from-source package remains
+available as a fallback: `package-source-release.js` → the source tree +
+`README-BUILD.txt` + `Build.bat.txt`; users install Node.js LTS, run
+`npm run build` (= `npm ci`, `build/fetch-tools.js` for 7-Zip/retoc/ZCSDK
+Runtime, electron-builder) and get the same exe. The packager refuses to emit a
+package containing a binary or nested archive.
 
 The project is a git repo with `origin` set to
 `github.com/EnvianMods/ZeroCompanyModCommand`. Full release flow:
@@ -307,10 +305,13 @@ The project is a git repo with `origin` set to
 2. `npm run dist`, zip exe + README.txt + CHANGELOG.md as
    `ZeroCompanyModCommand-v<version>.zip`; snapshot the source (no
    node_modules/release/data/.git) as `...-source-v<version>.zip`
-3. `node owner-tools/update-featured-authors/package-source-release.js` → the
-   Nexus package; upload it with `upload-nexus-file.js <public> <zip> --name
-   "Zero Company Mod Command (build from source)" --no-primary --update
-   --archive-old --set-mod-version` (a new version of the existing file line)
+3. Upload the exe zip to Nexus as a new version of the existing main file:
+   `upload-nexus-file.js <public> <zip> --name "Zero Company Mod Command" --update
+   --archive-old --set-mod-version`; the Linux zip likewise with
+   `--name "Zero Company Mod Command (Linux AppImage)" --category optional
+   --no-primary --update --archive-old`. (Fallback while an exe is held by the
+   scan: `package-source-release.js` + the same upload with
+   `--name "Zero Company Mod Command (build from source)" --no-primary`.)
 4. `"Archive Release.bat" <version> <build-zip> <source-zip> --notes "..."`
    — pushes the version archive (both zips as Release assets + synced changelog)
    to github.com/EnvianMods/ZeroCompanyModCommandArchive. This replaces the old

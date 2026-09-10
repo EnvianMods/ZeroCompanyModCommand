@@ -1,5 +1,12 @@
 # Zero Company Mod Command — Changelog
 
+## Unreleased (parked on branch feat/hourly-update-check)
+
+- Mod update checks now also run in the background every hour while the app
+  is open, not only at startup. The startup check runs when the last one is
+  over an hour old (it was twelve). Badges refresh each time; the toast only
+  appears when the set of available updates changes.
+
 ## v1.9.9 (2026-09-10)
 
 **Config Editor finds a mod's settings wherever the mod keeps them**

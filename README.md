@@ -136,8 +136,11 @@ automatically for IoStore package inspection; a different copy can be selected i
 - **Config Editor** (opened from a button on the Command Deck) — edit game and mod config files in-app: the UE user
   configs (`%LOCALAPPDATA%\SWZeroCompany\Saved\Config\Windows\` — Engine.ini,
   GameUserSettings.ini, Input.ini, Scalability.ini; missing ones are created on first
-  save), UE4SS-settings.ini and mods.txt, config files found inside UE4SS mod folders,
-  plus any file added via "Add file…" (right-click a custom entry to remove it).
+  save), UE4SS-settings.ini and mods.txt, config files found anywhere inside a UE4SS
+  mod folder (4 levels deep, `dlls\` and `Scripts\` included — .ini/.cfg/.json/.txt/
+  .toml/.yml, plus .lua whose name says config such as `config.lua` / `settings.lua`;
+  enabled.txt, modinfo.json, README/.md and .log never), plus any file added via
+  "Add file…" (right-click a custom entry to remove it).
   INI files get a structured section/key/value view that preserves comments, ordering
   and duplicate keys exactly (only values are editable); Raw view edits the full text.
   The original file is backed up to `.zcbak` on first save.

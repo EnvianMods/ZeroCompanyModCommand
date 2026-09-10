@@ -1,5 +1,18 @@
 # Zero Company Mod Command — Changelog
 
+## v1.9.9 (2026-09-10)
+
+**Config Editor finds a mod's settings wherever the mod keeps them**
+- The editor used to skip a UE4SS mod's `dlls` and `Scripts` folders and stop
+  two levels deep, so settings a mod ships next to its code — `dlls\settings.ini`
+  (ZCUnlocked 1.4.2), `Scripts\config.lua`, `MXM\settings.lua` — never appeared.
+  Every folder of a mod is now scanned, four levels deep.
+- Lua settings files are editable too: a `.lua` counts when its name says
+  config (`config.lua`, `settings.lua`, `options.lua`, `prefs.lua`…), so `main.lua`
+  and other code stays out of the list. `.toml`, `.yml` and `.yaml` are accepted
+  as well. `enabled.txt`, `modinfo.json`, mods.txt/mods.json, README/.md and
+  .log files are never listed.
+
 ## v1.9.8 (2026-09-09)
 
 **Swap UE4SS builds**

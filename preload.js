@@ -48,8 +48,11 @@ contextBridge.exposeInMainWorld('zc', {
   validateNexusKey: () => invoke('validate-nexus-key'),
   registerNxm: () => invoke('register-nxm'),
   unregisterNxm: () => invoke('unregister-nxm'),
-  installUe4ss: (tag) => invoke('install-ue4ss', tag ? { tag } : undefined),
+  // installUe4ss('experimental-latest') | installUe4ss({ nexusFileId: 743 }) | installUe4ss()
+  installUe4ss: (opt) => invoke('install-ue4ss', typeof opt === 'string' ? { tag: opt } : (opt || undefined)),
   ue4ssVersions: () => invoke('ue4ss-versions'),
+  checkRetoc: () => invoke('check-retoc'),
+  installRetoc: () => invoke('install-retoc'),
   ue4ssRestore: (entryId) => invoke('ue4ss-restore', { entryId }),
   installZcsdkRuntime: () => invoke('install-zcsdk-runtime'),
   checkZcsdkRuntime: () => invoke('check-zcsdk-runtime'),

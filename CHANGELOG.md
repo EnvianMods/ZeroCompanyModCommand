@@ -1,5 +1,18 @@
 # Zero Company Mod Command — Changelog
 
+## v1.9.10 (2026-09-10)
+
+**UE4SS tells you when a newer build is out**
+- UE4SS's experimental channel is a rolling release: the tag never changes,
+  only the build inside it. Mod Command now records the exact build it
+  installed (from the zip's name) and compares it with the current build at
+  startup, in the update check, and in Settings → UE4SS. When you are behind,
+  the card says so with both build ids and dates, the button becomes "Update
+  to build …", the ⧗ Versions picker marks your row, and a toast appears once
+  per new build. Diagnostics reports the installed build too.
+- Copies not installed by Mod Command have no recorded build; the card says
+  so and offers a reinstall to get current.
+
 ## v1.9.9 (2026-09-10)
 
 **Config Editor finds a mod's settings wherever the mod keeps them**

@@ -452,7 +452,8 @@ $('#btn-check-updates').addEventListener('click', async () => {
     const { checked, updates, errors } = res.results;
     if (!checked) toast('No mods have an update source (Nexus/GitHub installs are tracked).', 'info', 6000);
     else toast(updates ? `${updates} update(s) available.` : `All ${checked} tracked mod(s) are up to date.`, updates ? 'warn' : 'info', 6000);
-    if (res.results.ue4ssUpdate) toast(`Newer UE4SS build available: ${res.results.ue4ssUpdate.latestBuild} (you have ${res.results.ue4ssUpdate.currentBuild}) — Settings → UE4SS.`, 'warn', 8000);
+    if (res.results.ue4ssUpdate) toast(`Newer UE4SS ${res.results.ue4ssUpdate.source === 'nexus' ? 'compatibility ' : ''}build available: ${res.results.ue4ssUpdate.latestBuild} (you have ${res.results.ue4ssUpdate.currentBuild}) — Settings → UE4SS.`, 'warn', 8000);
+    if (res.results.retocUpdate) toast(`retoc ${res.results.retocUpdate.latest} is out (you have ${res.results.retocUpdate.installed}) — Settings → retoc → Update.`, 'warn', 8000);
     for (const e of errors.slice(0, 3)) toast(e, 'error', 6000);
   } finally {
     btn.disabled = false;
@@ -1053,17 +1054,29 @@ function renderSettings() {
   const ue4ssUp = state.ue4ss.update || {};
   const fmtDate = (d) => (d ? new Date(d).toLocaleDateString() : '');
   let ue4ssTail = '';
+  const fromNexus = ue4ssUp.source === 'nexus';
   if (state.ue4ss.installed && ue4ssRel) {
-    ue4ssTail = ` Installed: ${ue4ssRel.name}${ue4ssUp.currentBuild ? ` build ${ue4ssUp.currentBuild}` : ''}${ue4ssRel.installedAt ? ` (${fmtDate(ue4ssRel.installedAt)})` : ''}.`;
-    if (ue4ssUp.available) ue4ssTail += ` NEWER BUILD AVAILABLE: ${ue4ssUp.latestBuild} from ${fmtDate(ue4ssUp.latestDate)}.`;
+    ue4ssTail = ` Installed: ${fromNexus ? 'Nexus compatibility build' : ue4ssRel.name}${ue4ssUp.currentBuild ? ` ${fromNexus ? '' : 'build '}${ue4ssUp.currentBuild}` : ''}${ue4ssRel.installedAt ? ` (${fmtDate(ue4ssRel.installedAt)})` : ''}.`;
+    if (ue4ssUp.available) ue4ssTail += ` NEWER ${fromNexus ? 'NEXUS ' : ''}BUILD AVAILABLE: ${ue4ssUp.latestBuild} from ${fmtDate(ue4ssUp.latestDate)}.`;
     else if (ue4ssUp.latest) ue4ssTail += ' Up to date.';
   } else if (state.ue4ss.installed) {
     ue4ssTail = ' Build unknown (not installed by Mod Command) — Download & install to be on the newest build.';
   }
+  // The other source, always mentioned so both are one click away in ⧗ Versions.
+  const gb = state.detection && state.detection.buildId;
+  if (ue4ssUp.nexus && !fromNexus) {
+    const nx = ue4ssUp.nexus;
+    ue4ssTail += ` Also on Nexus: game-specific compatibility build v${nx.version || '?'} (${fmtDate(nx.date)})${nx.testedBuild ? `, tested on game build ${nx.testedBuild}${gb ? (String(gb) === String(nx.testedBuild) ? ' — matches yours' : ` — yours is ${gb}`) : ''}` : ''} — see ⧗ Versions.`;
+  } else if (ue4ssUp.github && fromNexus) {
+    ue4ssTail += ` Also on GitHub: rolling experimental build ${ue4ssUp.github.build} (${fmtDate(ue4ssUp.github.date)}) — see ⧗ Versions.`;
+  }
   $('#ue4ss-settings-status').textContent = state.ue4ss.message + ue4ssTail;
   const ue4ssBtn = $('#btn-install-ue4ss');
-  ue4ssBtn.textContent = !state.ue4ss.healthy ? 'Download & install' : (ue4ssUp.available ? `Update to build ${ue4ssUp.latestBuild}` : 'Reinstall latest');
+  ue4ssBtn.textContent = !state.ue4ss.healthy ? 'Download & install'
+    : (ue4ssUp.available ? (fromNexus ? `Update to Nexus ${ue4ssUp.latestBuild}` : `Update to build ${ue4ssUp.latestBuild}`) : (fromNexus ? 'Reinstall (Nexus)' : 'Reinstall latest'));
   ue4ssBtn.classList.toggle('primary', !!ue4ssUp.available);
+  ue4ssBtn.dataset.source = fromNexus ? 'nexus' : 'github';
+  ue4ssBtn.dataset.nexusFileId = fromNexus && ue4ssUp.nexus ? String(ue4ssUp.nexus.fileId) : '';
   // ZCSDK Runtime (newest GitHub release; bundled copy as the offline fallback)
   const zc = state.zcsdk || {};
   const zcPkg = zc.available || null;
@@ -1083,6 +1096,18 @@ function renderSettings() {
     : '—';
   $('#btn-storage-reset').disabled = !state.settings.gamePath || storage.inGameFolder;
   $('#set-retoc-path').textContent = state.settings.retocPath || (state.retoc.found ? `Auto: ${state.retoc.path}` : 'Auto-detect (not found)');
+  {
+    const ru = state.retoc.update || {};
+    const rec = state.retoc.installedRecord;
+    let txt = state.retoc.found ? `Installed: ${state.retoc.version || 'version unknown'}` : 'Not installed';
+    if (ru.latest) txt += ru.available ? ` · NEWER RELEASE ON GITHUB: ${ru.latest}${ru.latestDate ? ` (${new Date(ru.latestDate).toLocaleDateString()})` : ''}` : ` · latest GitHub release ${ru.latest} — current`;
+    else txt += ' · GitHub not checked yet';
+    if (rec && rec.installedAt) txt += ` · updated from GitHub ${new Date(rec.installedAt).toLocaleDateString()}`;
+    $('#retoc-update-status').textContent = txt;
+    const up = $('#btn-update-retoc');
+    up.textContent = ru.available ? `Update to ${ru.latest}` : (state.retoc.found ? 'Reinstall latest' : 'Install from GitHub');
+    up.classList.toggle('primary', !!ru.available);
+  }
   $('#set-7z-path').textContent = state.settings.sevenZipPath
     || (state.sevenZipBundled ? 'Bundled with Mod Command (7-Zip 25.01)' : (state.sevenZip ? 'Auto-detected' : 'Auto-detect (not found)'));
   $('#chk-close-on-launch').checked = !!state.settings.closeOnLaunch;
@@ -1141,6 +1166,30 @@ $('#btn-browse-game').addEventListener('click', async () => {
   const data = await call('browseGamePath');
   if (data) { state = data; render(); }
 });
+$('#btn-check-retoc').addEventListener('click', async () => {
+  const btn = $('#btn-check-retoc');
+  btn.disabled = true;
+  try {
+    const res = await call('checkRetoc');
+    if (!res) return;
+    state = res.state;
+    render();
+    if (!res.latest) toast('Could not reach GitHub (trumank/retoc).', 'warn', 6000);
+    else if (res.update.available) toast(`retoc ${res.update.latest} is available (you have ${res.update.installed}) — press Update.`, 'warn', 7000);
+    else toast(`retoc is current: ${res.update.installed || state.retoc.version} is the latest release (${res.update.latest}).`);
+  } finally { btn.disabled = false; }
+});
+$('#btn-update-retoc').addEventListener('click', async () => {
+  const btn = $('#btn-update-retoc');
+  btn.disabled = true;
+  try {
+    const res = await call('installRetoc');
+    if (!res) return;
+    state = res.state;
+    render();
+    toast(`retoc ${res.version} installed from GitHub — used for pak inspection from now on.`);
+  } finally { btn.disabled = false; $('#progress-toast').classList.add('hidden'); }
+});
 $('#btn-browse-retoc').addEventListener('click', async () => {
   const data = await call('browseToolPath', { key: 'retocPath', title: 'Locate retoc.exe', filterName: 'retoc' });
   if (data) { state = data; render(); }
@@ -1183,7 +1232,7 @@ async function openUe4ssVersionsModal() {
   const cur = data.installed;
   $('#ue4ss-versions-sub').textContent =
     (cur ? `Installed by Mod Command: ${cur.name}${cur.restored ? ' (restored)' : ''}. ` : (data.status.installed ? 'The installed copy was not placed by Mod Command, so its build is unknown. ' : 'UE4SS is not installed. ')) +
-    'Every install keeps the build it replaces, so you can go back to the UE4SS that matched a frozen game version. GitHub itself keeps only one rolling experimental build; the stable 3.0.x zips use a flat layout this manager cannot deploy and predate UE 5.6.';
+    'Two sources: the game-specific compatibility build on Nexus (stock UE4SS plus signatures for a tested game build — usually the one that works right after a game patch) and the rolling experimental build on GitHub. Every install keeps the build it replaces, so you can go back to whichever matched a frozen game version. The stable 3.0.x zips use a flat layout this manager cannot deploy and predate UE 5.6.';
   const list = $('#ue4ss-versions-list');
   list.innerHTML = '';
   const section = (title) => {
@@ -1240,7 +1289,37 @@ async function openUe4ssVersionsModal() {
       });
   }
 
-  section('GITHUB RELEASES');
+  section('NEXUS — UE4SS FOR STAR WARS ZERO COMPANY (game-specific compatibility build)');
+  if (!data.nexus) {
+    const none = document.createElement('div');
+    none.className = 'dim';
+    none.style.padding = '4px 4px 8px';
+    none.textContent = 'The Nexus page could not be read right now.';
+    list.appendChild(none);
+  } else {
+    const nx = data.nexus;
+    const tested = nx.testedBuild ? `tested on game build ${nx.testedBuild}${data.gameBuild ? (String(data.gameBuild) === String(nx.testedBuild) ? ' — matches yours' : ` — yours is ${data.gameBuild}`) : ''}` : 'tested game build not stated';
+    const isCur = cur && cur.source === 'nexus' && Number(cur.fileId) === Number(nx.fileId);
+    const badges = [];
+    if (data.gameBuild && nx.testedBuild && String(data.gameBuild) === String(nx.testedBuild)) badges.push('recommended for your game build');
+    if (isCur) badges.push('installed');
+    else if (cur && cur.source === 'nexus') badges.push(`installed: older v${cur.version || '?'} — newer available`);
+    row(`${nx.name} v${nx.version || '?'}${badges.length ? ` — ${badges.join(' · ')}` : ''}`,
+      `${nx.modName || 'Nexus mod 9'} · ${(nx.size / 1048576).toFixed(1)} MB · ${nx.publishedAt ? new Date(nx.publishedAt).toLocaleDateString() : ''} · ${tested}${nx.fileDescription ? ` · ${nx.fileDescription}` : ''}`,
+      data.isPremium ? (isCur ? '⭳ Reinstall' : '⭳ Install') : (data.hasApiKey ? 'Files page ↗' : 'Needs API key ↗'),
+      async () => {
+        if (!data.isPremium) { $('#ue4ss-versions-modal').classList.add('hidden'); openNexusDownload('UE4SS for Star Wars Zero Company', data.nexusUrl); return; }
+        const res = await call('installUe4ss', { nexusFileId: nx.fileId });
+        if (!res) return;
+        if (res.opened === 'embed') { $('#ue4ss-versions-modal').classList.add('hidden'); openNexusDownload(res.name, res.url); return; }
+        state = res.state;
+        render();
+        $('#ue4ss-versions-modal').classList.add('hidden');
+        toast(`UE4SS ${res.version} installed; the build it replaced is kept in ⧗ Versions. Your UE4SS mods and start order are unchanged.`);
+      });
+  }
+
+  section('GITHUB — UE4SS-RE/RE-UE4SS (rolling experimental build)');
   if (data.releasesError) {
     const err = document.createElement('div');
     err.className = 'dim';
@@ -1276,12 +1355,14 @@ $('#btn-install-ue4ss').addEventListener('click', async () => {
   const btn = $('#btn-install-ue4ss');
   btn.disabled = true;
   try {
-    const res = await call('installUe4ss');
-    if (res) {
-      state = res.state;
-      render();
-      toast(`UE4SS installed (${res.version}). Lua/DLL mods are now supported.`);
-    }
+    // A Nexus-sourced install stays on Nexus; everything else uses GitHub.
+    const arg = btn.dataset.source === 'nexus' && btn.dataset.nexusFileId ? { nexusFileId: Number(btn.dataset.nexusFileId) } : undefined;
+    const res = await call('installUe4ss', arg);
+    if (!res) return;
+    if (res.opened === 'embed') { openNexusDownload(res.name, res.url); return; }
+    state = res.state;
+    render();
+    toast(`UE4SS installed (${res.version}). Lua/DLL mods are now supported.`);
   } finally {
     btn.disabled = false;
     $('#progress-toast').classList.add('hidden');

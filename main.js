@@ -11,6 +11,7 @@ const { findSevenZip, bundledSevenZip } = require('./lib/archive');
 const nexus = require('./lib/nexus');
 const ue4ssDl = require('./lib/ue4ss');
 const zcsdkRt = require('./lib/zcsdk');
+const retocDl = require('./lib/retoc');
 const configs = require('./lib/configs');
 const { getPromotedAuthors } = require('./lib/featured');
 const github = require('./lib/github');
@@ -228,6 +229,14 @@ async function handleNxm(rawUrl) {
       const existing = store.mods.some((m) => m.origin && m.origin.type === 'nexus' && m.origin.modId === link.modId);
       const version = (fileMeta && fileMeta.version) || (info ? info.version : null);
       const origin = { type: 'nexus', modId: link.modId, fileId: link.fileId, version };
+      // The UE4SS compatibility page: keep the current runtime first, and
+      // record the install so the Settings card can track this source.
+      const isUe4ssPage = link.modId === ue4ssDl.NEXUS_MOD_ID;
+      if (isUe4ssPage) {
+        const cur = store.settings.ue4ssInstalled || null;
+        const kept = engine.ue4ssSnapshot(ue4ssLabel(cur), cur);
+        if (kept) log('info', `UE4SS runtime kept before update: ${kept}`);
+      }
       if (existing) {
         const res = await engine.replaceOrigin({ type: 'nexus', modId: link.modId }, dest, origin, version);
         if (res.pendingFomod) {
@@ -240,6 +249,9 @@ async function handleNxm(rawUrl) {
         const res = await engine.install(dest, { origin, version });
         if (res.pendingFomod) {
           forwardFomod(res, info ? info.name : `mod ${link.modId}`);
+        } else if (res.modType === 'ue4ss-runtime') {
+          if (isUe4ssPage) recordNexusUe4ss({ fileId: link.fileId, version, asset: fileName, publishedAt: fileMeta && fileMeta.uploaded_timestamp ? new Date(fileMeta.uploaded_timestamp * 1000).toISOString() : null });
+          sendEvent({ type: 'toast', message: `UE4SS runtime installed from Nexus${version ? ` (v${version})` : ''}. Your UE4SS mods and start order are unchanged.` });
         } else {
           const mods = installedMods(res);
           if (mods.length === 1 && mods[0].id && info && info.name) {
@@ -308,10 +320,12 @@ async function checkForUpdates() {
   // The UE4SS runtime rides along: refresh the rolling build and report when
   // the installed build is behind it (counted separately from mod updates).
   try {
-    await ue4ssDl.refreshLatest(true);
+    await Promise.all([ue4ssDl.refreshLatest(true), ue4ssDl.refreshNexusLatest(true), retocDl.refreshLatest(true)]);
     const u = ue4ssDl.updateInfo(store.settings.ue4ssInstalled);
-    results.ue4ssUpdate = u.available ? { currentBuild: u.currentBuild, latestBuild: u.latestBuild, latestDate: u.latestDate } : null;
-  } catch (_) { results.ue4ssUpdate = null; }
+    results.ue4ssUpdate = u.available ? { source: u.source, currentBuild: u.currentBuild, latestBuild: u.latestBuild, latestDate: u.latestDate } : null;
+    const ru = retocDl.updateInfo(engine.retocStatus().version);
+    results.retocUpdate = ru.available ? { installed: ru.installed, latest: ru.latest } : null;
+  } catch (_) { results.ue4ssUpdate = null; results.retocUpdate = null; }
   store.settings.lastUpdateCheck = new Date().toISOString();
   store.save();
   log('info', `update check: ${results.checked} checked, ${results.updates} update(s), ${results.errors.length} error(s)${results.ue4ssUpdate ? ', UE4SS build update available' : ''}`);
@@ -415,14 +429,24 @@ app.whenReady().then(() => {
   // UE4SS: learn the newest rolling build; the Settings card compares the
   // installed build against it. Nudge once per new build.
   win.webContents.once('did-finish-load', async () => {
-    const latest = await ue4ssDl.refreshLatest();
-    if (!latest) return;
+    const [latest, nx] = await Promise.all([ue4ssDl.refreshLatest(), ue4ssDl.refreshNexusLatest(), retocDl.refreshLatest()]);
+    {
+      const ru = retocDl.updateInfo(engine.retocStatus().version);
+      if (ru.available && store.settings.retocNoticedVersion !== ru.latest) {
+        store.settings.retocNoticedVersion = ru.latest;
+        store.save();
+        sendEvent({ type: 'toast', message: `retoc ${ru.latest} is out (you have ${ru.installed}) — update it from Settings → retoc.` });
+      }
+    }
+    if (!latest && !nx) { sendEvent({ type: 'state', state: fullState() }); return; }
     const u = ue4ssDl.updateInfo(store.settings.ue4ssInstalled);
     sendEvent({ type: 'state', state: fullState() });
     if (u.available && store.settings.ue4ssNoticedBuild !== u.latest) {
       store.settings.ue4ssNoticedBuild = u.latest;
       store.save();
-      sendEvent({ type: 'toast', message: `A newer UE4SS build is out (${u.latestBuild}, ${new Date(u.latestDate).toLocaleDateString()}) — you have ${u.currentBuild}. Update from Settings → UE4SS.` });
+      sendEvent({ type: 'toast', message: u.source === 'nexus'
+        ? `A newer UE4SS compatibility build is on Nexus (${u.latestBuild}, ${new Date(u.latestDate).toLocaleDateString()}) — you have ${u.currentBuild}. Update from Settings → UE4SS.`
+        : `A newer UE4SS build is out (${u.latestBuild}, ${new Date(u.latestDate).toLocaleDateString()}) — you have ${u.currentBuild}. Update from Settings → UE4SS.` });
     }
   });
   // Fresh store + existing archive → restore mods/profiles/vault from it.
@@ -551,7 +575,7 @@ function fullState() {
     // user placed by hand or one installed before 1.9.8 recorded it).
     ue4ss: { ...engine.ue4ssStatus(), release: store.settings.ue4ssInstalled || null, update: ue4ssDl.updateInfo(store.settings.ue4ssInstalled) },
     zcsdk: engine.zcsdkStatus(),
-    retoc: engine.retocStatus(),
+    retoc: (() => { const r = engine.retocStatus(); return { ...r, update: retocDl.updateInfo(r.version), installedRecord: store.settings.retocInstalled || null }; })(),
     sevenZip: !!findSevenZip(store.settings.sevenZipPath),
     sevenZipBundled: !store.settings.sevenZipPath && findSevenZip(null) === bundledSevenZip() && !!bundledSevenZip(),
     appId: steam.APP_ID,
@@ -1511,6 +1535,7 @@ const handlers = {
   // so a user who has frozen game updates can match UE4SS to their game build.
   'install-ue4ss': async (_e, payload) => {
     if (!store.settings.gamePath) throw new Error('Locate the game folder in Settings first.');
+    if (payload && payload.nexusFileId) return installUe4ssFromNexus(Number(payload.nexusFileId));
     const tag = payload && payload.tag ? String(payload.tag) : null;
     const asset = tag ? await ue4ssDl.runtimeByTag(tag) : await ue4ssDl.latestRuntime();
     // Keep the build that is there now, so it can be restored from ⧗ Versions.
@@ -1530,7 +1555,7 @@ const handlers = {
       fs.rmSync(dest, { force: true });
     }
     store.settings.ue4ssInstalled = {
-      tag: asset.tag, name: asset.releaseName, asset: asset.name, prerelease: !!asset.prerelease,
+      source: 'github', tag: asset.tag, name: asset.releaseName, asset: asset.name, prerelease: !!asset.prerelease,
       publishedAt: asset.publishedAt || null, installedAt: new Date().toISOString(),
     };
     store.settings.ue4ssNoticedBuild = asset.name;
@@ -1547,8 +1572,16 @@ const handlers = {
     try { releases = await ue4ssDl.listRuntimes(30); } catch (e) { releasesError = e.message; }
     const installed = store.settings.ue4ssInstalled || null;
     const latest = releases.find((r) => r.recommended) || null;
-    if (latest) await ue4ssDl.refreshLatest(true);
-    return { releases, releasesError, installed, status: engine.ue4ssStatus(), vault: engine.ue4ssListVault(), update: ue4ssDl.updateInfo(installed, latest || undefined) };
+    const [, nexusLatest] = await Promise.all([latest ? ue4ssDl.refreshLatest(true) : null, ue4ssDl.refreshNexusLatest(true)]);
+    const apiKey = nexusKey();
+    if (apiKey && !nexusUser) { try { nexusUser = await nexus.validateKey(apiKey); } catch (_) {} }
+    const det = steam.detectGame(store.settings.gamePath);
+    return {
+      releases, releasesError, installed, status: engine.ue4ssStatus(), vault: engine.ue4ssListVault(),
+      update: ue4ssDl.updateInfo(installed, latest || undefined),
+      nexus: nexusLatest, nexusUrl: ue4ssDl.NEXUS_URL, hasApiKey: !!apiKey, isPremium: !!(nexusUser && nexusUser.isPremium),
+      gameBuild: det.found ? det.buildId : null,
+    };
   },
 
   // Put a kept UE4SS build back (the current one is kept first).
@@ -1606,6 +1639,27 @@ const handlers = {
     return { state: fullState(), version, source, replaced: res.replaced };
   },
 
+  // Settings → retoc: check GitHub now / install the newest release into
+  // <dataDir>/tools (preferred over the bundled copy from then on).
+  'check-retoc': async () => {
+    const latest = await retocDl.refreshLatest(true);
+    return { state: fullState(), latest, update: retocDl.updateInfo(engine.retocStatus().version) };
+  },
+  'install-retoc': async () => {
+    if (process.platform !== 'win32') throw new Error('retoc updates are Windows-only in this app.');
+    const bundledTools = fs.existsSync(path.join(__dirname, 'tools')) ? path.join(__dirname, 'tools')
+      : (process.resourcesPath ? path.join(process.resourcesPath, 'tools') : null);
+    const r = await retocDl.installLatest(store.dataDir, bundledTools, nexus.downloadToFile, (got, total) => {
+      sendEvent({ type: 'progress', label: 'retoc', received: got, total });
+    });
+    store.settings.retocInstalled = { tag: r.tag, version: r.version, asset: r.asset, publishedAt: r.publishedAt, installedAt: new Date().toISOString(), path: r.path };
+    store.settings.retocNoticedVersion = r.version;
+    if (store.settings.retocPath) store.settings.retocPath = null; // the fresh copy wins over an old manual path
+    store.save();
+    log('info', `retoc ${r.version} installed from GitHub into ${r.path}`);
+    return { state: fullState(), version: r.version, path: r.path };
+  },
+
   // Settings → ZCSDK Runtime → Check for updates: re-reads latest.json now.
   'check-zcsdk-runtime': async () => {
     const remote = await zcsdkRt.latestRuntime({ force: true });
@@ -1627,6 +1681,44 @@ function spawnGameExe(detection) {
   const child = spawn(detection.exePath, [], { detached: true, stdio: 'ignore', cwd: path.dirname(detection.exePath), env });
   child.unref();
   return child;
+}
+
+// Install the game-specific UE4SS compatibility build from its Nexus page.
+// Premium: direct download. Free: the embedded Nexus page — its Mod Manager
+// Download button hands the file to handleNxm, which recognises the runtime.
+async function installUe4ssFromNexus(fileId) {
+  const apiKey = nexusKey();
+  if (!apiKey) throw new Error('A Nexus Mods API key is required to install from Nexus. Add one in Settings, or install the GitHub build.');
+  if (!nexusUser) { try { nexusUser = await nexus.validateKey(apiKey); } catch (err) { throw new Error(err.message); } }
+  if (!nexusUser.isPremium) return { opened: 'embed', url: ue4ssDl.NEXUS_URL, name: 'UE4SS for Star Wars Zero Company' };
+  const files = await nexus.filesList(ue4ssDl.NEXUS_MOD_ID, apiKey);
+  const file = files.find((f) => f.file_id === fileId);
+  if (!file) throw new Error('That file is no longer listed on the Nexus page.');
+  const cur = store.settings.ue4ssInstalled || null;
+  const kept = engine.ue4ssSnapshot(ue4ssLabel(cur), cur);
+  if (kept) log('info', `UE4SS runtime kept before update: ${kept}`);
+  const uri = await nexus.downloadLink({ modId: ue4ssDl.NEXUS_MOD_ID, fileId }, apiKey);
+  const dest = await nexus.downloadToFile(uri, store.stagingDir, file.file_name, (got, total) => {
+    sendEvent({ type: 'progress', label: `UE4SS (Nexus) ${file.version || ''}`, received: got, total });
+  });
+  try {
+    const result = await engine.install(dest);
+    if (result.modType !== 'ue4ss-runtime') throw new Error('The downloaded archive did not contain a UE4SS runtime layout.');
+  } finally {
+    fs.rmSync(dest, { force: true });
+  }
+  recordNexusUe4ss({ fileId, version: file.version || null, asset: file.file_name, publishedAt: file.uploaded_timestamp ? new Date(file.uploaded_timestamp * 1000).toISOString() : null });
+  log('info', `UE4SS compatibility build v${file.version || '?'} (Nexus file ${fileId}) installed`);
+  return { state: fullState(), version: `Nexus v${file.version || '?'}`, source: 'nexus' };
+}
+
+function recordNexusUe4ss({ fileId, version, asset, publishedAt }) {
+  store.settings.ue4ssInstalled = {
+    source: 'nexus', modId: ue4ssDl.NEXUS_MOD_ID, fileId, tag: null, name: 'UE4SS for Star Wars Zero Company',
+    version: version || null, asset: asset || null, publishedAt: publishedAt || null, installedAt: new Date().toISOString(),
+  };
+  store.settings.ue4ssNoticedBuild = String(fileId);
+  store.save();
 }
 
 // Human label for the runtime build a settings record describes.
@@ -1776,7 +1868,7 @@ function diagnostics() {
   {
     const u = ue4ssDl.updateInfo(store.settings.ue4ssInstalled);
     const rec = store.settings.ue4ssInstalled;
-    const tail = u.available ? ` Newer build available: ${u.latestBuild} (you have ${u.currentBuild}) — Settings → UE4SS.`
+    const tail = u.available ? ` Newer ${u.source === 'nexus' ? 'Nexus compatibility ' : ''}build available: ${u.latestBuild} (you have ${u.currentBuild}) — Settings → UE4SS.`
       : (ue4ss.installed && rec ? ` Build ${u.currentBuild || rec.asset || rec.name}${u.latest && !u.available ? ' — current' : ''}.` : (ue4ss.installed ? ' Build unknown (not installed by Mod Command) — reinstall from Settings → UE4SS to be on the newest build.' : ''));
     add(u.available ? 'warning' : (ue4ss.healthy ? 'good' : (ue4ss.installed ? 'warning' : 'info')), 'UE4SS runtime', ue4ss.message + tail);
   }
@@ -1786,8 +1878,12 @@ function diagnostics() {
     add(zc.healthy ? (zc.updateAvailable ? 'info' : 'good') : (needed ? 'warning' : 'info'), 'ZCSDK Runtime', zc.message);
   }
   const retoc = engine.retocStatus();
-  add(retoc.found ? 'good' : 'info', 'retoc',
-    retoc.found ? `Found at ${retoc.path}${retoc.version ? ` (${retoc.version})` : ''}` : 'Not found (optional — used for IoStore package inspection).');
+  {
+    const ru = retocDl.updateInfo(retoc.version);
+    const tail = ru.latest ? (ru.available ? ` Newer release on GitHub: ${ru.latest} — Settings → retoc → Update.` : ` Latest GitHub release: ${ru.latest} — current.`) : '';
+    add(retoc.found ? (ru.available ? 'warning' : 'good') : 'info', 'retoc',
+      (retoc.found ? `Found at ${retoc.path}${retoc.version ? ` (${retoc.version})` : ''}` : 'Not found (optional — used for IoStore package inspection).') + tail);
+  }
   {
     const sz = findSevenZip(store.settings.sevenZipPath);
     add(sz ? 'good' : 'info', '7-Zip',
@@ -1861,7 +1957,7 @@ function buildSupportReport() {
     missingDeployed: store.settings.gamePath ? engine.auditDeployedFiles() : [],
     ue4ssStatus: engine.ue4ssStatus(),
     zcsdkStatus: engine.zcsdkStatus(),
-    retoc: engine.retocStatus(),
+    retoc: (() => { const r = engine.retocStatus(); return { ...r, update: retocDl.updateInfo(r.version), installedRecord: store.settings.retocInstalled || null }; })(),
     sevenZip: !!findSevenZip(store.settings.sevenZipPath),
     sevenZipBundled: !store.settings.sevenZipPath && findSevenZip(null) === bundledSevenZip() && !!bundledSevenZip(),
     diagItems: diagnostics().items,

@@ -1,5 +1,31 @@
 # Zero Company Mod Command — Changelog
 
+## v1.9.11 (2026-09-10)
+
+**UE4SS from two sources: Nexus compatibility build and GitHub**
+- The "UE4SS for Star Wars Zero Company" page on Nexus ships a game-specific
+  compatibility build (stock UE4SS plus signatures for a tested game build),
+  which is often the only UE4SS that works right after a game patch. Mod
+  Command now reads that page too and offers the newest build from BOTH
+  sources: the Settings card names the other source, and ⧗ Versions has a
+  Nexus section (with the tested game build, marked when it matches yours)
+  above the GitHub section.
+- Installing from Nexus: premium accounts download directly; free accounts
+  are taken to the page in the embedded Nexus panel, and the Mod Manager
+  Download button installs it here. The runtime it replaces is kept, and
+  UE4SS mods and their start order are untouched.
+- Update detection follows the source you installed from: GitHub installs
+  compare build ids, Nexus installs compare the page's current file. Toasts,
+  the button label, Diagnostics and the update check say which source.
+
+**retoc updates from GitHub**
+- Settings → retoc now shows the installed version against the newest
+  release on GitHub (trumank/retoc), with "⟳ Check GitHub" and "Update from
+  GitHub" buttons. An updated copy lives in Mod Command's data folder and is
+  preferred over the bundled one, so a new retoc never waits for a Mod Command
+  release. The startup check, the update check and Diagnostics report it too.
+  (Today the bundled 0.1.5 is the latest release; the card says so.)
+
 ## v1.9.10 (2026-09-10)
 
 **UE4SS tells you when a newer build is out**

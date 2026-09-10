@@ -170,7 +170,19 @@ automatically for IoStore package inspection; a different copy can be selected i
   (same tag, new zip every CI build), compares its recorded build id (from the
   zip name, e.g. `g2bfa839f`) with the current asset at startup / in the update
   check — "Update to build …" when behind, a once-per-build toast, and the
-  Diagnostics line names the build.
+  Diagnostics line names the build. A second source is read anonymously via
+  GraphQL: Nexus mod 9 "UE4SS for Star Wars Zero Company" (a game-specific
+  compatibility build; its page states the tested game build, which is compared
+  with the installed game's build id). ⧗ Versions lists both sources; Nexus
+  installs go direct for premium keys and through the embedded page (nxm
+  handoff → handleNxm recognises the runtime) for free accounts; update
+  detection follows the installed source (`settings.ue4ssInstalled.source`).
+- **retoc update check** — Settings → retoc compares the installed
+  `retoc --version` with the newest GitHub release (trumank/retoc, Windows zip
+  asset) and installs it into `<dataDir>/tools/retoc.exe` (+ the bundled Oodle
+  dll), which `retocPath()` prefers over the copy bundled in `tools/`
+  (`settings.retocInstalled`). Reported at startup, in the update check and in
+  Diagnostics.
 - **ZCSDK Runtime one-click install** — Settings → ZCSDK Runtime installs the two
   UE4SS mods (ZCSDKBridge + ZCSDKLoader) that SDK-built content mods need. The SDK
   publishes every runtime build to `github.com/EnvianMods/ZCSDK-Runtime-Release`

@@ -244,8 +244,13 @@
               <div class="setting-info">
                 <span class="setting-name">retoc.exe <span class="dim">(optional — IoStore package inspection)</span></span>
                 <span id="set-retoc-path" class="setting-value mono">Auto-detect</span>
+                <span id="retoc-update-status" class="setting-value">—</span>
               </div>
-              <button class="btn" id="btn-browse-retoc">Browse…</button>
+              <div class="setting-actions">
+                <button class="btn ghost" id="btn-check-retoc" title="Compare the installed retoc with the newest release on GitHub (trumank/retoc)">⟳ Check GitHub</button>
+                <button class="btn" id="btn-update-retoc" title="Download the newest retoc release from GitHub into Mod Command's data folder">Update from GitHub</button>
+                <button class="btn ghost" id="btn-browse-retoc">Browse…</button>
+              </div>
             </div>
             <div class="setting-row">
               <div class="setting-info">

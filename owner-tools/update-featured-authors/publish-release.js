@@ -13,13 +13,19 @@
 // Usage (run after building and zipping):
 //   node publish-release.js [--repo Owner/Name] <version> <path-to-zip> [--notes "..."]
 //   node publish-release.js [--repo Owner/Name] --show
+//   node publish-release.js --check-only <path-to-zip>   (guard only, no GitHub)
 //
 // --repo targets any project's source repo (default: the launcher's).
 // Auth: release-token.txt (preferred) or token.txt next to this script, or
 // GITHUB_TOKEN — needs Contents read/write on the target repo.
+//
+// PRIVACY GUARD: HANDOFF.md (internal working notes) is untracked in the public
+// repo and lives only in the archive repo. Before any asset is uploaded, a .zip
+// is listed and refused if it contains anything matching /HANDOFF/i.
 
 const fs = require('fs');
 const path = require('path');
+const { spawnSync } = require('child_process');
 
 const DEFAULT_REPO = 'EnvianMods/ZeroCompanyModCommand';
 // --repo Owner/Name targets any project's source repo; default is the launcher.
@@ -43,6 +49,52 @@ function getToken() {
   return null;
 }
 
+// ---------------------------------------------------------------- zip guard
+const FORBIDDEN_IN_ASSETS = /HANDOFF/i;
+
+function find7z() {
+  const candidates = [
+    path.join(__dirname, '..', '..', 'tools', '7-Zip', '7z.exe'),
+    'G:\\SteamLibrary\\steamapps\\common\\Star Wars Zero Company\\ZeroCompanyModManager\\tools\\7-Zip\\7z.exe',
+  ];
+  return candidates.find((p) => fs.existsSync(p)) || null;
+}
+
+// Returns { tool, lines } — the raw listing lines of the zip. Throws when no
+// lister is available or the lister fails, so the guard fails CLOSED.
+function listZip(zipPath) {
+  const sevenZip = find7z();
+  if (sevenZip) {
+    const r = spawnSync(sevenZip, ['l', '-ba', zipPath], { encoding: 'utf8' });
+    if (r.error) throw new Error(`could not run 7z.exe (${r.error.message})`);
+    if (r.status !== 0) throw new Error(`7z.exe l failed (exit ${r.status}): ${String(r.stderr || r.stdout).trim().slice(0, 300)}`);
+    return { tool: sevenZip, lines: String(r.stdout).split(/\r?\n/).filter((l) => l.trim()) };
+  }
+  const r = spawnSync('unzip', ['-l', zipPath], { encoding: 'utf8' });
+  if (r.error) throw new Error('no zip lister available (bundled tools\\7-Zip\\7z.exe missing and `unzip` not on PATH) — cannot verify the asset');
+  if (r.status !== 0) throw new Error(`unzip -l failed (exit ${r.status}): ${String(r.stderr || r.stdout).trim().slice(0, 300)}`);
+  return { tool: 'unzip', lines: String(r.stdout).split(/\r?\n/).filter((l) => l.trim()) };
+}
+
+// Refuses to let an asset out of the door if it carries the internal working
+// notes. Non-.zip assets are passed through (nothing to list). Throws on a hit.
+function assertAssetIsPublishable(assetPath) {
+  if (!/\.zip$/i.test(assetPath)) return { checked: false, entries: 0 };
+  const { tool, lines } = listZip(assetPath);
+  const hits = lines.filter((l) => FORBIDDEN_IN_ASSETS.test(l));
+  if (hits.length) {
+    throw new Error(
+      `REFUSING TO UPLOAD ${path.basename(assetPath)} — it contains internal working notes:\n`
+      + hits.map((h) => `    ${h.trim()}`).join('\n')
+      + '\n  HANDOFF.md must never be published. Rebuild the zip without it'
+      + ' (it is gitignored; the archive repo holds it at docs/HANDOFF.md).'
+    );
+  }
+  return { checked: true, tool, entries: lines.length };
+}
+
+module.exports = { assertAssetIsPublishable, listZip, FORBIDDEN_IN_ASSETS };
+
 async function gh(url, options = {}) {
   return fetch(url, {
     ...options,
@@ -55,8 +107,21 @@ async function gh(url, options = {}) {
   });
 }
 
-(async () => {
+async function main() {
   const args = process.argv.slice(2);
+
+  // --check-only <zip>: run the privacy guard on a zip and exit. No GitHub calls.
+  const checkIdx = args.indexOf('--check-only');
+  if (checkIdx !== -1) {
+    const target = args[checkIdx + 1];
+    if (!target || !fs.existsSync(target)) { console.error('Usage: node publish-release.js --check-only <path-to-zip>'); process.exit(1); }
+    const r = assertAssetIsPublishable(target);
+    console.log(r.checked
+      ? `OK — ${path.basename(target)} is clean (${r.entries} entries listed with ${r.tool}).`
+      : `OK — ${path.basename(target)} is not a .zip, nothing to list.`);
+    return;
+  }
+
   if (!getToken()) {
     console.error('No GitHub token found (release-token.txt / token.txt / GITHUB_TOKEN). It needs Contents read/write on', REPO_FULL, 'and the roster repo.');
     process.exit(1);
@@ -81,6 +146,15 @@ async function gh(url, options = {}) {
   const [version, zipPath] = positional;
   if (!version || !/^\d+\.\d+\.\d+$/.test(version) || !zipPath || !fs.existsSync(zipPath)) {
     console.error('Usage: node publish-release.js [--repo Owner/Name] <version like 1.2.0> <path-to-zip> [--notes "..."]');
+    process.exit(1);
+  }
+
+  // 0. privacy guard — never let internal working notes reach the release page
+  try {
+    const g = assertAssetIsPublishable(zipPath);
+    if (g.checked) console.log(`Asset check: ${path.basename(zipPath)} clean, no HANDOFF entries (${g.entries} entries listed with ${g.tool}).`);
+  } catch (e) {
+    console.error('BLOCKED:', e.message);
     process.exit(1);
   }
 
@@ -130,7 +204,6 @@ async function gh(url, options = {}) {
 
   if (args.includes('--announce-github')) {
     // Only for a deliberate strategy change — normally announce Nexus instead.
-    const { spawnSync } = require('child_process');
     const announce = spawnSync(process.execPath, [
       path.join(__dirname, 'update-launcher-version.js'),
       version, release.html_url,
@@ -143,4 +216,8 @@ async function gh(url, options = {}) {
     console.log('\nPOLICY: announce the NEXUS page so update downloads count there. Next step:');
     console.log(`  node update-launcher-version.js ${version} "https://www.nexusmods.com/starwarszerocompany/mods/<your-mod-id>?tab=files"${notes ? ` --notes "${notes}"` : ''}`);
   }
-})().catch((e) => { console.error('FAIL:', e.message); process.exit(1); });
+}
+
+if (require.main === module) {
+  main().catch((e) => { console.error('FAIL:', e.message); process.exit(1); });
+}

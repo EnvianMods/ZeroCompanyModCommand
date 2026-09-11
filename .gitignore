@@ -14,3 +14,6 @@ token.txt
 *.zcbak
 *.log
 /ZeroCompanyModCommand.exe
+
+# Internal working notes - lives in the archive repo at docs/HANDOFF.md, never published
+HANDOFF.md

@@ -4,6 +4,58 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 
+// ------------------------------------------------- runtime integrity check
+// The portable exe unpacks the whole Electron runtime into
+// %TEMP%\ZeroCompanyModCommand (see package.json build.portable.unpackDirName)
+// and runs it from there. Antivirus products have been seen quarantining files
+// straight out of that folder — ffmpeg.dll most often — which leaves the app
+// dead at launch or silently broken. Check the runtime DLLs before anything
+// else runs so the user gets an explanation and a folder to whitelist instead
+// of a bare Windows error box.
+//
+// LIMITATION: ffmpeg.dll is imported by the Electron executable itself, so when
+// THAT is the quarantined file Windows fails the launch before any JavaScript
+// runs and this check never executes. It catches the lazily loaded graphics
+// DLLs (and reports ffmpeg.dll too, for the cases where we do get to run).
+const RUNTIME_DLLS = ['ffmpeg.dll', 'libEGL.dll', 'libGLESv2.dll', 'd3dcompiler_47.dll'];
+
+function checkRuntimeFiles() {
+  if (process.platform !== 'win32' || !app.isPackaged) return;
+  const dir = path.dirname(process.execPath);
+  let missing = [];
+  try {
+    missing = RUNTIME_DLLS.filter((name) => !fs.existsSync(path.join(dir, name)));
+  } catch {
+    return; // never let the check itself stop the app
+  }
+  if (missing.length === 0) return;
+  const message = [
+    'Part of the app runtime is missing from the folder it was unpacked into:',
+    '',
+    dir,
+    '',
+    'Missing: ' + missing.join(', '),
+    '',
+    'This is almost always antivirus: the portable exe unpacks itself into that',
+    'folder on every launch, and the security software quarantined the file(s)',
+    'again right after they were written. Reinstalling or re-downloading will',
+    'not help on its own.',
+    '',
+    'To fix it:',
+    '  1. Restore the listed file(s) from your antivirus quarantine, and',
+    '  2. Add the folder above to your antivirus exclusions (it keeps the same',
+    '     name every launch, so one exclusion is enough), then',
+    '  3. Run Zero Company Mod Command again.',
+  ].join('\n');
+  try {
+    dialog.showErrorBox('Zero Company Mod Command — runtime files missing', message);
+  } catch {
+    // showErrorBox can throw on a headless/broken session; exiting is still right
+  }
+  app.exit(1);
+}
+checkRuntimeFiles();
+
 const { Store } = require('./lib/store');
 const steam = require('./lib/steam');
 const { ModEngine, compareVersions, MODS_REL, LOGIC_MODS_REL, WIN64_REL, UE4SS_MODS_REL } = require('./lib/mods');

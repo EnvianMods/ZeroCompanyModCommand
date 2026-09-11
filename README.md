@@ -343,6 +343,15 @@ The project is a git repo with `origin` set to
 6. `"Update Launcher Version.bat" <version> "https://www.nexusmods.com/starwarszerocompany/mods/<id>?tab=files" --notes "..."`
    — announces to every installed launcher, pointing at Nexus
 
+- **HANDOFF.md is never published.** The internal working notes are untracked in
+  the public repo (listed in `.gitignore`) so they cannot end up in a tag's
+  automatic "Source code (zip/tar.gz)" assets; they live in the private archive
+  repo at `docs/HANDOFF.md` on `main` and are pushed with
+  `owner-tools/update-featured-authors/push-handoff.js` / `"Push Handoff.bat"`
+  after every HANDOFF edit. As a backstop, `publish-release.js` lists each .zip
+  before uploading it and refuses any zip with an entry matching `/HANDOFF/i`
+  (`node publish-release.js --check-only <zip>` runs that check alone).
+
 ## Owner tools (not shipped)
 
 `owner-tools/update-featured-authors/` pushes `featured.json` to the

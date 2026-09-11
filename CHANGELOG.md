@@ -1,5 +1,23 @@
 # Zero Company Mod Command — Changelog
 
+## Unreleased
+
+**The portable exe now unpacks to a folder you can whitelist**
+- Every launch, the portable exe unpacks the app into a temporary folder and
+  runs it from there. That folder used to have a different random name each
+  time, so when antivirus quarantined a file out of it (`ffmpeg.dll` was the
+  usual victim, giving "ffmpeg.dll was not found" at launch) there was nothing
+  you could add to your exclusions, and re-downloading never helped.
+- The folder is now always `%TEMP%\ZeroCompanyModCommand` (normally
+  `C:\Users\<you>\AppData\Local\Temp\ZeroCompanyModCommand`). Add that one path
+  to your antivirus exclusions and the problem stays fixed. Nothing else moves:
+  settings still live in `%APPDATA%\ZeroCompanyModCommand` and mods still live
+  in the game folder.
+- If part of the runtime is missing when the app starts, it now says so — a
+  message naming the folder, listing the missing files and explaining that
+  antivirus most likely quarantined them — instead of failing silently or
+  opening a broken window.
+
 ## v1.9.11 (2026-09-10)
 
 **UE4SS from two sources: Nexus compatibility build and GitHub**

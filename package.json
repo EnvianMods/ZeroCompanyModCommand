@@ -47,7 +47,8 @@
       "signAndEditExecutable": false
     },
     "portable": {
-      "artifactName": "ZeroCompanyModCommand.exe"
+      "artifactName": "ZeroCompanyModCommand.exe",
+      "unpackDirName": "ZeroCompanyModCommand"
     },
     "linux": {
       "target": [

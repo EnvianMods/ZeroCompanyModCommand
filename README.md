@@ -284,7 +284,12 @@ game folder under `ModCommandArchive` — nothing is written beside the exe (the
 `data/` folder is separate). A pre-1.9.0 `ZeroCompanyModCommand-data` folder next to
 the exe is copied into app-data on first start and left behind renamed `.migrated-<date>`.
 The `nxm://` registration from a portable exe points at the exe's on-disk location, so
-keep it somewhere permanent.
+keep it somewhere permanent. On every launch the portable stub unpacks the app into
+`%TEMP%\ZeroCompanyModCommand` (a fixed name, set by `build.portable.unpackDirName`,
+wiped and re-extracted each run and deleted again on exit) and runs it from there — so
+a user whose antivirus quarantines a runtime file such as `ffmpeg.dll` has one stable
+path to add to their exclusions, and the app names that folder in an error dialog if
+part of the runtime is missing when it starts.
 
 Shipping structure (v1.0.0 onward):
 - version lives in `package.json`; per-version notes in `CHANGELOG.md`

@@ -53,6 +53,14 @@
   antivirus most likely quarantined them — instead of failing silently or
   opening a broken window.
 
+**Adult-rated mods are out of the Holonet listing by default**
+- Browsing the Holonet — the default listing and any category — no longer
+  turns up mods Nexus has flagged as adult, and the Featured Transmissions
+  strip leaves them out too. Search still finds them: type a name and you get
+  every match, adult or not, each marked with an **18+** tag. A "Show adult
+  content" checkbox beside the Holonet's search box puts them back in the
+  listing, and the app remembers your choice.
+
 ## v1.9.11 (2026-09-10)
 
 **UE4SS from two sources: Nexus compatibility build and GitHub**

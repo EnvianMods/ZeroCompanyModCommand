@@ -1169,7 +1169,8 @@ const handlers = {
     let fillers = [];
     if (mods.length < 3) {
       try {
-        const top = await nexus.browseMods({ sort: 'downloads', count: 12 });
+        // Default surface — no adult-tagged mods in the featured strip.
+        const top = await nexus.browseMods({ sort: 'downloads', count: 12, includeAdult: false });
         const promotedIds = new Set(mods.map((m) => m.modId));
         fillers = top.mods.filter((m) => !promotedIds.has(m.modId));
       } catch (_) { /* strip just shows what it has */ }

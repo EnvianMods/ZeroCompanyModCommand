@@ -1587,12 +1587,24 @@ for (const c of CATEGORIES) {
   $('#browse-category').appendChild(opt);
 }
 
+// "Show adult content" — off by default, remembered per machine. Storage can
+// throw (or be wiped) in a packaged app, so every touch is guarded and the
+// safe answer on failure is "off".
+const ADULT_KEY = 'zc.holonet.showAdult';
+function showAdult() {
+  try { return localStorage.getItem(ADULT_KEY) === '1'; } catch (_) { return false; }
+}
+function setShowAdult(on) {
+  try { localStorage.setItem(ADULT_KEY, on ? '1' : '0'); } catch (_) { /* this run only */ }
+}
+
 function browseParams() {
   return {
     query: $('#browse-search').value,
     category: $('#browse-category').value || null,
     sort: $('#browse-sort').value,
     count: PAGE_SIZE,
+    includeAdult: showAdult(),
   };
 }
 
@@ -1687,6 +1699,15 @@ function buildBrowseCard(m) {
   summary.className = 'browse-summary';
   summary.textContent = m.summary;
   body.append(name, meta, stats, summary);
+  // Adult mods only reach a listing through a search or the toggle — flag them
+  // so it is never a surprise which card that is.
+  if (m.adult) {
+    const chip = document.createElement('span');
+    chip.className = 'adult-chip';
+    chip.textContent = '18+';
+    chip.title = 'Nexus Mods flags this mod as adult content.';
+    meta.prepend(chip);
+  }
 
   const actions = document.createElement('div');
   actions.className = 'browse-actions';
@@ -1938,6 +1959,13 @@ $('#browse-category').addEventListener('change', () => loadBrowse(true));
 $('#browse-sort').addEventListener('change', () => loadBrowse(true));
 $('#browse-refresh').addEventListener('click', () => loadBrowse(true));
 $('#browse-more').addEventListener('click', () => loadBrowse(false));
+// Runs before the first loadBrowse (the grid loads lazily on view switch), so
+// the remembered choice is already in place for page one.
+$('#browse-adult').checked = showAdult();
+$('#browse-adult').addEventListener('change', (e) => {
+  setShowAdult(e.target.checked);
+  loadBrowse(true);
+});
 
 // --------------------------------------------------- The Forge (curated GitHub)
 

@@ -554,20 +554,36 @@ app.whenReady().then(() => {
       }
     } catch (_) {}
   });
-  // Background update check, at most once per 12 hours.
-  win.webContents.once('did-finish-load', async () => {
-    const last = store.settings.lastUpdateCheck ? Date.parse(store.settings.lastUpdateCheck) : 0;
-    if (Date.now() - last < 12 * 60 * 60 * 1000) return;
-    if (!store.mods.some((m) => m.origin && m.origin.type !== 'local')) return;
-    try {
-      const results = await checkForUpdates();
-      if (results.updates > 0) {
-        sendEvent({ type: 'state', state: fullState() });
-        sendEvent({ type: 'toast', kind: 'warn', message: `${results.updates} mod update(s) available — see the Hangar Bay.` });
-      }
-    } catch (_) {}
-  });
+  // Background mod update check: at startup when the last one is over an
+  // hour old, then every hour while the app stays open (one Nexus files call
+  // per linked mod, one GitHub call per GitHub-linked mod). The Hangar's
+  // "Check updates" button runs the same check on demand.
+  win.webContents.once('did-finish-load', () => maybeCheckUpdates());
+  setInterval(() => { if (win && !win.isDestroyed()) maybeCheckUpdates(); }, UPDATE_CHECK_MS);
 });
+
+const UPDATE_CHECK_MS = 60 * 60 * 1000;
+let lastUpdateSignature = null;
+async function maybeCheckUpdates() {
+  const last = store.settings.lastUpdateCheck ? Date.parse(store.settings.lastUpdateCheck) : 0;
+  if (Date.now() - last < UPDATE_CHECK_MS) return;
+  if (!store.mods.some((m) => m.origin && m.origin.type !== 'local')) return;
+  try {
+    const results = await checkForUpdates();
+    // Badges refresh every time; the toast only when the set of available
+    // updates changed, so an hourly re-check never nags about the same ones.
+    const signature = store.mods
+      .filter((m) => m.updateInfo && m.updateInfo.available)
+      .map((m) => `${m.id}:${m.updateInfo.latest}`)
+      .sort()
+      .join('|');
+    sendEvent({ type: 'state', state: fullState() });
+    if (results.updates > 0 && signature !== lastUpdateSignature) {
+      sendEvent({ type: 'toast', kind: 'warn', message: `${results.updates} mod update(s) available — see the Hangar Bay.` });
+    }
+    lastUpdateSignature = signature;
+  } catch (_) {}
+}
 
 app.on('window-all-closed', () => app.quit());
 

@@ -61,6 +61,17 @@
   content" checkbox beside the Holonet's search box puts them back in the
   listing, and the app remembers your choice.
 
+**Mod updates are checked in the background every hour**
+- Mod update checks now also run while the app is open, once an hour, instead
+  of only when it starts. Leave Mod Command running and the Hangar Bay's
+  update badges keep themselves current on their own.
+- The startup check now runs when the last one is over an hour old — it used
+  to wait twelve. Badges refresh on every check, so one that has been taken
+  care of stops showing as available.
+- The "updates available" toast only appears when the set of available updates
+  actually changes, so an hourly re-check never nags you about the same ones
+  again. "Check updates" in the Hangar Bay still runs the check on demand.
+
 ## v1.9.11 (2026-09-10)
 
 **UE4SS from two sources: Nexus compatibility build and GitHub**

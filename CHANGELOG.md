@@ -2,6 +2,41 @@
 
 ## Unreleased
 
+**Mods that install as a folder in `SWZeroCompany\Mods` now install properly**
+- A growing number of mods ship as a **Game Feature plugin**: a folder with a
+  `.uplugin` file, an `AssetRegistry.bin` and its paks tucked inside
+  `Content\Paks`. Their readmes tell you to copy the whole folder to
+  `...\Star Wars Zero Company\SWZeroCompany\Mods\<Name>\` — never into `~mods`.
+  "Accurate Clone Commando - Delta Squad" (Nexus mod 174) is one of them.
+- Mod Command used to see only the paks inside and treat the download like any
+  packaged mod: it renamed them with a `pakchunk99-P###` prefix and dropped them
+  into `~mods`. The result was a mod that half-worked — the files mounted, so
+  replacements of existing things could show up, but the game never read the
+  plugin's own registry, so everything the mod ADDS (new outfits, new weapons)
+  simply never appeared in the armoury. That is exactly the failure the mod's
+  own readme warns about, and it was easy to mistake for a broken mod.
+- These now install as their own type, **PLUGIN**. The whole folder goes to
+  `SWZeroCompany\Mods\<Name>\` exactly as shipped — nothing renamed, no load
+  order prefix, the `.uplugin` and `AssetRegistry.bin` at the folder root and
+  `Content\Paks` untouched — which is what makes the game mount it and read its
+  registry. Nothing is put in `~mods`. An archive holding several plugin folders
+  installs each as its own mod.
+- Everything else works as usual: enable, disable (the folder is removed),
+  uninstall, updates from Nexus or GitHub, the version vault, squad profiles and
+  conflict detection. Renaming a plugin mod changes only the name you see — the
+  folder on disk must keep the plugin's own name, so it stays put. Plugin mods
+  are not in the Load Order list, because the game does not order them.
+- **Already copied some in by hand?** The existing-mods scan (Hangar Bay →
+  Import) now finds every plugin folder in `SWZeroCompany\Mods` that Mod Command
+  doesn't already manage and offers to adopt it, right where it is, with its
+  name and version read from its own files. Diagnostics has a new row for the
+  folder: how many plugin folders are there, and how many are managed here.
+- One caution, from the mod authors themselves: **unequip anything from a plugin
+  mod in game and save before you disable or remove it.** Saves record modded
+  gear by where its files live, so pulling the folder out while a squaddie is
+  wearing it can upset the save. Mod Command now says so when you disable or
+  uninstall one.
+
 **The portable exe now unpacks to a folder you can whitelist**
 - Every launch, the portable exe unpacks the app into a temporary folder and
   runs it from there. That folder used to have a different random name each

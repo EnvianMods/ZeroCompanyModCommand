@@ -29,6 +29,21 @@ automatically for IoStore package inspection; a different copy can be selected i
     the pak trio (`<Mod>.AssetRegistry.bin` + `<Mod>.zcsdk.lua`); they deploy to
     `~mods` too, keeping their exact names, and the row gets a ◆ SDK chip. They
     need the **ZCSDK Runtime** (see below) or the game can't discover the content.
+  - `gfp` (PLUGIN) — **Game Feature plugin** mods: a folder holding
+    `<Mod>.uplugin`, `AssetRegistry.bin` at its root and `Content/Paks/<Mod>_P.pak`
+    (+ `.utoc`/`.ucas`), optionally `Config/Tags/GameplayTags.ini`. The whole
+    folder is installed, unrenamed, as `SWZeroCompany/Mods/<Mod>/` — the name
+    comes from the `.uplugin`, never from the display name, so renaming the mod
+    here never moves the folder. The game's own loader mounts every folder in
+    `SWZeroCompany/Mods` at startup and appends its `AssetRegistry.bin` itself,
+    so these mods need no runtime, no load-order prefix and no `~mods` (putting
+    their paks in `~mods` mounts the content but hides everything the mod ADDS).
+    Disabling removes the folder, which is exactly how the game "forgets" the
+    mod — unequip its gear in game and save first, because saves record modded
+    gear by file location. Plugin folders you copied in by hand are found by the
+    existing-mods scan (Hangar Bay → **Import**) and adopted in place. The
+    display name comes from `modinfo.json` `title`, else the `.uplugin`'s
+    `FriendlyName`; version/author fall back to `VersionName`/`CreatedBy`.
   - `logicmods` → `SWZeroCompany/Content/Paks/LogicMods`.
   - UE4SS Lua/DLL mods (folders with `Scripts/main.lua` or `dlls/main.dll`) →
     `SWZeroCompany/Binaries/Win64/ue4ss/Mods/<Name>` with `enabled.txt`. The
@@ -41,8 +56,10 @@ automatically for IoStore package inspection; a different copy can be selected i
     `data/backups/gamefiles/<id>/` first and restored on disable/uninstall.
 - **Multi-mod archives** — an archive holding several mods installs each as its
   own entry (separate enable/order/update/remove): UE4SS mod folders split per
-  folder, pak containers split by containing folder (multiple paks in ONE
-  folder stay one mod), LogicMods subfolders keep their deployment, and each
+  folder, Game Feature plugin folders split per `.uplugin` (their inner
+  `Content/Paks` stays with them), pak containers split by containing folder
+  (multiple paks in ONE folder stay one mod), LogicMods subfolders keep their
+  deployment, and each
   entry reads its own `modinfo.json`. Nexus/GitHub origin tracking covers every
   entry; updating one replaces all siblings from a fresh download, preserving
   enabled state and priorities by name.
@@ -206,7 +223,9 @@ automatically for IoStore package inspection; a different copy can be selected i
   scan, session log). Paths, usernames and machine names are scrubbed by
   `lib/report.js`; the in-memory session log lives in `lib/log.js`.
 - **Diagnostics** — installation health scan: game layout, Steam manifest/build,
-  `~mods` presence, UE4SS layout, retoc/7-Zip availability, deployed-file audit, conflicts.
+  `~mods` presence, the `SWZeroCompany/Mods` plugin folder (how many plugin folders
+  are there and how many Mod Command manages, so hand-copied ones are visible),
+  UE4SS layout, retoc/7-Zip availability, deployed-file audit, conflicts.
   Also flags **duplicate mods** — the same UE4SS mod active under two folders in
   `ue4ss/Mods` (e.g. a manager install plus a leftover from a manual/one-click
   install under a different name). Two active copies run at once (double

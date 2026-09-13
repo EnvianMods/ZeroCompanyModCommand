@@ -90,8 +90,17 @@ $$('.nav-item').forEach((btn) => {
 
 const TYPE_LABEL = {
   pak: 'PAK', iostore: 'IOSTORE', logicmods: 'LOGICMODS', 'ue4ss-mod': 'UE4SS',
-  gamefolder: 'GAMEFILES',
+  gamefolder: 'GAMEFILES', gfp: 'PLUGIN',
 };
+
+const TYPE_TITLE = {
+  gfp: 'Game Feature plugin — installed as a folder in SWZeroCompany\\Mods',
+};
+
+// Mods whose files the game records BY LOCATION in the save (a Game Feature
+// plugin's content is addressed by its folder), so gear from one must be
+// unequipped before the folder goes away.
+const SAVE_CAVEAT = 'Unequip anything from this mod in game and save before disabling or removing it; saves record modded gear by file location.';
 
 function render() {
   if (!state) return;
@@ -165,6 +174,7 @@ function renderMods() {
     const badge = document.createElement('span');
     badge.className = `mod-badge badge-${mod.modType}`;
     badge.textContent = TYPE_LABEL[mod.modType] || mod.modType;
+    if (TYPE_TITLE[mod.modType]) badge.title = TYPE_TITLE[mod.modType];
 
     // Source badge: where the mod came from. Click opens the source dialog —
     // view the page, relink to a different source, or unlink back to LOCAL —
@@ -283,6 +293,11 @@ function renderMods() {
           `${compat.note ? `:\n\n${compat.note}` : '.'}\n\nEnable it anyway?`);
         if (!go) { toggle.checked = false; return; }
       }
+      if (!toggle.checked && mod.modType === 'gfp') {
+        const go = window.confirm(
+          `Disable “${mod.name}”? Its folder is removed from SWZeroCompany\\Mods.\n\n${SAVE_CAVEAT}`);
+        if (!go) { toggle.checked = true; return; }
+      }
       const data = toggle.checked
         ? await call('setModEnabled', mod.id, true)
         : await verifiedCall('setModEnabled', [mod.id, false], 'Disable');
@@ -313,7 +328,9 @@ function renderMods() {
     delBtn.addEventListener('click', async () => {
       const note = mod.modType === 'gamefolder'
         ? ' Replaced game files are restored from backup.'
-        : '';
+        : mod.modType === 'gfp'
+          ? `\n\n${SAVE_CAVEAT}`
+          : '';
       if (!window.confirm(`Uninstall “${mod.name}”? Its files are removed from the game and the library.${note}`)) return;
       const data = await verifiedCall('uninstallMod', [mod.id], 'Uninstall');
       if (data) { state = data; render(); toast(`“${mod.name}” uninstalled`); }

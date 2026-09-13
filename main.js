@@ -58,7 +58,7 @@ checkRuntimeFiles();
 
 const { Store } = require('./lib/store');
 const steam = require('./lib/steam');
-const { ModEngine, compareVersions, MODS_REL, LOGIC_MODS_REL, WIN64_REL, UE4SS_MODS_REL } = require('./lib/mods');
+const { ModEngine, compareVersions, MODS_REL, LOGIC_MODS_REL, WIN64_REL, UE4SS_MODS_REL, GAME_MODS_REL } = require('./lib/mods');
 const { findSevenZip, bundledSevenZip } = require('./lib/archive');
 const nexus = require('./lib/nexus');
 const ue4ssDl = require('./lib/ue4ss');
@@ -636,6 +636,8 @@ function fullState() {
       logicMods: LOGIC_MODS_REL,
       win64: WIN64_REL,
       ue4ssMods: UE4SS_MODS_REL,
+      // Game Feature plugin mods: SWZeroCompany\Mods\<Plugin>\
+      gameMods: GAME_MODS_REL,
       library: store.libraryDir,
     },
   };
@@ -646,7 +648,10 @@ function fullState() {
 // Only matches files uploaded to Nexus as-is (in practice loose paks); UE4SS
 // mods are skipped because their Lua/DLL files never hash-match a Nexus archive.
 async function md5Match(mod) {
-  if (!mod || !nexusKey() || mod.modType === 'ue4ss-mod') return null;
+  // Game Feature plugin mods are skipped for the same reason as UE4SS mods:
+  // their files (.uplugin, AssetRegistry.bin, the paks inside Content/Paks) are
+  // only ever uploaded inside an archive, so they never hash-match a Nexus file.
+  if (!mod || !nexusKey() || mod.modType === 'ue4ss-mod' || mod.modType === 'gfp') return null;
   for (const f of mod.files.slice(0, 4)) {
     try {
       const hit = await nexus.md5Lookup(path.join(store.modLibraryDir(mod.id), f.libraryRelative), nexusKey());
@@ -1030,6 +1035,7 @@ const handlers = {
       mods: store.settings.gamePath && path.join(store.settings.gamePath, MODS_REL),
       logicMods: store.settings.gamePath && path.join(store.settings.gamePath, LOGIC_MODS_REL),
       ue4ssMods: store.settings.gamePath && path.join(store.settings.gamePath, UE4SS_MODS_REL),
+      gameMods: store.settings.gamePath && path.join(store.settings.gamePath, GAME_MODS_REL),
       library: store.libraryDir,
       data: store.dataDir,
     };
@@ -1888,6 +1894,41 @@ function diagnostics() {
     const modsDir = path.join(detection.gamePath, MODS_REL);
     add(fs.existsSync(modsDir) ? 'good' : 'info', '~mods folder',
       fs.existsSync(modsDir) ? 'Present' : 'Created on first packaged-mod install');
+    // Game Feature plugin mods: whole folders in SWZeroCompany\Mods, mounted by
+    // the game itself. Count the plugin folders there and say how many Mod
+    // Command manages, so hand-copied ones are visible (Import can adopt them).
+    {
+      const gameModsDir = path.join(detection.gamePath, GAME_MODS_REL);
+      if (!fs.existsSync(gameModsDir)) {
+        add('info', 'Mods folder (plugins)', 'Not present — created on the first Game Feature plugin install.');
+      } else {
+        let folders = [];
+        try {
+          folders = fs.readdirSync(gameModsDir, { withFileTypes: true })
+            .filter((d) => d.isDirectory())
+            .filter((d) => {
+              try {
+                return fs.readdirSync(path.join(gameModsDir, d.name))
+                  .some((f) => f.toLowerCase().endsWith('.uplugin'));
+              } catch (_) { return false; }
+            })
+            .map((d) => d.name);
+        } catch (_) {}
+        const managedNames = new Set(store.mods
+          .filter((m) => m.modType === 'gfp' && m.enabled)
+          .map((m) => engine.gfpFolderName(m).toLowerCase()));
+        const managed = folders.filter((f) => managedNames.has(f.toLowerCase()));
+        const unmanaged = folders.filter((f) => !managedNames.has(f.toLowerCase()));
+        if (!folders.length) {
+          add('good', 'Mods folder (plugins)', `Present, no plugin folders yet (${GAME_MODS_REL}).`);
+        } else {
+          add(unmanaged.length ? 'info' : 'good', 'Mods folder (plugins)',
+            `Present with ${folders.length} plugin folder${folders.length === 1 ? '' : 's'}: ` +
+            `${managed.length} managed by Mod Command, ${unmanaged.length} unmanaged` +
+            (unmanaged.length ? ` (${unmanaged.join(', ')}) — Hangar Bay → Import can adopt them so enable/disable, updates and removal are handled here.` : '.'));
+        }
+      }
+    }
     // Update freeze state vs the user's intent.
     const freeze = steam.updateFreezeStatus(store.settings.gamePath);
     if (store.settings.updateFreeze) {

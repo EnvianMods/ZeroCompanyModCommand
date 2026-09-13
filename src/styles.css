@@ -235,6 +235,8 @@ body.reduced-motion * { transition: none !important; animation: none !important;
 .badge-iostore { color: #b08cff; border-color: rgba(176, 140, 255, 0.5); }
 .badge-logicmods { color: var(--good); border-color: rgba(109, 255, 176, 0.5); }
 .badge-ue4ss-mod { color: var(--amber); border-color: rgba(255, 200, 87, 0.5); }
+/* Game Feature plugin mods (SWZeroCompany\Mods\<Plugin>) */
+.badge-gfp { color: #7ce0c3; border-color: rgba(124, 224, 195, 0.5); }
 .mod-conflict-flag {
   flex-shrink: 0; font-size: 11px; color: var(--amber); cursor: pointer;
   background: rgba(255, 200, 87, 0.08); border: 1px solid rgba(255, 200, 87, 0.4);

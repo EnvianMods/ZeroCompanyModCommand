@@ -1,6 +1,6 @@
 # Zero Company Mod Command — Changelog
 
-## Unreleased
+## v1.9.12 (2026-09-13)
 
 **Mods that install as a folder in `SWZeroCompany\Mods` now install properly**
 - A growing number of mods ship as a **Game Feature plugin**: a folder with a

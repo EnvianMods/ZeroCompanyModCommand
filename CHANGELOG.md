@@ -1,5 +1,23 @@
 # Zero Company Mod Command — Changelog
 
+## Unreleased
+
+**Signing in to Nexus Mods replaces the personal API key**
+- Nexus Mods requires apps like this one to sign you in with your Nexus account
+  instead of asking for a personal API key, so the key box is gone from Settings
+  and from the first-run assistant.
+- What you do now: Settings → Nexus Mods → **Sign in with Nexus Mods**. Your
+  browser opens on nexusmods.com, you approve Mod Command there, and the app
+  picks it up. That's the whole thing — the app never sees your password.
+- Mod Command stores only the tokens Nexus hands back, encrypted with your
+  Windows/OS account, and only ever sends them to nexusmods.com. Settings shows
+  who you are signed in as, whether the account is Premium, and a **Sign out**
+  button. You can also revoke the app's access at any time from your Nexus
+  account page.
+- Any API key you had saved is **discarded** when this version first starts —
+  it is no longer used for anything. One-click downloads, update checking,
+  version pickers and mod linking all work again as soon as you sign in.
+
 ## v1.9.12 (2026-09-13)
 
 **Mods that install as a folder in `SWZeroCompany\Mods` now install properly**

@@ -107,7 +107,8 @@ GETTING STARTED
    data in a folder next to the exe
 2. The game is auto-detected through Steam (or set the folder in
    Settings)
-3. In Settings -> Nexus Mods, paste your personal API key and press
+3. In Settings -> Nexus Mods, press "Sign in with Nexus Mods" and
+   approve Mod Command in the browser tab that opens, then press
    "Register handler" to enable one-click downloads
 4. Install mods from the Holonet tab, or drag archives onto the window
 

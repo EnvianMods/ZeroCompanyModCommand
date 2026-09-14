@@ -289,21 +289,21 @@
           <div class="card-body settings-body">
             <div class="setting-row">
               <div class="setting-info">
-                <span class="setting-name">API key</span>
-                <span id="nexus-status" class="setting-value">No key stored</span>
+                <span class="setting-name">Account</span>
+                <span id="nexus-status" class="setting-value">Not signed in</span>
               </div>
               <div class="nexus-key-controls">
-                <input type="password" id="nexus-key-input" class="text-input" placeholder="Paste personal API key" />
-                <button class="btn tiny" id="btn-nexus-save">Save</button>
-                <button class="btn ghost tiny" id="btn-nexus-clear">Clear</button>
+                <button class="btn tiny primary" id="btn-nexus-signin">Sign in with Nexus Mods</button>
+                <button class="btn tiny" id="btn-nexus-verify">Verify</button>
+                <button class="btn ghost tiny" id="btn-nexus-signout">Sign out</button>
               </div>
             </div>
             <div class="setting-row">
               <div class="setting-info">
-                <span class="setting-name dim">Where do I get the key?</span>
-                <p class="setting-note dim">The key is free with any Nexus Mods account and unlocks one-click downloads and update checking. Press the button to open your Nexus API keys page (log in if asked), scroll to <b>Personal API Key</b> at the bottom, press <b>Request an API key</b> if you don't have one yet, then copy it and paste it into the field above. The key is stored encrypted with your OS account — never in plain text — and is only ever sent to nexusmods.com.</p>
+                <span class="setting-name dim">How does signing in work?</span>
+                <p class="setting-note dim">Sign-in opens nexusmods.com in your browser; the app never sees your password. It stores only the access tokens Nexus issues, encrypted with your OS account, and only ever sends them to nexusmods.com. You can revoke access any time from your Nexus account settings.</p>
               </div>
-              <button class="btn" data-url="https://next.nexusmods.com/settings/api-keys">Get my API key ↗</button>
+              <button class="btn" data-url="https://www.nexusmods.com/users/myaccount">Nexus account ↗</button>
             </div>
             <div class="setting-row">
               <div class="setting-info">
@@ -543,12 +543,10 @@
       </div>
 
       <div class="setup-step">
-        <div class="setup-step-head"><span class="setup-step-num">2</span> NEXUS API KEY <span id="setup-key-status" class="setup-status"></span></div>
-        <p class="setting-note dim">The free key unlocks one-click installs and update checking. Press the button, log in if asked, scroll to <b>Personal API Key</b> at the bottom, press <b>Request an API key</b> if you don't have one, copy it, and paste it here. It is stored encrypted with your OS account and only ever sent to nexusmods.com.</p>
+        <div class="setup-step-head"><span class="setup-step-num">2</span> SIGN IN TO NEXUS MODS <span id="setup-signin-status" class="setup-status"></span></div>
+        <p class="setting-note dim">Signing in with your free Nexus Mods account unlocks one-click installs and update checking. Press the button — nexusmods.com opens in your browser, you approve Mod Command there, and that's it. The app never sees your password; it stores only the access tokens Nexus issues, encrypted with your OS account.</p>
         <div class="setup-row">
-          <button class="btn" data-url="https://next.nexusmods.com/settings/api-keys">Get my API key ↗</button>
-          <input type="password" id="setup-key-input" class="text-input" placeholder="Paste personal API key" />
-          <button class="btn tiny primary" id="btn-setup-key-save">Save</button>
+          <button class="btn tiny primary" id="btn-setup-signin">Sign in with Nexus Mods</button>
         </div>
       </div>
 

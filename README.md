@@ -168,13 +168,17 @@ automatically for IoStore package inspection; a different copy can be selected i
   Install button downloads+installs directly for premium accounts; non-premium
   accounts get the mod's Files page opened — pressing "Mod Manager Download" there
   sends the nxm:// link back into the manager, which installs it automatically.
-- **Nexus Mods integration** — paste your personal API key in Settings (validated
-  against the Nexus API; stored encrypted with your OS user credentials — Windows
-  DPAPI via Electron safeStorage — and never shown to the UI; a legacy plaintext
-  key is migrated automatically). Register the `nxm://` handler and "Mod Manager Download" buttons on
-  nexusmods.com install straight into the manager, with download progress, auto
-  naming/version from Nexus mod info. Non-premium accounts must start downloads from
-  the website button (the nxm link carries the required key/expires).
+- **Nexus Mods integration** — press **Sign in with Nexus Mods** in Settings: the
+  app opens nexusmods.com in your own browser (OAuth 2.0 authorization code +
+  PKCE, per Nexus's app guidelines), you approve Mod Command there, and it never
+  sees your password. Only the access tokens Nexus issues are kept, encrypted
+  with your OS user credentials (Windows DPAPI via Electron safeStorage), never
+  shown to the UI, and only ever sent to nexusmods.com; revoke access any time
+  from your Nexus account page. Register the `nxm://` handler and "Mod Manager
+  Download" buttons on nexusmods.com install straight into the manager, with
+  download progress, auto naming/version from Nexus mod info. Non-premium
+  accounts must start downloads from the website button (the nxm link carries the
+  required key/expires).
 - **UE4SS one-click install** — Settings → UE4SS → Download & install fetches the
   latest experimental UE4SS runtime zip from GitHub (UE4SS-RE/RE-UE4SS) and installs
   it into `Binaries/Win64`. Every runtime install snapshots the build it

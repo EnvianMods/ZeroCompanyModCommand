@@ -1058,10 +1058,15 @@ function renderSettings() {
   renderProfiles();
   // Nexus
   const nx = state.nexus || {};
-  const keyStorage = nx.keyEncrypted ? ' · encrypted at rest' : '';
-  $('#nexus-status').textContent = nx.hasKey
-    ? (nx.user ? `Key valid — ${nx.user.name}${nx.user.isPremium ? ' (premium)' : ''}${keyStorage}` : `Key stored${keyStorage}`)
-    : 'No key stored';
+  const atRest = nx.tokensEncrypted ? ' · tokens encrypted at rest' : '';
+  $('#nexus-status').textContent = nx.signedIn
+    ? (nx.user
+      ? `Signed in as ${nx.user.name} · ${nx.user.isPremium ? 'Premium' : 'Free'} member${atRest}`
+      : `Signed in${atRest}`)
+    : 'Not signed in';
+  $('#btn-nexus-signin').classList.toggle('hidden', !!nx.signedIn);
+  $('#btn-nexus-verify').classList.toggle('hidden', !nx.signedIn);
+  $('#btn-nexus-signout').classList.toggle('hidden', !nx.signedIn);
   $('#nxm-status').textContent = nx.nxmRegistered
     ? 'Registered — “Mod Manager Download” buttons install here'
     : 'Not registered';
@@ -1215,20 +1220,37 @@ $('#btn-browse-7z').addEventListener('click', async () => {
   const data = await call('browseToolPath', { key: 'sevenZipPath', title: 'Locate 7z.exe', filterName: '7-Zip' });
   if (data) { state = data; render(); }
 });
-$('#btn-nexus-save').addEventListener('click', async () => {
-  const key = $('#nexus-key-input').value;
-  if (!key.trim()) { toast('Paste your Nexus API key first.', 'warn'); return; }
-  const data = await call('setNexusKey', key);
+// Sign-in runs in the user's own browser; the app just waits for the callback.
+async function runNexusSignIn(btn, after) {
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Waiting for your browser…';
+  try {
+    const data = await call('nexusSignIn');
+    if (!data) return false;
+    state = data;
+    render();
+    if (after) after();
+    toast(`Signed in to Nexus Mods — welcome, ${state.nexus.user.name}.`);
+    return true;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+}
+$('#btn-nexus-signin').addEventListener('click', (e) => runNexusSignIn(e.currentTarget));
+$('#btn-nexus-verify').addEventListener('click', async () => {
+  const data = await call('nexusRefreshUser');
   if (data) {
     state = data;
-    $('#nexus-key-input').value = '';
     render();
-    toast(`Nexus key validated — welcome, ${state.nexus.user.name}.`);
+    const u = state.nexus.user;
+    toast(u ? `Nexus Mods confirmed the sign-in — ${u.name} (${u.isPremium ? 'premium' : 'free'} account).` : 'Nexus Mods confirmed the sign-in.');
   }
 });
-$('#btn-nexus-clear').addEventListener('click', async () => {
-  const data = await call('clearNexusKey');
-  if (data) { state = data; render(); toast('Nexus key cleared.'); }
+$('#btn-nexus-signout').addEventListener('click', async () => {
+  const data = await call('nexusSignOut');
+  if (data) { state = data; render(); toast('Signed out of Nexus Mods — the stored tokens were cleared and revoked.'); }
 });
 $('#btn-nxm-register').addEventListener('click', async () => {
   const registered = state.nexus && state.nexus.nxmRegistered;
@@ -1323,7 +1345,7 @@ async function openUe4ssVersionsModal() {
     else if (cur && cur.source === 'nexus') badges.push(`installed: older v${cur.version || '?'} — newer available`);
     row(`${nx.name} v${nx.version || '?'}${badges.length ? ` — ${badges.join(' · ')}` : ''}`,
       `${nx.modName || 'Nexus mod 9'} · ${(nx.size / 1048576).toFixed(1)} MB · ${nx.publishedAt ? new Date(nx.publishedAt).toLocaleDateString() : ''} · ${tested}${nx.fileDescription ? ` · ${nx.fileDescription}` : ''}`,
-      data.isPremium ? (isCur ? '⭳ Reinstall' : '⭳ Install') : (data.hasApiKey ? 'Files page ↗' : 'Needs API key ↗'),
+      data.isPremium ? (isCur ? '⭳ Reinstall' : '⭳ Install') : (data.signedIn ? 'Files page ↗' : 'Sign in to install ↗'),
       async () => {
         if (!data.isPremium) { $('#ue4ss-versions-modal').classList.add('hidden'); openNexusDownload('UE4SS for Star Wars Zero Company', data.nexusUrl); return; }
         const res = await call('installUe4ss', { nexusFileId: nx.fileId });
@@ -1578,7 +1600,7 @@ function refreshBrowseCards() {
 
 const CATEGORIES = ['Gameplay', 'Outfits', 'User Interface', 'Miscellaneous', 'Characters', 'Visuals', 'Audio', 'Weapons', 'Utilities'];
 const PAGE_SIZE = 24;
-const browse = { mods: [], total: 0, offset: 0, loading: false, loaded: false, isPremium: false, hasKey: false };
+const browse = { mods: [], total: 0, offset: 0, loading: false, loaded: false, isPremium: false, signedIn: false };
 
 for (const c of CATEGORIES) {
   const opt = document.createElement('option');
@@ -1622,10 +1644,10 @@ async function loadBrowse(reset) {
   try {
     const res = await window.zc.browseNexus({ ...browseParams(), offset: browse.offset });
     if (!res.ok) throw new Error(res.error);
-    const { mods, totalCount, isPremium, hasKey } = res.data;
+    const { mods, totalCount, isPremium, signedIn } = res.data;
     browse.total = totalCount;
     browse.isPremium = isPremium;
-    browse.hasKey = hasKey;
+    browse.signedIn = signedIn;
     browse.mods.push(...mods);
     browse.offset += mods.length;
     browse.loaded = true;
@@ -1792,7 +1814,7 @@ function makeHolonetVersionsBtn(m) {
   const btn = document.createElement('button');
   btn.className = 'btn ghost tiny';
   btn.textContent = '⧗';
-  btn.title = 'Choose a version — install any file the mod page offers (needs the API key)';
+  btn.title = 'Choose a version — install any file the mod page offers (needs a Nexus Mods sign-in)';
   btn.addEventListener('click', () => openNexusVersionsModal(m));
   return btn;
 }
@@ -2626,8 +2648,8 @@ $('#btn-link-mods').addEventListener('click', async () => {
       toast('Every installed mod is already linked to a source.', 'info', 6000);
       return;
     }
-    if (!res.hasKey) {
-      toast('A Nexus API key is required to link mods. Add one in Settings.', 'warn', 8000);
+    if (!res.signedIn) {
+      toast('Linking mods needs a Nexus Mods sign-in. Sign in from Settings.', 'warn', 8000);
       return;
     }
     startLinkWizard(res.suggestions);
@@ -3456,11 +3478,13 @@ function refreshSetupModal() {
   $('#setup-game-note').textContent = det.found
     ? `Found the ${{ steam: 'Steam', ea: 'EA App', manual: 'manually installed' }[det.launcher] || ''} edition${det.buildId ? ` (build ${det.buildId})` : ''} — nothing to do here.`
     : 'The game was not auto-detected. Set the game folder in Settings → Paths after finishing setup.';
-  const hasKey = state.nexus && state.nexus.hasKey;
-  $('#setup-key-status').textContent = hasKey ? '✔ SAVED' : '· NEEDED';
-  $('#setup-key-status').className = `setup-status ${hasKey ? 'good' : ''}`;
-  $('#setup-key-input').disabled = !!hasKey;
-  $('#btn-setup-key-save').disabled = !!hasKey;
+  const signedIn = state.nexus && state.nexus.signedIn;
+  $('#setup-signin-status').textContent = signedIn ? '✔ SIGNED IN' : '· NEEDED';
+  $('#setup-signin-status').className = `setup-status ${signedIn ? 'good' : ''}`;
+  $('#btn-setup-signin').disabled = !!signedIn;
+  $('#btn-setup-signin').textContent = signedIn
+    ? `✔ Signed in as ${(state.nexus.user && state.nexus.user.name) || 'your Nexus account'}`
+    : 'Sign in with Nexus Mods';
   const nxm = state.nexus && state.nexus.nxmRegistered;
   $('#setup-nxm-status').textContent = nxm ? '✔ REGISTERED' : '· NEEDED';
   $('#setup-nxm-status').className = `setup-status ${nxm ? 'good' : ''}`;
@@ -3479,33 +3503,16 @@ async function closeSetupModal(finished) {
   if (data) { state = data; render(); }
   maybeRunFirstScan();
   if (!finished) {
-    toast('Setup skipped — the API key and one-click downloads live in Settings whenever you need them.', 'info', 8000);
+    toast('Setup skipped — the Nexus sign-in and one-click downloads live in Settings whenever you need them.', 'info', 8000);
   } else {
-    const ready = state.nexus && state.nexus.hasKey && state.nexus.nxmRegistered;
+    const ready = state.nexus && state.nexus.signedIn && state.nexus.nxmRegistered;
     toast(ready
       ? 'Mission-ready: press “Mod Manager Download” on any Nexus mod and it installs here.'
       : 'Setup saved — anything you left out is waiting in Settings.', 'info', 8000);
   }
 }
 
-$('#btn-setup-key-save').addEventListener('click', async () => {
-  const key = $('#setup-key-input').value;
-  if (!key.trim()) { toast('Paste your Nexus API key first.', 'warn'); return; }
-  const btn = $('#btn-setup-key-save');
-  btn.disabled = true;
-  try {
-    const data = await call('setNexusKey', key);
-    if (data) {
-      state = data;
-      $('#setup-key-input').value = '';
-      render();
-      refreshSetupModal();
-      toast(`Nexus key validated — welcome, ${state.nexus.user.name}.`);
-    }
-  } finally {
-    if (!(state.nexus && state.nexus.hasKey)) btn.disabled = false;
-  }
-});
+$('#btn-setup-signin').addEventListener('click', (e) => runNexusSignIn(e.currentTarget, refreshSetupModal));
 
 $('#btn-setup-nxm').addEventListener('click', async () => {
   const data = await call('registerNxm');
@@ -3526,7 +3533,7 @@ $('#btn-rerun-setup').addEventListener('click', () => openSetupModal());
 refreshState().then(() => {
   runDiagnostics();
   if (!state) return;
-  const ready = state.nexus && state.nexus.hasKey && state.nexus.nxmRegistered;
+  const ready = state.nexus && state.nexus.signedIn && state.nexus.nxmRegistered;
   if (!state.settings.onboarded) {
     if (ready) {
       // Existing install that's already fully configured — mark and move on.

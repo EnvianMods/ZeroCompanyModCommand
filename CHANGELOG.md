@@ -1,6 +1,6 @@
 # Zero Company Mod Command — Changelog
 
-## Unreleased
+## v1.9.13 (2026-09-14)
 
 **Signing in to Nexus Mods replaces the personal API key**
 - Nexus Mods requires apps like this one to sign you in with your Nexus account

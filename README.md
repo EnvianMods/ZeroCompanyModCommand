@@ -161,10 +161,18 @@ automatically for IoStore package inspection; a different copy can be selected i
   INI files get a structured section/key/value view that preserves comments, ordering
   and duplicate keys exactly (only values are editable); Raw view edits the full text.
   The original file is backed up to `.zcbak` on first save.
+- **Adult content follows your Nexus account** — there is no "show adult content"
+  switch in Mod Command, by design. Signed out, adult-rated mods are filtered out of
+  every listing: browsing, categories, search, the featured strip and the Link wizard
+  (a search by name is not a way past it). Signed in, the app reads your own Nexus
+  account's content preference — the one behind Nexus's age verification — and follows
+  it, blurring adult thumbnails when your account asks for that (hover to reveal).
+  Adult-rated mods always carry an **18+** chip. Settings → Nexus Mods states what is
+  in force and links to your Nexus content-preferences page to change it.
 - **Holonet browser** — an in-app Nexus Mods browser for Zero Company: grid of mods
   with thumbnails, author/version/category, download & endorsement counts, live search,
   category filter, and sorting (downloads / endorsements / newest / updated / name),
-  with paging. Powered by the Nexus GraphQL v2 API (no key needed to browse). The
+  with paging. Powered by the Nexus GraphQL v2 API (browsing needs no sign-in). The
   Install button downloads+installs directly for premium accounts; non-premium
   accounts get the mod's Files page opened — pressing "Mod Manager Download" there
   sends the nxm:// link back into the manager, which installs it automatically.
@@ -178,7 +186,16 @@ automatically for IoStore package inspection; a different copy can be selected i
   Download" buttons on nexusmods.com install straight into the manager, with
   download progress, auto naming/version from Nexus mod info. Non-premium
   accounts must start downloads from the website button (the nxm link carries the
-  required key/expires).
+  required key/expires). Every request to Nexus — v1, GraphQL, the OAuth endpoints
+  and the download CDN — goes out through one helper (`lib/nexus-http.js`) that
+  identifies the app by registered name, version and User-Agent.
+- **Request allowance, read from Nexus** — Settings → Nexus Mods shows the quota
+  Nexus reports on every reply ("API requests: 1,950 of 2,000 this hour (resets
+  16:00) · 19,900 of 20,000 today (resets 00:00 UTC)"). When it runs out the app
+  stops instead of retrying, with a readable "try again after HH:MM"; it honours
+  `Retry-After` on a 429, keeps at most two requests in flight, and background
+  work (the hourly update check, the file-name index) leaves a reserve for your
+  own clicks and reschedules itself rather than spending it.
 - **UE4SS one-click install** — Settings → UE4SS → Download & install fetches the
   latest experimental UE4SS runtime zip from GitHub (UE4SS-RE/RE-UE4SS) and installs
   it into `Binaries/Win64`. Every runtime install snapshots the build it

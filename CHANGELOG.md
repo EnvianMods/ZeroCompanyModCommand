@@ -18,6 +18,36 @@
   it is no longer used for anything. One-click downloads, update checking,
   version pickers and mod linking all work again as soon as you sign in.
 
+**Adult content now follows your Nexus account**
+- The Holonet's "Show adult content" checkbox is gone. Whether adult-rated mods
+  appear is decided by the **content preference on your own Nexus account** —
+  the one behind Nexus's age verification — and nothing else.
+- Signed out, adult-rated mods are hidden everywhere: browsing, categories,
+  searching, the featured strip and the Link wizard alike. (Searching by name
+  used to slip past the filter; it no longer does.)
+- Signed in, Mod Command asks Nexus what your account says and follows it. If
+  your account also asks for adult images to be blurred, those thumbnails are
+  blurred here too — hover a card to reveal it. Adult-rated mods always carry
+  an **18+** chip either way.
+- Settings → Nexus Mods shows what is in force and links straight to your Nexus
+  content-preferences page to change it.
+
+**Nexus's request limits are respected**
+- Mod Command now reads the request allowance Nexus sends back with every reply
+  and shows it in Settings → Nexus Mods: how many requests are left this hour
+  and today, and when each resets.
+- When the allowance runs out, the app stops rather than hammering, and tells
+  you plainly: *"Nexus Mods request limit reached — try again after 16:00."*
+  If Nexus asks it to wait a moment, it waits and tries once more.
+- Background work — the hourly update check and the file-name index — keeps a
+  reserve so your own clicks always have requests to spend, spaces itself out,
+  and quietly reschedules for when the allowance refills. Nothing you press has
+  to queue behind it.
+
+**Mod Command identifies itself to Nexus Mods**
+- Every request to Nexus now carries the app's registered name and version, so
+  Nexus can see what its API is being used by. Nothing else changed for you.
+
 ## v1.9.12 (2026-09-13)
 
 **Mods that install as a folder in `SWZeroCompany\Mods` now install properly**

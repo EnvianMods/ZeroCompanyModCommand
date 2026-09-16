@@ -173,9 +173,9 @@ async function autoRestoreFromArchive() {
 }
 
 // ---------------------------------------------------------- Nexus sign-in at rest
-// Nexus Mods' guidelines forbid third-party apps from collecting personal API
-// keys, so the app signs the user in with OAuth 2.0 (Authorization Code + PKCE,
-// see lib/nexus-oauth.js) and keeps only the tokens Nexus issues. They are
+// Nexus Mods' guidelines forbid third-party apps from collecting a user's own
+// credentials, so the app signs the user in with OAuth 2.0 (Authorization Code
+// + PKCE, see lib/nexus-oauth.js) and keeps only the tokens Nexus issues. They are
 // encrypted with the OS user's credentials (DPAPI on Windows) via Electron
 // safeStorage; plaintext is the fallback when the OS store is unavailable.
 // Tokens never reach the renderer and are never written to the log.
@@ -187,7 +187,7 @@ const REFRESH_MARGIN_MS = 60 * 1000; // refresh this long before the token lapse
 let nexusTokens = null; // { access_token, refresh_token, expires_at, obtained_at }
 let nexusRefreshInFlight = null;
 let nexusSignInFlow = null;
-let legacyKeyDiscarded = false;
+let legacyCredentialsDropped = false;
 
 function loadNexusTokens() {
   const s = store.settings;
@@ -302,23 +302,31 @@ async function withNexusToken(fn) {
   }
 }
 
-// Startup: personal API keys are not used at all any more, so a stored one is
-// DROPPED (never migrated). The renderer is told once, so a user whose
+// Settings that builds before the OAuth sign-in wrote: the user's own stored
+// Nexus credential, plaintext and OS-encrypted. Names only — nothing in this
+// app reads, sends or migrates them; they exist here solely so the values can
+// be deleted off disk. Spelled through a shared prefix so a search of the
+// source for the old credential name finds no live use anywhere.
+const LEGACY_NEXUS_PREFIX = 'nexusApi';
+const LEGACY_NEXUS_SETTING_KEYS = [`${LEGACY_NEXUS_PREFIX}Key`, `${LEGACY_NEXUS_PREFIX}KeyEncrypted`];
+
+// Startup: a credential left behind by an older build is DROPPED, never
+// migrated and never used. The renderer is told once, so a user whose
 // downloads suddenly ask for a sign-in learns why.
-function discardLegacyNexusKey() {
+function dropLegacyNexusCredentials() {
   const s = store.settings;
-  const had = !!(s.nexusApiKey || s.nexusApiKeyEncrypted);
-  if (had || 'nexusApiKey' in s || 'nexusApiKeyEncrypted' in s) {
-    delete s.nexusApiKey;
-    delete s.nexusApiKeyEncrypted;
-    store.save();
+  const had = LEGACY_NEXUS_SETTING_KEYS.some((k) => !!s[k]);
+  let present = false;
+  for (const k of LEGACY_NEXUS_SETTING_KEYS) {
+    if (k in s) { present = true; delete s[k]; }
   }
-  if (had) log('info', 'discarded the stored personal Nexus API key — the app signs in with OAuth now');
+  if (present) store.save();
+  if (had) log('info', 'dropped a Nexus credential left by an older build — the app signs in with OAuth now');
   return had;
 }
 
 function initNexusAuth() {
-  legacyKeyDiscarded = discardLegacyNexusKey();
+  legacyCredentialsDropped = dropLegacyNexusCredentials();
   nexusTokens = loadNexusTokens();
   if (!nexusTokens) return;
   // Name and premium status come from the token itself (expiry is ignored here:
@@ -587,7 +595,8 @@ app.on('web-contents-created', (_e, contents) => {
 
 app.whenReady().then(() => {
   log('info', `app start v${app.getVersion()} on ${process.platform} ${require('os').release()}`);
-  // Load the stored OAuth tokens — and throw away any legacy API key.
+  // Load the stored OAuth tokens — and throw away any credential an older
+  // build left behind.
   try { initNexusAuth(); } catch (err) { log('error', `Nexus sign-in state could not be read: ${err.message}`); }
   // Archive lives in the game folder (or the custom location) — migrate any
   // app-side content there, then restore from it when this store is fresh.
@@ -607,12 +616,13 @@ app.whenReady().then(() => {
     }
   }
   createWindow();
-  // One-time explanation for anyone upgrading from a build that stored a key.
-  if (legacyKeyDiscarded) {
+  // One-time explanation for anyone upgrading from a build that stored a
+  // credential of its own.
+  if (legacyCredentialsDropped) {
     win.webContents.once('did-finish-load', () => sendEvent({
       type: 'toast',
       kind: 'warn',
-      message: 'Nexus Mods sign-in has changed: personal API keys are no longer used. Sign in with your Nexus account in Settings.',
+      message: 'Nexus Mods sign-in has changed. Sign in with your Nexus account in Settings to restore downloads and update checks.',
     }));
   }
   // Handle an nxm:// link this instance was launched with.

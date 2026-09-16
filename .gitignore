@@ -2,10 +2,10 @@
 node_modules/
 release/
 
-# Local user data (settings, Nexus API key, installed mod library)
+# Local user data (settings, Nexus sign-in tokens, installed mod library)
 data/
 
-# Secrets — never commit tokens or API keys
+# Secrets — never commit credentials of any kind
 owner-tools/**/*token*.txt
 owner-tools/**/nexus-key.txt
 token.txt

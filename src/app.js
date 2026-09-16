@@ -1086,6 +1086,11 @@ function renderSettings() {
   $('#btn-nexus-signin').classList.toggle('hidden', !!nx.signedIn);
   $('#btn-nexus-verify').classList.toggle('hidden', !nx.signedIn);
   $('#btn-nexus-signout').classList.toggle('hidden', !nx.signedIn);
+  // Read-only: this app has no adult-content switch of its own. It reports
+  // what the signed-in Nexus account says and points at the page to change it.
+  $('#nexus-adult').textContent = !nx.signedIn
+    ? 'hidden — sign in and enable it in your Nexus account preferences to see it here'
+    : (nx.adultAllowed ? 'shown (your Nexus account preference)' : 'hidden');
   // What Nexus's own rate-limit headers last reported. The hourly reset is
   // shown in local time (it is a wall-clock "come back at" for the user); the
   // daily one is stated in UTC, which is how Nexus rolls it over.
@@ -1632,24 +1637,16 @@ for (const c of CATEGORIES) {
   $('#browse-category').appendChild(opt);
 }
 
-// "Show adult content" — off by default, remembered per machine. Storage can
-// throw (or be wiped) in a packaged app, so every touch is guarded and the
-// safe answer on failure is "off".
-const ADULT_KEY = 'zc.holonet.showAdult';
-function showAdult() {
-  try { return localStorage.getItem(ADULT_KEY) === '1'; } catch (_) { return false; }
-}
-function setShowAdult(on) {
-  try { localStorage.setItem(ADULT_KEY, on ? '1' : '0'); } catch (_) { /* this run only */ }
-}
-
+// Whether adult-tagged mods are listed is not a setting in this app: it is the
+// signed-in Nexus account's own content preference, decided in the main
+// process (adultAllowed()) and applied to every query there. Nothing here
+// asks for it and nothing here can change it.
 function browseParams() {
   return {
     query: $('#browse-search').value,
     category: $('#browse-category').value || null,
     sort: $('#browse-sort').value,
     count: PAGE_SIZE,
-    includeAdult: showAdult(),
   };
 }
 
@@ -1744,14 +1741,20 @@ function buildBrowseCard(m) {
   summary.className = 'browse-summary';
   summary.textContent = m.summary;
   body.append(name, meta, stats, summary);
-  // Adult mods only reach a listing through a search or the toggle — flag them
-  // so it is never a surprise which card that is.
+  // An adult-tagged mod is always flagged, so it is never a surprise which
+  // card that is — and when the account asks for adult images to be blurred,
+  // its thumbnail is blurred until the pointer is on it.
   if (m.adult) {
     const chip = document.createElement('span');
     chip.className = 'adult-chip';
     chip.textContent = '18+';
     chip.title = 'Nexus Mods flags this mod as adult content.';
     meta.prepend(chip);
+    const nx = (state && state.nexus) || {};
+    if (nx.user && nx.user.adultBlurImages) {
+      pic.classList.add('adult-blur');
+      pic.title = 'Blurred because your Nexus account asks for adult images to be blurred — hover to view.';
+    }
   }
 
   const actions = document.createElement('div');
@@ -2004,13 +2007,10 @@ $('#browse-category').addEventListener('change', () => loadBrowse(true));
 $('#browse-sort').addEventListener('change', () => loadBrowse(true));
 $('#browse-refresh').addEventListener('click', () => loadBrowse(true));
 $('#browse-more').addEventListener('click', () => loadBrowse(false));
-// Runs before the first loadBrowse (the grid loads lazily on view switch), so
-// the remembered choice is already in place for page one.
-$('#browse-adult').checked = showAdult();
-$('#browse-adult').addEventListener('change', (e) => {
-  setShowAdult(e.target.checked);
-  loadBrowse(true);
-});
+// An older build remembered a "show adult content" choice per machine. There
+// is no such choice any more — the account's Nexus preference decides — so the
+// leftover value is cleared. Storage can throw in a packaged app, hence guarded.
+try { localStorage.removeItem('zc.holonet.showAdult'); } catch (_) { /* nothing to clear */ }
 
 // --------------------------------------------------- The Forge (curated GitHub)
 

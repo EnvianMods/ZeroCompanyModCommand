@@ -235,8 +235,61 @@ function applyNexusTokens(fresh) {
   const who = oauth.userFromToken(next.access_token); // throws on a token we cannot verify
   nexusTokens = next;
   saveNexusTokens(next);
-  nexusUser = { name: who.name, isPremium: who.isPremium };
+  nexusUser = {
+    name: who.name,
+    isPremium: who.isPremium,
+    // Until the account's own preferences come back, adult content is hidden.
+    adult: false, adultBlurImages: false, ageVerified: false,
+  };
+  // Every fresh token — sign-in and refresh alike — re-reads the account's
+  // content preferences, so a change made on nexusmods.com lands here.
+  refreshNexusPreferences().catch(() => {});
   return next;
+}
+
+// --------------------------------------------------------- adult content
+//
+// THE one place that decides whether adult-tagged mods are listed. There is no
+// in-app opt-in and no way to reach them while signed out: the answer is the
+// signed-in account's own Nexus content preference, which Nexus itself gates
+// behind its age verification. This app never second-guesses it in the other
+// direction, and every listing path (browse, category, search, the featured
+// strip and its backfill, the Link wizard) is handed this answer rather than
+// deciding for itself.
+function adultAllowed() {
+  return !!(nexusSignedIn() && nexusUser && nexusUser.adult === true);
+}
+
+// Fold what /users/validate.json says into the cached user WITHOUT losing the
+// content preferences already read from the account.
+function mergeNexusUser(patch) {
+  nexusUser = {
+    adult: false, adultBlurImages: false, ageVerified: false,
+    ...(nexusUser || {}),
+    ...(patch || {}),
+  };
+  return nexusUser;
+}
+
+// Ask Nexus what this account's content preferences are and cache them on
+// nexusUser. Any failure leaves adult content hidden.
+async function refreshNexusPreferences() {
+  if (!nexusSignedIn() || !nexusUser) return null;
+  let prefs;
+  try {
+    prefs = await nexus.userPreferences(await nexusAccessToken());
+  } catch (_) {
+    prefs = { adult: false, adultBlurImages: false, ageVerified: false };
+  }
+  if (!nexusUser) return null;
+  const changed = nexusUser.adult !== prefs.adult || nexusUser.adultBlurImages !== prefs.adultBlurImages;
+  Object.assign(nexusUser, prefs);
+  if (changed) {
+    log('info', `nexus account preferences: adult content ${prefs.adult ? 'shown' : 'hidden'}`
+      + `${prefs.adult && prefs.adultBlurImages ? ', images blurred' : ''}`);
+    try { sendEvent({ type: 'state', state: fullState() }); } catch (_) {}
+  }
+  return prefs;
 }
 
 function nexusSignOutLocal() {
@@ -335,7 +388,9 @@ function initNexusAuth() {
   // refreshes it). A token we cannot verify is refused outright.
   try {
     const who = oauth.userFromToken(nexusTokens.access_token, { ignoreExpiry: true });
-    nexusUser = { name: who.name, isPremium: who.isPremium };
+    // Adult content stays hidden until the account's own preferences answer.
+    nexusUser = { name: who.name, isPremium: who.isPremium, adult: false, adultBlurImages: false, ageVerified: false };
+    refreshNexusPreferences().catch(() => {});
   } catch (err) {
     log('error', `stored Nexus access token failed verification (${err.message}) — signed out`);
     nexusSignOutLocal();
@@ -822,7 +877,11 @@ app.on('window-all-closed', () => app.quit());
 
 // ------------------------------------------------------------------ helpers
 
-let nexusUser = null; // { name, isPremium } from the verified access token (or /users/validate.json)
+// { name, isPremium } from the verified access token (or /users/validate.json),
+// plus { adult, adultBlurImages, ageVerified } from the account's own Nexus
+// content preferences. adult/adultBlurImages reach the renderer in
+// fullState().nexus.user; the policy itself lives in adultAllowed().
+let nexusUser = null;
 let eaAppDetected = false; // probed once at startup (reg.exe is too slow per-state)
 
 // The quota Nexus reports, trimmed for the renderer: counts, and the reset
@@ -835,7 +894,7 @@ function compactQuota() {
   });
   return { known: q.known, hourly: win(q.hourly), daily: win(q.daily), updatedAt: q.updatedAt };
 }
-const promotedCache = { mods: null, at: 0, authors: [] };
+const promotedCache = { mods: null, at: 0, authors: [], adult: false };
 
 function fullState() {
   const detection = steam.detectGame(store.settings.gamePath);
@@ -856,7 +915,17 @@ function fullState() {
     nexus: {
       signedIn: nexusSignedIn(),
       tokensEncrypted: !!store.settings.nexusOAuthEncrypted,
-      user: nexusUser,
+      user: nexusUser ? {
+        name: nexusUser.name,
+        isPremium: !!nexusUser.isPremium,
+        // The account's own Nexus content preferences, for display only.
+        adult: !!nexusUser.adult,
+        adultBlurImages: !!nexusUser.adultBlurImages,
+        ageVerified: !!nexusUser.ageVerified,
+      } : null,
+      // The one policy answer, decided in main by adultAllowed(). The renderer
+      // reads it to describe the state; it never gets to change it.
+      adultAllowed: adultAllowed(),
       nxmRegistered: app.isDefaultProtocolClient('nxm', exe, args),
       // What Nexus's own x-rl-* headers last said about the request quota.
       quota: compactQuota(),
@@ -1073,7 +1142,7 @@ async function scoreCandidates(m, index, fileCache) {
   try {
     const q = searchQuery(localName);
     if (q && q.length >= 2) {
-      const res = await nexus.browseMods({ query: q, sort: 'downloads', count: 25 });
+      const res = await nexus.browseMods({ query: q, sort: 'downloads', count: 25, includeAdult: adultAllowed() });
       for (const r of (res.mods || [])) {
         const s = titleScore(localName, r.name);
         if (s >= 0.34) note(r, confOf(s));
@@ -1084,7 +1153,7 @@ async function scoreCandidates(m, index, fileCache) {
   //    mods are few, so each gets a live file check for a name match too.
   if (author) {
     try {
-      for (const r of (await nexus.modsByAuthors([author])).slice(0, 10)) {
+      for (const r of (await nexus.modsByAuthors([author], { includeAdult: adultAllowed() })).slice(0, 10)) {
         note(r, 'author');
         if (!byId.get(r.modId).reasons.has('file') && await modHasMatchingFile(r.modId, localName, fileCache)) note(r, 'file');
       }
@@ -1368,9 +1437,11 @@ const handlers = {
   // What Nexus's rate-limit headers last reported, for Settings.
   'nexus-quota': async () => compactQuota(),
 
-  // "Verify": ask the API itself who this token belongs to.
+  // "Verify": ask the API itself who this token belongs to, and re-read the
+  // account's content preferences while we are there.
   'nexus-refresh-user': async () => {
-    nexusUser = await withNexusToken((t) => nexus.validateToken(t));
+    mergeNexusUser(await withNexusToken((t) => nexus.validateToken(t)));
+    await refreshNexusPreferences();
     return fullState();
   },
   'register-nxm': async () => {
@@ -1418,38 +1489,42 @@ const handlers = {
   },
 
   'nexus-browse': async (_e, opts) => {
-    const result = await nexus.browseMods(opts || {}); // anonymous — browsing needs no sign-in
+    // Browsing itself needs no sign-in. Whether adult-tagged mods are in the
+    // listing is NEVER the renderer's call: adultAllowed() decides, and any
+    // includeAdult that arrived from the renderer is discarded here.
+    const result = await nexus.browseMods({ ...(opts || {}), includeAdult: adultAllowed() });
     // Premium accounts can pull download links straight from the API.
     if (nexusSignedIn() && !nexusUser) {
-      try { nexusUser = await withNexusToken((t) => nexus.validateToken(t)); } catch (_) {}
+      try { mergeNexusUser(await withNexusToken((t) => nexus.validateToken(t))); } catch (_) {}
     }
     return { ...result, signedIn: nexusSignedIn(), isPremium: !!(nexusUser && nexusUser.isPremium) };
   },
 
   'nexus-promoted': async () => {
-    // Session cache — the featured pool rarely changes.
+    // Session cache — the featured pool rarely changes. It is also keyed on
+    // the adult answer, so signing in or out never serves a stale mix.
     const now = Date.now();
-    if (promotedCache.mods && now - promotedCache.at < 5 * 60 * 1000) return promotedCache;
+    const adult = adultAllowed();
+    if (promotedCache.mods && promotedCache.adult === adult && now - promotedCache.at < 5 * 60 * 1000) return promotedCache;
     const roster = await getPromotedAuthors();
-    const mods = await nexus.modsByAuthors(roster);
+    const mods = await nexus.modsByAuthors(roster, { includeAdult: adult });
     // When the roster can't fill all 3 slots, backfill from the game's top mods.
     let fillers = [];
     if (mods.length < 3) {
       try {
-        // Default surface — no adult-tagged mods in the featured strip.
-        const top = await nexus.browseMods({ sort: 'downloads', count: 12, includeAdult: false });
+        const top = await nexus.browseMods({ sort: 'downloads', count: 12, includeAdult: adult });
         const promotedIds = new Set(mods.map((m) => m.modId));
         fillers = top.mods.filter((m) => !promotedIds.has(m.modId));
       } catch (_) { /* strip just shows what it has */ }
     }
-    Object.assign(promotedCache, { mods, fillers, at: now, authors: roster });
+    Object.assign(promotedCache, { mods, fillers, at: now, authors: roster, adult });
     return promotedCache;
   },
 
   'nexus-install-remote': async (_e, { modId, name }) => {
     const token = await nexusAccessToken();
     if (!nexusUser) {
-      try { nexusUser = await nexus.validateToken(token); } catch (err) { throw new Error(err.message); }
+      try { mergeNexusUser(await nexus.validateToken(token)); } catch (err) { throw new Error(err.message); }
     }
     if (!nexusUser.isPremium) {
       // Nexus policy: non-premium downloads must start on the website. Rather
@@ -1628,13 +1703,13 @@ const handlers = {
         sizeKb: f.size_kb || f.size || 0,
         uploaded: f.uploaded_timestamp ? new Date(f.uploaded_timestamp * 1000).toISOString() : null,
       }));
-    if (!nexusUser) { try { nexusUser = await nexus.validateToken(token); } catch (_) {} }
+    if (!nexusUser) { try { mergeNexusUser(await nexus.validateToken(token)); } catch (_) {} }
     return { files: usable, isPremium: !!(nexusUser && nexusUser.isPremium) };
   },
 
   'nexus-install-file': async (_e, { modId, fileId, name }) => {
     const token = await nexusAccessToken();
-    if (!nexusUser) { try { nexusUser = await nexus.validateToken(token); } catch (err) { throw new Error(err.message); } }
+    if (!nexusUser) { try { mergeNexusUser(await nexus.validateToken(token)); } catch (err) { throw new Error(err.message); } }
     if (!nexusUser.isPremium) {
       // Free accounts: the website mints the link. Open the mod's Files page in
       // the embedded Nexus panel; the nxm handoff installs the file the user
@@ -1715,7 +1790,7 @@ const handlers = {
   // Wizard search box: title OR author (anonymous), then flag results whose
   // uploaded file is named like the local mod so the right page stands out.
   'link-search': async (_e, { query, modId } = {}) => {
-    const mods = await nexus.searchMods(query, 10);
+    const mods = await nexus.searchMods(query, 10, { includeAdult: adultAllowed() });
     const local = modId ? store.getMod(modId) : null;
     const fileCache = new Map();
     const out = [];
@@ -1908,7 +1983,7 @@ const handlers = {
     const latest = releases.find((r) => r.recommended) || null;
     const [, nexusLatest] = await Promise.all([latest ? ue4ssDl.refreshLatest(true) : null, ue4ssDl.refreshNexusLatest(true)]);
     const signedIn = nexusSignedIn();
-    if (signedIn && !nexusUser) { try { nexusUser = await withNexusToken((t) => nexus.validateToken(t)); } catch (_) {} }
+    if (signedIn && !nexusUser) { try { mergeNexusUser(await withNexusToken((t) => nexus.validateToken(t))); } catch (_) {} }
     const det = steam.detectGame(store.settings.gamePath);
     return {
       releases, releasesError, installed, status: engine.ue4ssStatus(), vault: engine.ue4ssListVault(),
@@ -2023,7 +2098,7 @@ function spawnGameExe(detection) {
 async function installUe4ssFromNexus(fileId) {
   if (!nexusSignedIn()) throw new Error('Sign in to Nexus Mods in Settings first, or install the GitHub build.');
   const token = await nexusAccessToken();
-  if (!nexusUser) { try { nexusUser = await nexus.validateToken(token); } catch (err) { throw new Error(err.message); } }
+  if (!nexusUser) { try { mergeNexusUser(await nexus.validateToken(token)); } catch (err) { throw new Error(err.message); } }
   if (!nexusUser.isPremium) return { opened: 'embed', url: ue4ssDl.NEXUS_URL, name: 'UE4SS for Star Wars Zero Company' };
   const files = await nexus.filesList(ue4ssDl.NEXUS_MOD_ID, token);
   const file = files.find((f) => f.file_id === fileId);

@@ -140,10 +140,6 @@
               <option value="name">Name A–Z</option>
             </select>
             <button id="browse-refresh" class="btn tiny">⟳ Refresh</button>
-            <label class="adult-toggle" title="Adult-rated mods are hidden from this listing by default. A search by name finds them either way.">
-              <input type="checkbox" id="browse-adult" />
-              <span>Show adult content</span>
-            </label>
             <span id="browse-count" class="browse-count dim"></span>
           </div>
           <div id="browse-status" class="browse-status hidden"></div>
@@ -304,6 +300,13 @@
                 <p class="setting-note dim">Sign-in opens nexusmods.com in your browser; the app never sees your password. It stores only the access tokens Nexus issues, encrypted with your OS account, and only ever sends them to nexusmods.com. You can revoke access any time from your Nexus account settings.</p>
               </div>
               <button class="btn" data-url="https://www.nexusmods.com/users/myaccount">Nexus account ↗</button>
+            </div>
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-name">Adult content</span>
+                <span id="nexus-adult" class="setting-value">hidden</span>
+              </div>
+              <button class="btn ghost" data-url="https://www.nexusmods.com/users/myaccount?tab=content+preferences">Change on nexusmods.com ↗</button>
             </div>
             <div class="setting-row">
               <div class="setting-info">

@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld('zc', {
   nexusSignIn: () => invoke('nexus-sign-in'),
   nexusSignOut: () => invoke('nexus-sign-out'),
   nexusRefreshUser: () => invoke('nexus-refresh-user'),
+  nexusQuota: () => invoke('nexus-quota'),
   registerNxm: () => invoke('register-nxm'),
   unregisterNxm: () => invoke('unregister-nxm'),
   // installUe4ss('experimental-latest') | installUe4ss({ nexusFileId: 743 }) | installUe4ss()

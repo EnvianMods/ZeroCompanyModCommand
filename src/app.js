@@ -467,6 +467,9 @@ $('#btn-check-updates').addEventListener('click', async () => {
     state = res.state;
     render();
     const { checked, updates, errors } = res.results;
+    // Nexus's request limit, said plainly and with the time to come back.
+    if (res.results.limited) toast(res.results.limited.message, 'warn', 9000);
+    else if (res.results.skippedNexus) toast(`Nexus mods were skipped this time — ${res.results.skippedNexus.reason}.`, 'warn', 9000);
     if (!checked) toast('No mods have an update source (Nexus/GitHub installs are tracked).', 'info', 6000);
     else toast(updates ? `${updates} update(s) available.` : `All ${checked} tracked mod(s) are up to date.`, updates ? 'warn' : 'info', 6000);
     if (res.results.ue4ssUpdate) toast(`Newer UE4SS ${res.results.ue4ssUpdate.source === 'nexus' ? 'compatibility ' : ''}build available: ${res.results.ue4ssUpdate.latestBuild} (you have ${res.results.ue4ssUpdate.currentBuild}) — Settings → UE4SS.`, 'warn', 8000);
@@ -1054,6 +1057,22 @@ $('#btn-profile-delete').addEventListener('click', async () => {
   if (data) { state = data; render(); toast('Profile deleted.'); }
 });
 
+// "1,950 of 2,000 this hour (resets 16:00) · 19,900 of 20,000 today (resets 00:00 UTC)"
+function formatNexusQuota(q) {
+  if (!q || !q.known || !q.hourly || q.hourly.remaining == null) {
+    return 'Not known yet — shown after the next request to Nexus Mods';
+  }
+  const n = (v) => Number(v).toLocaleString();
+  const pad = (v) => String(v).padStart(2, '0');
+  const local = (iso) => { const d = new Date(iso); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  const utc = (iso) => { const d = new Date(iso); return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} UTC`; };
+  const parts = [`${n(q.hourly.remaining)} of ${n(q.hourly.limit)} this hour${q.hourly.resetAt ? ` (resets ${local(q.hourly.resetAt)})` : ''}`];
+  if (q.daily && q.daily.remaining != null) {
+    parts.push(`${n(q.daily.remaining)} of ${n(q.daily.limit)} today${q.daily.resetAt ? ` (resets ${utc(q.daily.resetAt)})` : ''}`);
+  }
+  return parts.join(' · ');
+}
+
 function renderSettings() {
   renderProfiles();
   // Nexus
@@ -1067,6 +1086,10 @@ function renderSettings() {
   $('#btn-nexus-signin').classList.toggle('hidden', !!nx.signedIn);
   $('#btn-nexus-verify').classList.toggle('hidden', !nx.signedIn);
   $('#btn-nexus-signout').classList.toggle('hidden', !nx.signedIn);
+  // What Nexus's own rate-limit headers last reported. The hourly reset is
+  // shown in local time (it is a wall-clock "come back at" for the user); the
+  // daily one is stated in UTC, which is how Nexus rolls it over.
+  $('#nexus-quota').textContent = formatNexusQuota(nx.quota);
   $('#nxm-status').textContent = nx.nxmRegistered
     ? 'Registered — “Mod Manager Download” buttons install here'
     : 'Not registered';

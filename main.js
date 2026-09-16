@@ -61,6 +61,7 @@ const steam = require('./lib/steam');
 const { ModEngine, compareVersions, MODS_REL, LOGIC_MODS_REL, WIN64_REL, UE4SS_MODS_REL, GAME_MODS_REL } = require('./lib/mods');
 const { findSevenZip, bundledSevenZip } = require('./lib/archive');
 const nexus = require('./lib/nexus');
+const nexusHttp = require('./lib/nexus-http');
 const oauth = require('./lib/nexus-oauth');
 const ue4ssDl = require('./lib/ue4ss');
 const zcsdkRt = require('./lib/zcsdk');
@@ -486,17 +487,48 @@ async function handleNxm(rawUrl) {
 
 // ---------------------------------------------------------- update checks
 
-async function checkForUpdates() {
-  const results = { checked: 0, updates: 0, errors: [] };
+// One v1 request per Nexus-linked mod, so this is exactly the kind of loop
+// that must not eat the user's quota. `background` (the startup/hourly run)
+// keeps the reserve; the Hangar's "Check updates" button is the user asking,
+// so it spends freely — but it still refuses to start when Nexus has already
+// said there is nothing left, and it still honours Retry-After.
+async function checkForUpdates({ background = false } = {}) {
+  const results = { checked: 0, updates: 0, errors: [], limited: null, skippedNexus: null };
+  const nexusMods = store.mods.filter((m) => m.origin && m.origin.type === 'nexus');
+  // Would this run leave the user without a reserve? Then don't start it.
+  let skipNexus = false;
+  if (background && nexusSignedIn() && nexusMods.length) {
+    // One v1 request per linked mod: if that would not fit above the reserve,
+    // the whole Nexus pass waits for the reset rather than half-running.
+    const plan = nexusHttp.backgroundPlan(nexusMods.length);
+    if (!plan.ok) {
+      skipNexus = true;
+      results.skippedNexus = { reason: plan.reason, retryAt: plan.retryAt || null };
+      log('info', `update check: skipping the Nexus part for ${nexusMods.length} linked mod(s) — ${plan.reason}`);
+    }
+  }
   for (const mod of store.mods) {
     const origin = mod.origin;
     if (!origin || origin.type === 'local') continue;
+    if (origin.type === 'nexus' && skipNexus) continue;
     results.checked += 1;
     try {
       if (origin.type === 'nexus' && nexusSignedIn()) {
+        // Re-check the reserve every time round: another part of the app may
+        // have spent the quota while this loop was running.
+        if (background) {
+          const allowed = nexusHttp.backgroundAllowed();
+          if (!allowed.ok) {
+            results.checked -= 1;
+            skipNexus = true;
+            results.skippedNexus = { reason: allowed.reason, retryAt: allowed.retryAt || null };
+            log('info', `update check: stopping the Nexus part — ${allowed.reason}`);
+            continue;
+          }
+        }
         // The site's file-update chain decides (see nexus.resolveUpdate) — the
         // page-level "Mod version" field is free text authors rarely maintain.
-        const data = await withNexusToken((t) => nexus.filesData(origin.modId, t));
+        const data = await withNexusToken((t) => nexus.filesData(origin.modId, t, { background }));
         const r = nexus.resolveUpdate(data, origin, compareVersions);
         if (r.target) {
           mod.updateInfo = {
@@ -525,6 +557,15 @@ async function checkForUpdates() {
         }
       }
     } catch (err) {
+      // Out of quota / a 429 we would not wait out: stop the whole Nexus pass
+      // and let the caller reschedule for when Nexus says to come back.
+      if (err && err.quota) {
+        skipNexus = true;
+        results.checked -= 1;
+        results.limited = { message: err.message, retryAt: err.retryAt || null };
+        log('info', `update check: ${err.message}`);
+        continue;
+      }
       results.errors.push(`${mod.name}: ${err.message}`);
     }
   }
@@ -539,7 +580,10 @@ async function checkForUpdates() {
   } catch (_) { results.ue4ssUpdate = null; results.retocUpdate = null; }
   store.settings.lastUpdateCheck = new Date().toISOString();
   store.save();
-  log('info', `update check: ${results.checked} checked, ${results.updates} update(s), ${results.errors.length} error(s)${results.ue4ssUpdate ? ', UE4SS build update available' : ''}`);
+  log('info', `update check: ${results.checked} checked, ${results.updates} update(s), ${results.errors.length} error(s)`
+    + `${results.ue4ssUpdate ? ', UE4SS build update available' : ''}`
+    + `${results.limited ? ', cut short by the Nexus request limit' : ''}`
+    + `${results.skippedNexus ? ', Nexus part skipped' : ''}`);
   return results;
 }
 
@@ -733,12 +777,32 @@ app.whenReady().then(() => {
 
 const UPDATE_CHECK_MS = 60 * 60 * 1000;
 let lastUpdateSignature = null;
+let updateRetryTimer = null;
+let updateHoldUntil = 0;
+
+// Come back when Nexus said to, instead of retrying into a closed door.
+function rescheduleUpdateCheck(retryAt, why) {
+  const at = Number(retryAt) || 0;
+  const delay = Math.min(Math.max(at - Date.now(), 60 * 1000), UPDATE_CHECK_MS);
+  updateHoldUntil = Date.now() + delay;
+  log('info', `update check: rescheduled for ${nexusHttp.hhmm(updateHoldUntil)} — ${why}`);
+  if (updateRetryTimer) clearTimeout(updateRetryTimer);
+  updateRetryTimer = setTimeout(() => {
+    updateRetryTimer = null;
+    if (win && !win.isDestroyed()) maybeCheckUpdates();
+  }, delay);
+  if (updateRetryTimer.unref) updateRetryTimer.unref();
+}
+
 async function maybeCheckUpdates() {
+  if (Date.now() < updateHoldUntil) return;
   const last = store.settings.lastUpdateCheck ? Date.parse(store.settings.lastUpdateCheck) : 0;
   if (Date.now() - last < UPDATE_CHECK_MS) return;
   if (!store.mods.some((m) => m.origin && m.origin.type !== 'local')) return;
   try {
-    const results = await checkForUpdates();
+    const results = await checkForUpdates({ background: true });
+    const held = results.limited || results.skippedNexus;
+    if (held) rescheduleUpdateCheck(held.retryAt, held.reason || held.message);
     // Badges refresh every time; the toast only when the set of available
     // updates changed, so an hourly re-check never nags about the same ones.
     const signature = store.mods
@@ -760,6 +824,17 @@ app.on('window-all-closed', () => app.quit());
 
 let nexusUser = null; // { name, isPremium } from the verified access token (or /users/validate.json)
 let eaAppDetected = false; // probed once at startup (reg.exe is too slow per-state)
+
+// The quota Nexus reports, trimmed for the renderer: counts, and the reset
+// times as plain ISO strings. `known` is false until a v1 call has answered.
+function compactQuota() {
+  const q = nexusHttp.quotaState();
+  const win = (w) => ({
+    limit: w.limit, remaining: w.remaining,
+    resetAt: w.resetAt ? new Date(w.resetAt).toISOString() : null,
+  });
+  return { known: q.known, hourly: win(q.hourly), daily: win(q.daily), updatedAt: q.updatedAt };
+}
 const promotedCache = { mods: null, at: 0, authors: [] };
 
 function fullState() {
@@ -783,6 +858,8 @@ function fullState() {
       tokensEncrypted: !!store.settings.nexusOAuthEncrypted,
       user: nexusUser,
       nxmRegistered: app.isDefaultProtocolClient('nxm', exe, args),
+      // What Nexus's own x-rl-* headers last said about the request quota.
+      quota: compactQuota(),
     },
     detection: {
       found: detection.found,
@@ -1288,6 +1365,9 @@ const handlers = {
     return fullState();
   },
 
+  // What Nexus's rate-limit headers last reported, for Settings.
+  'nexus-quota': async () => compactQuota(),
+
   // "Verify": ask the API itself who this token belongs to.
   'nexus-refresh-user': async () => {
     nexusUser = await withNexusToken((t) => nexus.validateToken(t));
@@ -1607,7 +1687,17 @@ const handlers = {
     const index = getFileIndex();
     try {
       const token = signedIn ? await nexusAccessToken() : null;
-      await index.refresh(token, (done, all) => sendEvent({ type: 'progress', label: 'Indexing Nexus file names', received: done, total: all }));
+      await index.refresh(
+        token,
+        (done, all) => sendEvent({ type: 'progress', label: 'Indexing Nexus file names', received: done, total: all }),
+        // One v1 request per changed mod: it stands down the moment Nexus's
+        // remaining quota reaches the reserve kept for the user's own actions.
+        { shouldContinue: () => nexusHttp.backgroundAllowed() },
+      );
+      if (index.stoppedEarly) {
+        log('info', `file-name index: stopped early — ${index.stoppedEarly.reason}; the next run picks up the rest`);
+        sendEvent({ type: 'toast', kind: 'warn', message: 'Nexus Mods request limit reached while indexing file names — matching continues with what is already known.' });
+      }
     } catch (_) { /* index stays as it was; the other matchers still run */ }
     let i = 0;
     for (const m of targets) {

@@ -86,6 +86,7 @@ contextBridge.exposeInMainWorld('zc', {
     browse: () => invoke('sdk-link-browse'),
     unlink: () => invoke('sdk-link-unlink'),
     view: (opts) => invoke('sdk-link-view', opts),
+    checkUpdate: (opts) => invoke('sdk-link-check-update', opts || {}),
     devTools: () => invoke('sdk-link-devtools'),
   },
   onEvent: (cb) => ipcRenderer.on('zc-event', (_e, payload) => cb(payload)),

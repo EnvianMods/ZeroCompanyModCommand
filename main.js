@@ -449,6 +449,11 @@ function createWindow() {
       return res.canceled || !res.filePaths.length ? null : res.filePaths[0];
     },
     openPath: (p) => shell.openPath(p),
+    openExternal: (url) => shell.openExternal(url),
+    // The SDK's update answer is cached in OUR store, so the host badge and
+    // the hosted page's own line read one cache and cost one fetch an hour.
+    getUpdateCache: () => store.settings.sdkUpdate || null,
+    setUpdateCache: (c) => { store.settings.sdkUpdate = c; store.save(); },
   });
 
   // A window resize must not leave the hosted view at yesterday's size; the
@@ -610,7 +615,21 @@ app.whenReady().then(() => {
   // "Check updates" button runs the same check on demand.
   win.webContents.once('did-finish-load', () => maybeCheckUpdates());
   setInterval(() => { if (win && !win.isDestroyed()) maybeCheckUpdates(); }, UPDATE_CHECK_MS);
+  // The linked SDK's own update check, on the SAME hourly cadence and with
+  // the same 60-minute cache. One small JSON fetch, only when an SDK is
+  // linked, and a failure is a state ('unknown'), never a toast.
+  win.webContents.once('did-finish-load', () => maybeCheckSdkUpdate());
+  setInterval(() => { if (win && !win.isDestroyed()) maybeCheckSdkUpdate(); }, UPDATE_CHECK_MS);
 });
+
+async function maybeCheckSdkUpdate() {
+  try {
+    if (!sdkLink.status().linked) return;
+    const info = await sdkLink.checkUpdate({ force: false });
+    sdkLink.pushUpdateToView(info);
+    sendEvent({ type: 'sdk-update', info });
+  } catch (_) { /* never surfaces */ }
+}
 
 const UPDATE_CHECK_MS = 60 * 60 * 1000;
 let lastUpdateSignature = null;
@@ -2184,6 +2203,15 @@ handlers['sdk-link-unlink'] = async () => {
 handlers['sdk-link-view'] = async (_e, { visible, bounds } = {}) => sdkLink.setVisible(!!visible, bounds || null);
 
 handlers['sdk-link-devtools'] = async () => sdkLink.openDevTools();
+
+// The SDK's update check, for the host's own badge and Settings line.
+// { force: true } is the "Check now" button; everything else is cached.
+handlers['sdk-link-check-update'] = async (_e, { force } = {}) => {
+  sdkLinkEnsure();
+  const info = await sdkLink.checkUpdate({ force: !!force });
+  sdkLink.pushUpdateToView(info);
+  return info;
+};
 
 for (const [channel, fn] of Object.entries(handlers)) {
   ipcMain.handle(channel, async (event, payload) => {

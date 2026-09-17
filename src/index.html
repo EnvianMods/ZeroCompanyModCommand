@@ -24,8 +24,9 @@
         <button class="nav-item active" data-view="mods"><span class="nav-glyph">◈</span> Command Deck <span id="nav-update-count" class="nav-badge warn" title="Mod updates available"></span><span id="nav-mod-count" class="nav-badge"></span></button>
         <button class="nav-item" data-view="browse"><span class="nav-glyph">◍</span> Holonet</button>
         <button class="nav-item" data-view="diagnostics"><span class="nav-glyph">≡</span> Diagnostics <span id="nav-conflict-count" class="nav-badge warn"></span></button>
-        <!-- Only shown once an SDK is linked — see the ◆ SDK card in Settings. -->
-        <button class="nav-item hidden" data-view="forge" id="nav-forge"><span class="nav-glyph">◆</span> Forge</button>
+        <!-- ALWAYS here. Dimmed with no SDK linked, where it opens the
+             "Get the SDK" pitch instead of the panel. -->
+        <button class="nav-item dim" data-view="forge" id="nav-forge"><span class="nav-glyph">◆</span> Forge <span id="nav-forge-badge" class="nav-badge warn" title="A newer Zero Company Mod SDK has been published"></span></button>
         <button class="nav-item" data-view="settings"><span class="nav-glyph">⚙</span> Settings</button>
       </nav>
 
@@ -403,6 +404,16 @@
                 <button class="btn ghost tiny hidden" id="btn-unlink-sdk">Unlink</button>
               </div>
             </div>
+            <div class="setting-row" id="set-sdk-update-row">
+              <div class="setting-info">
+                <span class="setting-name">SDK updates <span class="dim">(read from the SDK's own update file, hourly)</span></span>
+                <span id="set-sdk-update" class="setting-value dim">&mdash;</span>
+              </div>
+              <div class="setting-actions">
+                <button class="btn tiny hidden" id="btn-sdk-update-get">Get it &#8599;</button>
+                <button class="btn ghost tiny" id="btn-sdk-update-check" title="Re-read the SDK's update file now, ignoring the hourly cache">&#10227; Check now</button>
+              </div>
+            </div>
             <p class="dim settings-note" id="set-sdk-help">The SDK is a separate download and updates on its own &mdash; Mod Command only hosts its window, so a new SDK needs no new Mod Command. <a href="#" class="ext-link" id="link-sdk-get">Get the Zero Company Mod SDK &#8599;</a></p>
           </div>
         </div>
@@ -415,9 +426,60 @@
            markup below is only what shows in the moment before it paints,
            or if the view could not be created. -->
       <section class="view" id="view-forge">
-        <div id="forge-fallback" class="empty-state">
+        <!-- Linked: this is covered edge to edge by the hosted view, and the
+             fallback below is only what shows before it paints. -->
+        <div id="forge-fallback" class="empty-state hidden">
           <div class="empty-glyph">&#9670;</div>
           <p id="forge-fallback-text">Starting the Mod SDK&hellip;</p>
+        </div>
+
+        <!-- NOT linked: the Forge nav item still exists, dimmed, and lands
+             here. This is the only place in Mod Command that explains what
+             the SDK is. -->
+        <div id="forge-pitch">
+          <header class="view-header">
+            <h1>FORGE</h1>
+            <p class="view-sub">The Zero Company Mod SDK &mdash; not installed</p>
+          </header>
+
+          <div class="card holo wide">
+            <div class="card-title">WHAT THE SDK IS</div>
+            <div class="card-body">
+              <p class="pitch-lede">Mod Command installs and manages mods. The <strong>Zero Company Mod SDK</strong> is
+              the other half: the toolkit that <em>makes</em> them. It scaffolds a mod from one of 30-plus recipes
+              (a new item, a weapon, an ability, a cost or balance change, a whole character class), checks it against
+              the game's own reflected data before you build, cooks it through Unreal, and deploys it into the game
+              &mdash; each step a button, with the real build log in front of you. It is a separate download on its own
+              release cadence. Install it, point Mod Command at it here, and this view becomes the SDK's own workbench
+              inside this window.</p>
+            </div>
+          </div>
+
+          <div class="card holo wide">
+            <div class="card-title">WHAT IT NEEDS ON YOUR MACHINE</div>
+            <div class="card-body">
+              <div class="pitch-table">
+                <div class="pitch-row pitch-head"><span>Requirement</span><span>Why</span></div>
+                <div class="pitch-row"><span class="mono">Unreal Engine 5.6.x</span><span>The cook. Must match the game's major.minor &mdash; newer is rejected at load.</span></div>
+                <div class="pitch-row"><span class="mono">MSVC (VS Build Tools) + Windows SDK 10.0.26100</span><span>Compiles the SDK's UE project.</span></div>
+                <div class="pitch-row"><span class="mono">.NET Framework 4.8.1 Developer Pack</span><span>The NetFxSDK Unreal's build tool needs &mdash; the one prerequisite that is easy to miss.</span></div>
+                <div class="pitch-row"><span class="mono">retoc 0.1.5</span><span>Pak/IoStore conversion. <em>Mod Command already bundles it</em> &mdash; see Settings.</span></div>
+                <div class="pitch-row"><span class="mono">Node.js on PATH</span><span>Runs <span class="mono">zcmod-build.js</span>, the build driver.</span></div>
+                <div class="pitch-row"><span class="mono">Python 3.8+ on PATH</span><span>Runs the gates, the localisation pass and <span class="mono">doctor.py</span>.</span></div>
+                <div class="pitch-row"><span class="mono">STAR WARS: Zero Company</span><span>Installed, for the reflection data and for deploying what you build.</span></div>
+              </div>
+              <p class="dim settings-note">The SDK ships a <span class="mono">doctor</span> that checks every one of these and tells you which is missing. You do not have to get this right before downloading.</p>
+            </div>
+          </div>
+
+          <div class="card holo wide">
+            <div class="card-title">GET IT</div>
+            <div class="card-body actions-row">
+              <button class="btn primary" id="btn-pitch-nexus">&#8659; Get the Zero Company Mod SDK on Nexus</button>
+              <button class="btn ghost" id="btn-pitch-github">GitHub release &#8599;</button>
+              <button class="btn ghost" id="btn-pitch-point">Point Mod Command at an installed SDK</button>
+            </div>
+          </div>
         </div>
       </section>
     </main>

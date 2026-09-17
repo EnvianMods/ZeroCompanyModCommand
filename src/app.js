@@ -192,7 +192,7 @@ function renderMods() {
       srcBadge.addEventListener('click', () => openLinkModal(mod));
     } else {
       srcBadge.textContent = 'LOCAL · link?';
-      srcBadge.title = 'No update source — click to link this mod to its Nexus page or Hub repo so updates can be tracked';
+      srcBadge.title = 'No update source — click to link this mod to its Nexus page or GitHub repo so updates can be tracked';
       srcBadge.addEventListener('click', () => openLinkModal(mod));
     }
 
@@ -1967,7 +1967,7 @@ $('#browse-adult').addEventListener('change', (e) => {
   loadBrowse(true);
 });
 
-// ----------------------------------------------------- The Hub (curated GitHub)
+// ----------------------------------------------------- GitHub (curated repos)
 // Renamed from "The Forge" — Forge is now the name of the SDK's own panel.
 // The element ids, css classes and function names below keep the old spelling
 // on purpose: none of them is user-visible and renaming them would churn every
@@ -1990,7 +1990,7 @@ async function loadForge() {
   forge.loading = true;
   const statusEl = $('#forge-status');
   statusEl.classList.remove('hidden');
-  statusEl.textContent = 'Contacting the Hub…';
+  statusEl.textContent = 'Contacting GitHub…';
   $('#forge-grid').innerHTML = '';
   try {
     const res = await window.zc.browseGithub({ query: $('#forge-search').value, sort: $('#forge-sort').value });
@@ -2005,7 +2005,7 @@ async function loadForge() {
     if (!forge.mods.length) statusEl.classList.remove('hidden'), statusEl.textContent = 'No curated repos match.';
   } catch (err) {
     statusEl.classList.remove('hidden');
-    statusEl.textContent = `The Hub is unreachable: ${err.message}`;
+    statusEl.textContent = `GitHub is unreachable: ${err.message}`;
   } finally {
     forge.loading = false;
   }
@@ -2087,7 +2087,7 @@ function buildForgeCard(m) {
           render();
           toast(res.count > 1
             ? `Installed ${res.count} mods from “${m.name}” — each is its own entry.`
-            : `Installed “${m.name}” from the Hub.`);
+            : `Installed “${m.name}” from GitHub.`);
         }
       } finally {
         installBtn.disabled = false;

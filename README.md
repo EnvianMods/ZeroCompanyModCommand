@@ -138,7 +138,7 @@ automatically for IoStore package inspection; a different copy can be selected i
   update check). LAUNCH GAME always goes through Steam; it and Steam's own Play button
   fail with "Disk write error – appmanifest_2075800.acf" whenever an update is pending —
   that is the freeze working, and turning it off lets Steam update.
-- **Installed badges in Holonet/Hub** — cards for mods already in the hangar
+- **Installed badges in Holonet/GitHub** — cards for mods already in the hangar
   show a green IN HANGAR tag; the Install button becomes ✓ Installed, or
   ⬆ Update when one is waiting.
 - **Featured transmissions** — the Holonet opens with a rotating 3-slot promo strip of

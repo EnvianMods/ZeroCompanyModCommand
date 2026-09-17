@@ -76,20 +76,17 @@ contextBridge.exposeInMainWorld('zc', {
   configAddCustom: () => invoke('config-add-custom'),
   configRemoveCustom: (path) => invoke('config-remove-custom', { path }),
   configOpenFolder: (path) => invoke('config-open-folder', { path }),
-  // ---- shared SDK bridge (must match the standalone SDK UI's preload verbatim) ----
-  sdk: {
-    getSettings: () => invoke('sdk-get-settings'),
-    setSettings: (patch) => invoke('sdk-set-settings', patch),
-    browseSdkPath: () => invoke('sdk-browse-path'),
-    doctor: () => invoke('sdk-doctor'),
-    templates: () => invoke('sdk-templates'),
-    mods: () => invoke('sdk-mods'),
-    newMod: (opts) => invoke('sdk-new-mod', opts),
-    run: (opts) => invoke('sdk-run', opts),
-    cancel: () => invoke('sdk-cancel'),
-    gameRunning: () => invoke('sdk-game-running'),
-    openPath: (opts) => invoke('sdk-open-path', opts),
-    onEvent: (cb) => ipcRenderer.on('zc-event', (_e, payload) => cb(payload)),
+  // ---- SDK LINK ----
+  // Six channels ABOUT the link only. The SDK panel's own traffic never comes
+  // through here: it runs in the hosted WebContentsView, over the SDK's own
+  // preload and its own `sdk:<contract>:*` channels.
+  sdkLink: {
+    status: () => invoke('sdk-link-status'),
+    detect: () => invoke('sdk-link-detect'),
+    browse: () => invoke('sdk-link-browse'),
+    unlink: () => invoke('sdk-link-unlink'),
+    view: (opts) => invoke('sdk-link-view', opts),
+    devTools: () => invoke('sdk-link-devtools'),
   },
   onEvent: (cb) => ipcRenderer.on('zc-event', (_e, payload) => cb(payload)),
   pathForFile: (file) => {

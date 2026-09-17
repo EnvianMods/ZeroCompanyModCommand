@@ -76,6 +76,21 @@ contextBridge.exposeInMainWorld('zc', {
   configAddCustom: () => invoke('config-add-custom'),
   configRemoveCustom: (path) => invoke('config-remove-custom', { path }),
   configOpenFolder: (path) => invoke('config-open-folder', { path }),
+  // ---- shared SDK bridge (must match the standalone SDK UI's preload verbatim) ----
+  sdk: {
+    getSettings: () => invoke('sdk-get-settings'),
+    setSettings: (patch) => invoke('sdk-set-settings', patch),
+    browseSdkPath: () => invoke('sdk-browse-path'),
+    doctor: () => invoke('sdk-doctor'),
+    templates: () => invoke('sdk-templates'),
+    mods: () => invoke('sdk-mods'),
+    newMod: (opts) => invoke('sdk-new-mod', opts),
+    run: (opts) => invoke('sdk-run', opts),
+    cancel: () => invoke('sdk-cancel'),
+    gameRunning: () => invoke('sdk-game-running'),
+    openPath: (opts) => invoke('sdk-open-path', opts),
+    onEvent: (cb) => ipcRenderer.on('zc-event', (_e, payload) => cb(payload)),
+  },
   onEvent: (cb) => ipcRenderer.on('zc-event', (_e, payload) => cb(payload)),
   pathForFile: (file) => {
     try { return webUtils.getPathForFile(file); } catch (_) { return null; }

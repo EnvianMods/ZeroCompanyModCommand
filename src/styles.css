@@ -1003,3 +1003,127 @@ body.reduced-motion * { transition: none !important; animation: none !important;
   color: var(--good); border-color: rgba(109, 255, 176, 0.5);
   background: rgba(109, 255, 176, 0.08); cursor: default;
 }
+
+/* =======================================================================
+   FORGE — shared SDK panel styles.
+   SHARED PANEL: this block is copied verbatim into the standalone SDK UI
+   host (tools/sdk-ui/src/styles.css in the SDK repo). Keep the two copies
+   identical. Only the palette tokens from :root above are used, so the
+   panel looks the same in either host.
+   ======================================================================= */
+
+.sdk-bar { display: flex; align-items: center; gap: 8px; padding: 4px 0 10px; flex-wrap: wrap; }
+.sdk-spacer { flex: 1 1 auto; }
+.sdk-search { max-width: 260px; }
+.sdk-title-btn { margin-left: 8px; vertical-align: middle; }
+.sdk-path { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%; }
+.sdk-status { font-size: 12px; color: var(--amber); padding: 6px 0 10px; }
+
+/* ---------- doctor ---------- */
+.sdk-verdict {
+  float: right; font-size: 10px; letter-spacing: 2px; padding: 1px 8px;
+  border: 1px solid var(--panel-edge); border-radius: 3px; color: var(--text-dim);
+}
+.sdk-verdict.ready { color: var(--good); border-color: rgba(109, 255, 176, 0.5); background: rgba(109, 255, 176, 0.08); }
+.sdk-verdict.notready { color: var(--danger); border-color: rgba(255, 92, 92, 0.5); background: rgba(255, 92, 92, 0.08); }
+.sdk-verdict.busy { color: var(--amber); border-color: rgba(255, 200, 87, 0.5); }
+
+.sdk-doctor-rows { max-height: 320px; overflow: auto; border-top: 1px solid var(--panel-edge); padding: 8px 0 12px; }
+.sdk-drow { display: flex; gap: 10px; align-items: baseline; font-family: var(--mono); font-size: 11px; padding: 2px 0; }
+.sdk-drow .sdk-dtag { flex: 0 0 auto; width: 46px; letter-spacing: 1px; }
+.sdk-drow.ok .sdk-dtag { color: var(--good); }
+.sdk-drow.warn .sdk-dtag { color: var(--amber); }
+.sdk-drow.fail .sdk-dtag { color: var(--danger); }
+.sdk-drow.ok { opacity: 0.75; }
+.sdk-drow .sdk-dtext { flex: 1 1 auto; color: var(--text); word-break: break-word; }
+.sdk-dsection { font-size: 10px; letter-spacing: 2px; color: var(--holo-dim); text-transform: uppercase; padding: 10px 0 3px; }
+
+/* ---------- templates gallery ---------- */
+.sdk-tpl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; padding-bottom: 14px; }
+.sdk-tpl {
+  border: 1px solid var(--panel-edge); border-radius: 4px; background: rgba(8, 15, 27, 0.6);
+  padding: 12px 13px 11px; display: flex; flex-direction: column; gap: 7px; transition: border-color .15s, box-shadow .15s;
+}
+.sdk-tpl:hover { border-color: rgba(79, 209, 255, 0.45); box-shadow: 0 0 14px rgba(79, 209, 255, 0.12); }
+.sdk-tpl-head { display: flex; align-items: baseline; gap: 8px; }
+.sdk-tpl-name { font-family: var(--mono); font-size: 13px; color: var(--holo); letter-spacing: 0.5px; }
+.sdk-chip {
+  font-size: 9px; letter-spacing: 1.5px; padding: 1px 6px; border-radius: 2px;
+  border: 1px solid rgba(255, 200, 87, 0.5); color: var(--amber); background: rgba(255, 200, 87, 0.08);
+  white-space: nowrap;
+}
+.sdk-chip.plain { border-color: var(--panel-edge); color: var(--text-dim); background: transparent; }
+/* Recipe blurbs run from one line to a paragraph; clamp so the grid stays a
+   grid and the "what to change first" block below it never drops off-card. */
+.sdk-tpl-blurb {
+  font-size: 12px; color: var(--text); line-height: 1.45;
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+}
+.sdk-tpl-first {
+  font-size: 11px; color: var(--text-dim); line-height: 1.45; border-left: 2px solid var(--holo-dim);
+  padding-left: 8px; max-height: 5.4em; overflow: hidden;
+}
+.sdk-tpl-first b { color: var(--holo-dim); font-weight: 600; letter-spacing: 1px; font-size: 9px; display: block; text-transform: uppercase; }
+.sdk-tpl-actions { display: flex; gap: 6px; align-items: center; margin-top: auto; padding-top: 4px; }
+.sdk-tpl-new { display: none; gap: 6px; align-items: center; }
+.sdk-tpl.naming .sdk-tpl-new { display: flex; }
+.sdk-tpl.naming .sdk-tpl-actions > .btn.sdk-new-btn { display: none; }
+.sdk-name-input { flex: 1 1 auto; min-width: 0; padding: 4px 8px; font-size: 11px; }
+
+/* ---------- workbench ---------- */
+.sdk-mod-list { display: flex; flex-direction: column; gap: 8px; padding-bottom: 14px; }
+.sdk-mod {
+  border: 1px solid var(--panel-edge); border-radius: 4px; background: rgba(8, 15, 27, 0.6);
+  padding: 10px 13px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.sdk-mod-main { flex: 1 1 260px; min-width: 0; }
+.sdk-mod-name { font-family: var(--mono); font-size: 13px; color: var(--text); }
+.sdk-mod-meta { font-size: 11px; color: var(--text-dim); margin-top: 3px; display: flex; gap: 10px; flex-wrap: wrap; }
+.sdk-mod-build { font-size: 11px; font-family: var(--mono); }
+.sdk-mod-build.pass { color: var(--good); }
+.sdk-mod-build.fail { color: var(--danger); }
+.sdk-mod-build.none { color: var(--text-dim); }
+.sdk-mod-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.sdk-empty { font-size: 12px; color: var(--text-dim); padding: 6px 0 12px; line-height: 1.6; }
+
+/* ---------- console ---------- */
+.sdk-jobstate { font-family: var(--mono); font-size: 11px; letter-spacing: 2px; color: var(--text-dim); }
+.sdk-jobstate.running { color: var(--amber); }
+.sdk-jobstate.done { color: var(--good); }
+.sdk-jobstate.failed { color: var(--danger); }
+.sdk-spin {
+  display: inline-block; width: 9px; height: 9px; margin-right: 6px; vertical-align: -1px;
+  border: 1.5px solid rgba(255, 200, 87, 0.3); border-top-color: var(--amber); border-radius: 50%;
+  animation: sdkspin 0.8s linear infinite;
+}
+@keyframes sdkspin { to { transform: rotate(360deg); } }
+body.reduced-motion .sdk-spin { animation: none; }
+
+.sdk-console {
+  max-height: 340px; min-height: 120px; overflow: auto; background: rgba(2, 6, 12, 0.75);
+  border: 1px solid var(--panel-edge); border-radius: 4px; padding: 10px 12px; margin-bottom: 14px;
+  font-size: 11px; line-height: 1.5; color: var(--text); white-space: pre-wrap; word-break: break-word;
+  user-select: text;
+}
+.sdk-console .l-cmd { color: var(--holo); }
+.sdk-console .l-err { color: var(--danger); }
+.sdk-console .l-warn { color: var(--amber); }
+.sdk-console .l-ok { color: var(--good); }
+.sdk-console .l-meta { color: var(--text-dim); }
+
+.sdk-gates { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 0 10px; }
+.sdk-gate {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 1px; padding: 2px 7px; border-radius: 2px;
+  border: 1px solid var(--panel-edge); color: var(--text-dim);
+}
+.sdk-gate.pass { color: var(--good); border-color: rgba(109, 255, 176, 0.45); background: rgba(109, 255, 176, 0.07); }
+.sdk-gate.fail { color: var(--danger); border-color: rgba(255, 92, 92, 0.5); background: rgba(255, 92, 92, 0.09); }
+.sdk-gate.warn { color: var(--amber); border-color: rgba(255, 200, 87, 0.5); background: rgba(255, 200, 87, 0.07); }
+.sdk-gate.na { opacity: 0.5; }
+
+.sdk-banner {
+  font-family: var(--mono); font-size: 12px; letter-spacing: 2px; padding: 8px 12px; border-radius: 3px;
+  margin-bottom: 10px; border: 1px solid var(--panel-edge);
+}
+.sdk-banner.pass { color: var(--good); border-color: rgba(109, 255, 176, 0.5); background: rgba(109, 255, 176, 0.08); }
+.sdk-banner.fail { color: var(--danger); border-color: rgba(255, 92, 92, 0.5); background: rgba(255, 92, 92, 0.08); }

@@ -24,6 +24,7 @@
         <button class="nav-item active" data-view="mods"><span class="nav-glyph">◈</span> Command Deck <span id="nav-update-count" class="nav-badge warn" title="Mod updates available"></span><span id="nav-mod-count" class="nav-badge"></span></button>
         <button class="nav-item" data-view="browse"><span class="nav-glyph">◍</span> Holonet</button>
         <button class="nav-item" data-view="diagnostics"><span class="nav-glyph">≡</span> Diagnostics <span id="nav-conflict-count" class="nav-badge warn"></span></button>
+        <button class="nav-item" data-view="forge"><span class="nav-glyph">◆</span> Forge <span id="sdk-nav-badge" class="nav-badge"></span></button>
         <button class="nav-item" data-view="settings"><span class="nav-glyph">⚙</span> Settings</button>
       </nav>
 
@@ -378,6 +379,113 @@
             <button class="btn ghost" data-open="ue4ssMods">Open UE4SS mods</button>
             <button class="btn ghost" id="btn-launch-direct">Launch game directly (no Steam)</button>
             <button class="btn ghost" id="btn-rerun-setup">Setup assistant</button>
+          </div>
+        </div>
+
+        <div class="card holo wide">
+          <div class="card-title">&#9670; SDK</div>
+          <div class="card-body settings-body">
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-name">Mod SDK folder <span class="dim">(drives the Forge view &mdash; doctor, templates, build, deploy)</span></span>
+                <span id="set-sdk-path" class="setting-value mono">Not set</span>
+              </div>
+              <div class="setting-actions">
+                <button class="btn ghost tiny" id="btn-goto-forge">Open Forge</button>
+                <button class="btn tiny" id="btn-browse-sdk-settings">Browse&hellip;</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================= FORGE (SDK panel) =======================
+           SHARED PANEL — this block is copied verbatim into the standalone
+           SDK UI host (tools/sdk-ui/src/index.html in the SDK repo). Keep the
+           two copies identical; every id is prefixed `sdk-` so the panel can
+           be dropped into a host that already owns other ids. -->
+      <section class="view" id="view-forge">
+        <header class="view-header">
+          <h1>FORGE</h1>
+          <p class="view-sub">Zero Company Mod SDK &mdash; scaffold, check, build &amp; deploy</p>
+        </header>
+
+        <!-- ---------------- doctor strip ---------------- -->
+        <div class="card holo wide">
+          <div class="card-title">SDK ENVIRONMENT <span id="sdk-doctor-verdict" class="sdk-verdict">&mdash;</span></div>
+          <div class="card-body">
+            <div class="sdk-bar">
+              <span id="sdk-doctor-path" class="sdk-path mono dim">SDK folder not set</span>
+              <span class="sdk-spacer"></span>
+              <span id="sdk-doctor-counts" class="dim"></span>
+              <button class="btn tiny ghost" id="sdk-doctor-toggle">Details</button>
+              <button class="btn tiny" id="sdk-doctor-run" title="python tools/doctor.py">&#10227; Re-run doctor</button>
+            </div>
+            <div id="sdk-doctor-rows" class="sdk-doctor-rows hidden"></div>
+          </div>
+        </div>
+
+        <!-- ---------------- templates gallery ---------------- -->
+        <div class="card holo wide">
+          <div class="card-title">TEMPLATES <span id="sdk-tpl-count" class="dim"></span></div>
+          <div class="card-body">
+            <div class="sdk-bar">
+              <input type="search" id="sdk-tpl-search" class="text-input sdk-search" placeholder="Search recipes&hellip;" />
+              <span class="sdk-spacer"></span>
+              <span id="sdk-tpl-source" class="dim"></span>
+              <button class="btn tiny ghost" id="sdk-tpl-refresh">&#10227; Refresh</button>
+            </div>
+            <div id="sdk-tpl-status" class="sdk-status hidden"></div>
+            <div id="sdk-tpl-grid" class="sdk-tpl-grid"></div>
+          </div>
+        </div>
+
+        <!-- ---------------- workbench ---------------- -->
+        <div class="card holo wide">
+          <div class="card-title">MY MODS <span id="sdk-mod-count" class="dim"></span>
+            <button class="btn tiny ghost sdk-title-btn" id="sdk-mods-refresh">&#10227;</button>
+          </div>
+          <div class="card-body">
+            <div id="sdk-mod-list" class="sdk-mod-list"></div>
+          </div>
+        </div>
+
+        <!-- ---------------- console ---------------- -->
+        <div class="card holo wide">
+          <div class="card-title">CONSOLE <span id="sdk-job-label" class="dim"></span></div>
+          <div class="card-body">
+            <div class="sdk-bar">
+              <span id="sdk-job-state" class="sdk-jobstate">IDLE</span>
+              <span class="sdk-spacer"></span>
+              <button class="btn tiny danger hidden" id="sdk-job-cancel">&#9632; Cancel</button>
+              <button class="btn tiny ghost" id="sdk-console-clear">Clear</button>
+            </div>
+            <div id="sdk-gates" class="sdk-gates hidden"></div>
+            <div id="sdk-banner" class="sdk-banner hidden"></div>
+            <pre id="sdk-console" class="sdk-console mono">No job has run yet. CHECK a mod, or scaffold one from a template above.</pre>
+          </div>
+        </div>
+
+        <!-- ---------------- panel settings ---------------- -->
+        <div class="card holo wide">
+          <div class="card-title">FORGE SETTINGS</div>
+          <div class="card-body settings-body">
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-name">SDK folder <span class="dim">(the ZeroCompanyModSDK checkout that holds tools/ and templates/)</span></span>
+                <span id="sdk-set-path" class="setting-value mono">Not set</span>
+              </div>
+              <div class="setting-actions">
+                <button class="btn ghost tiny" id="sdk-btn-open-sdk">Open folder</button>
+                <button class="btn tiny" id="sdk-btn-browse-sdk">Browse&hellip;</button>
+              </div>
+            </div>
+            <label class="setting-row toggle-row">
+              <div class="setting-info">
+                <span class="setting-name">Show CLI command <span class="dim">(print the exact command line in the console before each run)</span></span>
+              </div>
+              <input type="checkbox" id="sdk-chk-showcmd" class="switch" />
+            </label>
           </div>
         </div>
       </section>

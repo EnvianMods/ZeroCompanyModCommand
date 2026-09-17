@@ -71,6 +71,9 @@ const ea = require('./lib/ea');
 const { checkLauncherUpdate } = require('./lib/launcher-update');
 const { log, logText } = require('./lib/log');
 const report = require('./lib/report');
+// FORGE (SDK panel, A/B mock): every call into the Zero Company Mod SDK CLI.
+// Shared verbatim with the standalone SDK UI host — see lib/sdk-cli.js.
+const sdkCli = require('./lib/sdk-cli');
 
 // App data (settings, staging, indexes) lives in the OS per-user app-data
 // folder — %APPDATA%\ZeroCompanyModCommand on Windows — never beside the exe.
@@ -2089,6 +2092,30 @@ handlers['save-support-report'] = async () => {
   log('info', 'support report saved');
   return { saved: true, file: path.basename(res.filePath) };
 };
+
+// ------------------------------------------------------- FORGE (SDK panel)
+// The panel's IPC lives entirely in lib/sdk-cli.js so the standalone SDK UI
+// host can register the SAME handler map. Only this context object differs:
+// Mod Command keeps the SDK folder in its own settings store and uses its own
+// window for the folder picker.
+Object.assign(handlers, sdkCli.createHandlers({
+  getSettings: () => ({
+    sdkPath: store.settings.sdkPath || null,
+    showCommand: !!store.settings.sdkShowCommand,
+  }),
+  setSettings: (patch) => {
+    if (Object.prototype.hasOwnProperty.call(patch, 'sdkPath')) store.settings.sdkPath = patch.sdkPath || null;
+    if (Object.prototype.hasOwnProperty.call(patch, 'showCommand')) store.settings.sdkShowCommand = !!patch.showCommand;
+    store.save();
+    return { sdkPath: store.settings.sdkPath || null, showCommand: !!store.settings.sdkShowCommand };
+  },
+  browseFolder: async (title, defaultPath) => {
+    const res = await dialog.showOpenDialog(win, { title, properties: ['openDirectory'], defaultPath: defaultPath || undefined });
+    return res.canceled || !res.filePaths.length ? null : res.filePaths[0];
+  },
+  sendEvent,
+  openPath: (p) => shell.openPath(p),
+}));
 
 for (const [channel, fn] of Object.entries(handlers)) {
   ipcMain.handle(channel, async (event, payload) => {

@@ -3536,3 +3536,437 @@ refreshState().then(() => {
     }
   }
 });
+
+/* =======================================================================
+   FORGE — shared SDK panel (renderer half).
+
+   SHARED PANEL: this block is copied VERBATIM into the standalone SDK UI
+   host (tools/sdk-ui/src/app.js in the SDK repo). Keep the two copies
+   identical.
+
+   Host contract — the hosting app must provide, before this block runs:
+     • window.zc.sdk.*            (see lib/sdk-cli.js + the preload bridge)
+     • toast(message, kind)       a transient notification
+     • $(sel) / $$(sel)           querySelector / querySelectorAll helpers
+     • the markup of #view-forge  (the panel HTML block, also shared)
+   Everything else below is self-contained and only touches `sdk-*` ids.
+   ======================================================================= */
+
+const sdk = {
+  settings: { sdkPath: null, showCommand: false },
+  templates: [],
+  mods: [],
+  job: null,          // { kind, mod, command } while a CLI job is running
+  lines: [],          // console buffer
+  gates: null,        // parsed `[zcmod] gates:` summary
+  banner: null,       // final SUCCESS/FAIL banner
+  doctorRows: [],
+  loaded: false,
+};
+
+// Envelope unwrap, same shape the rest of the host uses: { ok, data|error }.
+async function sdkCall(fn, ...args) {
+  if (!window.zc || !window.zc.sdk || typeof window.zc.sdk[fn] !== 'function') {
+    toast(`SDK bridge missing: ${fn}`, 'error');
+    return null;
+  }
+  const res = await window.zc.sdk[fn](...args);
+  if (!res || !res.ok) {
+    toast((res && res.error) || `${fn} failed`, 'error', 6000);
+    return null;
+  }
+  return res.data;
+}
+
+function sdkEsc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// ---------------------------------------------------------------- console
+
+function sdkLineClass(line) {
+  if (/^\$ /.test(line)) return 'l-cmd';
+  if (/\b(FAIL|ERROR|Traceback|error:)\b/.test(line)) return 'l-err';
+  if (/\bWARN\b|\bwarning\b/i.test(line)) return 'l-warn';
+  if (/\b(PASS|SUCCESS|OK)\b/.test(line)) return 'l-ok';
+  if (/^\[(harness|zcmod-ui)\]/.test(line)) return 'l-meta';
+  return '';
+}
+
+function sdkRenderConsole() {
+  const el = $('#sdk-console');
+  if (!el) return;
+  if (!sdk.lines.length) {
+    el.textContent = 'No job has run yet. CHECK a mod, or scaffold one from a template above.';
+    return;
+  }
+  const stick = el.scrollTop + el.clientHeight >= el.scrollHeight - 30;
+  el.innerHTML = sdk.lines
+    .map((l) => { const c = sdkLineClass(l); return c ? `<span class="${c}">${sdkEsc(l)}</span>` : sdkEsc(l); })
+    .join('\n');
+  if (stick) el.scrollTop = el.scrollHeight;
+}
+
+function sdkPush(line) {
+  sdk.lines.push(line);
+  if (sdk.lines.length > 4000) sdk.lines.splice(0, sdk.lines.length - 4000);
+  sdkRenderConsole();
+}
+
+function sdkRenderGates() {
+  const box = $('#sdk-gates');
+  if (!box) return;
+  if (!sdk.gates || !sdk.gates.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+  box.classList.remove('hidden');
+  box.innerHTML = sdk.gates.map((g) => {
+    const cls = g.result === 'PASS' ? 'pass' : g.result === 'FAIL' ? 'fail'
+      : g.result === 'WARN' ? 'warn' : 'na';
+    return `<span class="sdk-gate ${cls}" title="${sdkEsc(g.name)}: ${sdkEsc(g.result)}">${sdkEsc(g.name)} ${sdkEsc(g.result)}</span>`;
+  }).join('');
+}
+
+function sdkRenderBanner() {
+  const el = $('#sdk-banner');
+  if (!el) return;
+  if (!sdk.banner) { el.classList.add('hidden'); el.textContent = ''; return; }
+  el.classList.remove('hidden');
+  el.className = `sdk-banner ${sdk.banner.ok ? 'pass' : 'fail'}`;
+  el.textContent = sdk.banner.text;
+}
+
+function sdkRenderJobState() {
+  const st = $('#sdk-job-state');
+  const label = $('#sdk-job-label');
+  const cancel = $('#sdk-job-cancel');
+  if (!st) return;
+  if (sdk.job) {
+    st.className = 'sdk-jobstate running';
+    st.innerHTML = `<span class="sdk-spin"></span>RUNNING`;
+    label.textContent = `${sdk.job.kind.toUpperCase()} · ${sdk.job.mod || ''}`;
+    cancel.classList.remove('hidden');
+  } else {
+    st.className = `sdk-jobstate ${sdk.banner ? (sdk.banner.ok ? 'done' : 'failed') : ''}`;
+    st.textContent = sdk.banner ? (sdk.banner.ok ? 'DONE' : 'FAILED') : 'IDLE';
+    label.textContent = sdk.lastJobLabel || '';
+    cancel.classList.add('hidden');
+  }
+  sdkRenderModList(); // buttons enable/disable with the job
+}
+
+// ---------------------------------------------------------------- doctor
+
+async function sdkRunDoctor() {
+  const verdict = $('#sdk-doctor-verdict');
+  verdict.className = 'sdk-verdict busy';
+  verdict.textContent = 'CHECKING…';
+  $('#sdk-doctor-counts').textContent = '';
+  const data = await sdkCall('doctor');
+  if (!data) { verdict.className = 'sdk-verdict notready'; verdict.textContent = 'NO DATA'; return; }
+  sdk.doctorRows = data.rows || [];
+  verdict.className = `sdk-verdict ${data.ready ? 'ready' : 'notready'}`;
+  verdict.textContent = data.ready ? 'READY' : 'NOT READY';
+  const c = data.counts || { ok: 0, warn: 0, fail: 0 };
+  $('#sdk-doctor-counts').textContent = `${c.ok} ok · ${c.warn} warn · ${c.fail} fail`;
+  $('#sdk-doctor-path').textContent = sdk.settings.sdkPath || 'SDK folder not set';
+  $('#sdk-doctor-path').classList.toggle('dim', !sdk.settings.sdkPath);
+  // Failures and warnings are what the operator needs; open the drawer on them.
+  const bad = sdk.doctorRows.filter((r) => r.status !== 'ok');
+  if (bad.length) $('#sdk-doctor-rows').classList.remove('hidden');
+  sdkRenderDoctorRows();
+  if (data.error) toast(data.error, 'error', 6000);
+}
+
+function sdkRenderDoctorRows(all) {
+  const box = $('#sdk-doctor-rows');
+  if (!box) return;
+  const show = all ? sdk.doctorRows : sdk.doctorRows.filter((r) => r.status !== 'ok');
+  const rows = show.length ? show : sdk.doctorRows;
+  if (!rows.length) { box.innerHTML = '<div class="sdk-empty">doctor produced no rows.</div>'; return; }
+  let html = '';
+  let section = null;
+  for (const r of rows) {
+    if (r.section && r.section !== section) { section = r.section; html += `<div class="sdk-dsection">${sdkEsc(section)}</div>`; }
+    const tag = r.status === 'ok' ? '[ ok ]' : r.status === 'warn' ? '[warn]' : '[fail]';
+    html += `<div class="sdk-drow ${sdkEsc(r.status)}"><span class="sdk-dtag mono">${tag}</span><span class="sdk-dtext">${sdkEsc(r.text)}</span></div>`;
+  }
+  box.innerHTML = html;
+}
+
+// ---------------------------------------------------------------- templates
+
+async function sdkLoadTemplates() {
+  const status = $('#sdk-tpl-status');
+  status.classList.remove('hidden');
+  status.textContent = 'Reading templates…';
+  const data = await sdkCall('templates');
+  status.classList.add('hidden');
+  if (!data) { $('#sdk-tpl-grid').innerHTML = '<div class="sdk-empty">Templates could not be read. Check the SDK folder in Forge Settings.</div>'; return; }
+  sdk.templates = data.items || [];
+  $('#sdk-tpl-count').textContent = `${sdk.templates.length} recipe${sdk.templates.length === 1 ? '' : 's'}`;
+  $('#sdk-tpl-source').textContent = data.source === 'cli'
+    ? 'source: zcmod-build --new --list' : 'source: templates/';
+  if (data.note) { status.classList.remove('hidden'); status.textContent = data.note; }
+  sdkRenderTemplates();
+}
+
+function sdkRenderTemplates() {
+  const grid = $('#sdk-tpl-grid');
+  if (!grid) return;
+  const q = ($('#sdk-tpl-search').value || '').trim().toLowerCase();
+  const items = q
+    ? sdk.templates.filter((t) => `${t.id} ${t.name} ${t.blurb}`.toLowerCase().includes(q))
+    : sdk.templates;
+  if (!items.length) {
+    grid.innerHTML = `<div class="sdk-empty">${sdk.templates.length ? 'No recipe matches that search.' : 'No templates found in the SDK folder.'}</div>`;
+    return;
+  }
+  grid.innerHTML = items.map((t) => `
+    <div class="sdk-tpl" data-recipe="${sdkEsc(t.id)}">
+      <div class="sdk-tpl-head">
+        <span class="sdk-tpl-name">${sdkEsc(t.id)}</span>
+        <span class="sdk-spacer"></span>
+        ${t.runtime
+          ? '<span class="sdk-chip" title="Needs the ZCSDK runtime (UE4SS Lua) installed in the game">RUNTIME</span>'
+          : '<span class="sdk-chip plain" title="Pure asset mod — no runtime component">ASSETS ONLY</span>'}
+      </div>
+      <div class="sdk-tpl-blurb">${sdkEsc(t.blurb || '—')}</div>
+      ${t.changeFirst ? `<div class="sdk-tpl-first"><b>What to change first</b>${sdkEsc(t.changeFirst)}</div>` : ''}
+      <div class="sdk-tpl-actions">
+        <button class="btn tiny sdk-new-btn">NEW</button>
+        <span class="sdk-tpl-new">
+          <input type="text" class="text-input sdk-name-input" placeholder="Mod name (e.g. MyBlaster)" />
+          <button class="btn tiny primary sdk-new-go">Create</button>
+          <button class="btn tiny ghost sdk-new-cancel">×</button>
+        </span>
+      </div>
+    </div>`).join('');
+}
+
+async function sdkCreateMod(card) {
+  const recipe = card.dataset.recipe;
+  const input = card.querySelector('.sdk-name-input');
+  const name = (input.value || '').trim();
+  if (!name) { toast('Give the mod a name first.', 'error'); input.focus(); return; }
+  if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)) {
+    toast('Mod names must be letters, digits and underscores, starting with a letter.', 'error', 6000);
+    input.focus(); return;
+  }
+  card.classList.remove('naming');
+  const data = await sdkCall('newMod', { recipe, name });
+  if (!data) return;
+  for (const l of (data.lines || [])) sdkPush(l);
+  sdk.lastJobLabel = `NEW · ${name}`;
+  sdkRenderJobState();
+  toast(`Scaffolded “${name}” from ${recipe}.`, 'info');
+  await sdkLoadMods();
+  // Open it in the workbench: scroll the new row into view and flag it.
+  const row = document.querySelector(`.sdk-mod[data-mod="${CSS.escape(name)}"]`);
+  if (row) { row.scrollIntoView({ block: 'center', behavior: 'smooth' }); row.classList.add('sdk-just-made'); }
+}
+
+// ---------------------------------------------------------------- workbench
+
+async function sdkLoadMods() {
+  const data = await sdkCall('mods');
+  sdk.mods = data || [];
+  $('#sdk-mod-count').textContent = `${sdk.mods.length} in <sdk>\\mods`;
+  sdkRenderModList();
+}
+
+function sdkRenderModList() {
+  const list = $('#sdk-mod-list');
+  if (!list) return;
+  if (!sdk.mods.length) {
+    list.innerHTML = '<div class="sdk-empty">No mods yet.<br>Pick a recipe above and press NEW — the scaffold lands in <span class="mono">&lt;sdk&gt;\\mods\\&lt;Name&gt;</span>.</div>';
+    return;
+  }
+  const busy = !!sdk.job;
+  list.innerHTML = sdk.mods.map((m) => {
+    // A footprint only exists for a build that reached the end, so its presence
+    // IS the last-build result (zcmod-build writes it last). Gate outcomes are
+    // stdout-only and never persisted — the console below is their only record.
+    const b = m.lastBuild;
+    const bcls = b ? 'pass' : 'none';
+    const btext = b
+      ? `built ${sdkEsc(b.builtAt || '?')}${b.sdk ? ' · sdk ' + sdkEsc(b.sdk) : ''}`
+      : 'never built';
+    return `
+    <div class="sdk-mod" data-mod="${sdkEsc(m.name)}">
+      <div class="sdk-mod-main">
+        <div class="sdk-mod-name">${sdkEsc(m.modName || m.name)}</div>
+        <div class="sdk-mod-meta">
+          <span>v${sdkEsc(m.version || '—')}</span>
+          <span>${sdkEsc(m.recipe || 'recipe unknown')}</span>
+          <span class="sdk-mod-build ${bcls}">${btext}</span>
+        </div>
+      </div>
+      <div class="sdk-mod-actions">
+        <button class="btn tiny sdk-act" data-act="check" ${busy ? 'disabled' : ''} title="node tools/zcmod-build.js --check">CHECK</button>
+        <button class="btn tiny primary sdk-act" data-act="build" ${busy ? 'disabled' : ''} title="node tools/zcmod-build.js --gates --layout gfp — a real cook, minutes">BUILD</button>
+        <button class="btn tiny sdk-act" data-act="deploy" ${busy ? 'disabled' : ''} title="node tools/zcmod-build.js --deploy-only --layout gfp">DEPLOY</button>
+        <button class="btn tiny ghost sdk-act" data-act="json">OPEN JSON</button>
+        <button class="btn tiny ghost sdk-act" data-act="folder">OPEN FOLDER</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+const SDK_CONFIRM = {
+  build: (m) => `BUILD “${m}”?\n\nThis runs the real SDK build with every applicable gate and cooks the mod's content in Unreal. It takes minutes and holds this panel for the duration.\n\nRun it now?`,
+  deploy: (m) => `DEPLOY “${m}” to the game?\n\nThis copies the built mod into the game's Mods folder (gfp layout). The game must be closed.\n\nDeploy now?`,
+};
+
+async function sdkRunJob(kind, mod) {
+  if (sdk.job) { toast('A job is already running — cancel it first.', 'error'); return; }
+  if (SDK_CONFIRM[kind] && !window.confirm(SDK_CONFIRM[kind](mod))) return;
+  if (kind === 'deploy') {
+    const g = await sdkCall('gameRunning');
+    if (g && g.running) {
+      toast('Star Wars Zero Company is running — close the game before deploying.', 'error', 7000);
+      return;
+    }
+  }
+  sdk.gates = null; sdk.banner = null;
+  sdkRenderGates(); sdkRenderBanner();
+  const data = await sdkCall('run', { kind, mod });
+  if (!data) return;
+  sdk.job = { kind, mod, command: data.command };
+  sdk.lastJobLabel = `${kind.toUpperCase()} · ${mod}`;
+  sdkRenderJobState();
+}
+
+// ---------------------------------------------------------------- events
+
+function sdkOnEvent(ev) {
+  if (!ev || typeof ev.type !== 'string' || !ev.type.startsWith('sdk-')) return;
+  if (ev.type === 'sdk-line') { sdkPush(ev.line); return; }
+  if (ev.type === 'sdk-gates') { sdk.gates = ev.gates; sdkRenderGates(); return; }
+  if (ev.type === 'sdk-done') {
+    sdk.job = null;
+    sdk.banner = { ok: !!ev.ok, text: ev.banner || (ev.ok ? 'SUCCESS' : `FAILED (exit ${ev.code})`) };
+    sdkRenderBanner();
+    sdkRenderJobState();
+    sdkLoadMods();
+    return;
+  }
+}
+
+// ---------------------------------------------------------------- settings
+
+function sdkRenderSettings() {
+  const p = sdk.settings.sdkPath;
+  const el = $('#sdk-set-path');
+  if (el) { el.textContent = p || 'Not set'; el.classList.toggle('dim', !p); }
+  const chk = $('#sdk-chk-showcmd');
+  if (chk) chk.checked = !!sdk.settings.showCommand;
+  const dp = $('#sdk-doctor-path');
+  if (dp) { dp.textContent = p || 'SDK folder not set'; dp.classList.toggle('dim', !p); }
+  // The host may also show the path on its own Settings view.
+  const mirror = $('#set-sdk-path');
+  if (mirror) { mirror.textContent = p || 'Not set'; }
+}
+
+async function sdkRefreshAll() {
+  const s = await sdkCall('getSettings');
+  if (s) sdk.settings = s;
+  sdkRenderSettings();
+  await sdkLoadTemplates();
+  await sdkLoadMods();
+  await sdkRunDoctor();
+}
+
+// ---------------------------------------------------------------- wiring
+
+function sdkInit() {
+  if (!$('#view-forge')) return; // host without the panel markup
+  $('#sdk-doctor-run').addEventListener('click', sdkRunDoctor);
+  $('#sdk-doctor-toggle').addEventListener('click', () => {
+    const box = $('#sdk-doctor-rows');
+    const opening = box.classList.contains('hidden');
+    box.classList.toggle('hidden');
+    if (opening) sdkRenderDoctorRows(true);
+  });
+  $('#sdk-tpl-refresh').addEventListener('click', sdkLoadTemplates);
+  $('#sdk-tpl-search').addEventListener('input', sdkRenderTemplates);
+  $('#sdk-mods-refresh').addEventListener('click', sdkLoadMods);
+  $('#sdk-console-clear').addEventListener('click', () => {
+    sdk.lines = []; sdk.gates = null; sdk.banner = null;
+    sdkRenderConsole(); sdkRenderGates(); sdkRenderBanner();
+  });
+  $('#sdk-job-cancel').addEventListener('click', async () => {
+    const d = await sdkCall('cancel');
+    if (d) toast('Cancelling the running job…', 'info');
+  });
+
+  $('#sdk-tpl-grid').addEventListener('click', (e) => {
+    const card = e.target.closest('.sdk-tpl');
+    if (!card) return;
+    if (e.target.closest('.sdk-new-btn')) {
+      $$('.sdk-tpl').forEach((c) => c.classList.remove('naming'));
+      card.classList.add('naming');
+      card.querySelector('.sdk-name-input').focus();
+    } else if (e.target.closest('.sdk-new-go')) {
+      sdkCreateMod(card);
+    } else if (e.target.closest('.sdk-new-cancel')) {
+      card.classList.remove('naming');
+    }
+  });
+  $('#sdk-tpl-grid').addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || !e.target.classList.contains('sdk-name-input')) return;
+    sdkCreateMod(e.target.closest('.sdk-tpl'));
+  });
+
+  $('#sdk-mod-list').addEventListener('click', async (e) => {
+    const btn = e.target.closest('.sdk-act');
+    if (!btn) return;
+    const name = e.target.closest('.sdk-mod').dataset.mod;
+    const act = btn.dataset.act;
+    if (act === 'json' || act === 'folder') { await sdkCall('openPath', { mod: name, what: act }); return; }
+    sdkRunJob(act, name);
+  });
+
+  $('#sdk-btn-browse-sdk').addEventListener('click', async () => {
+    const d = await sdkCall('browseSdkPath');
+    if (!d || !d.sdkPath) return;
+    sdk.settings = d.settings || { ...sdk.settings, sdkPath: d.sdkPath };
+    sdkRenderSettings();
+    sdkRefreshAll();
+  });
+  $('#sdk-btn-open-sdk').addEventListener('click', () => sdkCall('openPath', { what: 'sdk' }));
+  $('#sdk-chk-showcmd').addEventListener('change', async (e) => {
+    const s = await sdkCall('setSettings', { showCommand: e.target.checked });
+    if (s) { sdk.settings = s; sdkRenderSettings(); }
+  });
+
+  if (window.zc && window.zc.sdk && window.zc.sdk.onEvent) window.zc.sdk.onEvent(sdkOnEvent);
+
+  // First paint is lazy: the panel only talks to the SDK once it is opened.
+  const navBtn = document.querySelector('.nav-item[data-view="forge"]');
+  if (navBtn) {
+    navBtn.addEventListener('click', () => { if (!sdk.loaded) { sdk.loaded = true; sdkRefreshAll(); } });
+  } else {
+    sdk.loaded = true;
+    sdkRefreshAll();
+  }
+}
+
+sdkInit();
+// Reachable for the verification harness.
+window.sdkRefreshAll = sdkRefreshAll;
+window.sdkState = sdk;
+
+// ---- Host A only: the Settings "◆ SDK" chip mirrors the panel's setting ----
+if ($('#btn-browse-sdk-settings')) {
+  $('#btn-browse-sdk-settings').addEventListener('click', async () => {
+    const d = await sdkCall('browseSdkPath');
+    if (!d || !d.sdkPath) return;
+    sdk.settings = d.settings || { ...sdk.settings, sdkPath: d.sdkPath };
+    sdkRenderSettings();
+    if (sdk.loaded) sdkRefreshAll();
+  });
+  $('#btn-goto-forge').addEventListener('click', () => $('.nav-item[data-view="forge"]').click());
+  // Fill the chip on startup without waking the whole panel.
+  sdkCall('getSettings').then((s) => { if (s) { sdk.settings = s; sdkRenderSettings(); } });
+}

@@ -48,6 +48,17 @@
 - Every request to Nexus now carries the app's registered name and version, so
   Nexus can see what its API is being used by. Nothing else changed for you.
 
+**UE4SS mods that bring their own paks install correctly again**
+- A UE4SS mod can ship a `paks` folder next to its dll and mount that content
+  itself. Mod Command used to spot those pak files first, scatter them into
+  `~mods` under new names and throw the dll away, so the mod installed but did
+  nothing. Now the whole mod folder goes down intact — dll, settings and its
+  `paks` folder — into `ue4ss/Mods/<Mod>`, exactly where the mod expects it.
+- ZCUnlocked 1.4.5 is the mod that hit this; reinstall it and it lands right.
+  Archives that really are loose paks, LogicMods, plugin mods or a UE4SS runtime
+  build are unaffected, and an archive holding both a UE4SS mod and separate
+  loose paks still installs each part as its own entry.
+
 ## v1.9.12 (2026-09-13)
 
 **Mods that install as a folder in `SWZeroCompany\Mods` now install properly**

@@ -48,7 +48,10 @@ automatically for IoStore package inspection; a different copy can be selected i
   - UE4SS Lua/DLL mods (folders with `Scripts/main.lua` or `dlls/main.dll`) →
     `SWZeroCompany/Binaries/Win64/ue4ss/Mods/<Name>` with `enabled.txt`. The
     display name defaults to the folder name; a `modinfo.json` in the mod folder
-    can override it with a friendly title (see **Mod metadata** below).
+    can override it with a friendly title (see **Mod metadata** below). A mod's
+    own `paks/` folder travels with it into `ue4ss/Mods/<Name>/paks/`, unrenamed
+    — the mod mounts those containers itself at startup, so they are never moved
+    into `~mods`.
   - UE4SS runtime archives (dwmapi.dll + ue4ss folder) → installed into `Binaries/Win64`.
   - `gamefolder` (GAMEFILES) — archives laid out against the game root
     (`SWZeroCompany/...`, `Engine/...`, e.g. replacement movies) deploy over the

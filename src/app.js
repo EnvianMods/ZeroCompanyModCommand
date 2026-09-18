@@ -1105,28 +1105,43 @@ function renderSettings() {
   const fmtDate = (d) => (d ? new Date(d).toLocaleDateString() : '');
   let ue4ssTail = '';
   const fromNexus = ue4ssUp.source === 'nexus';
+  // The tested game build a Nexus install recorded, or the one the page states now.
+  const gb = state.detection && state.detection.buildId;
+  const testedVs = (tested) => (tested
+    ? `tested on game build ${tested}${gb ? (String(gb) === String(tested) ? ' — matches yours' : ` — yours is ${gb}`) : ''}`
+    : 'tested game build not stated');
   if (state.ue4ss.installed && ue4ssRel) {
-    ue4ssTail = ` Installed: ${fromNexus ? 'Nexus compatibility build' : ue4ssRel.name}${ue4ssUp.currentBuild ? ` ${fromNexus ? '' : 'build '}${ue4ssUp.currentBuild}` : ''}${ue4ssRel.installedAt ? ` (${fmtDate(ue4ssRel.installedAt)})` : ''}.`;
+    ue4ssTail = fromNexus
+      ? ` Installed: the Zero Company package from Nexus${ue4ssUp.currentBuild ? ` ${ue4ssUp.currentBuild}` : ''}${ue4ssRel.installedAt ? ` (${fmtDate(ue4ssRel.installedAt)})` : ''} — ${testedVs(ue4ssRel.testedBuild || (ue4ssUp.nexus && ue4ssUp.nexus.testedBuild))}.`
+      : ` Installed: ${ue4ssRel.name}${ue4ssUp.currentBuild ? ` build ${ue4ssUp.currentBuild}` : ''}${ue4ssRel.installedAt ? ` (${fmtDate(ue4ssRel.installedAt)})` : ''} — stock upstream build, not game-specific.`;
     if (ue4ssUp.available) ue4ssTail += ` NEWER ${fromNexus ? 'NEXUS ' : ''}BUILD AVAILABLE: ${ue4ssUp.latestBuild} from ${fmtDate(ue4ssUp.latestDate)}.`;
     else if (ue4ssUp.latest) ue4ssTail += ' Up to date.';
   } else if (state.ue4ss.installed) {
-    ue4ssTail = ' Build unknown (not installed by Mod Command) — Download & install to be on the newest build.';
+    ue4ssTail = ' Build unknown (not installed by Mod Command) — Download & install to get the Zero Company package from Nexus.';
+  } else {
+    ue4ssTail = ' Download & install fetches “UE4SS for Star Wars Zero Company” from Nexus Mods — stock UE4SS plus this game’s signatures, loader settings and helpers.';
   }
   // The other source, always mentioned so both are one click away in ⧗ Versions.
-  const gb = state.detection && state.detection.buildId;
   if (ue4ssUp.nexus && !fromNexus) {
     const nx = ue4ssUp.nexus;
-    ue4ssTail += ` Also on Nexus: game-specific compatibility build v${nx.version || '?'} (${fmtDate(nx.date)})${nx.testedBuild ? `, tested on game build ${nx.testedBuild}${gb ? (String(gb) === String(nx.testedBuild) ? ' — matches yours' : ` — yours is ${gb}`) : ''}` : ''} — see ⧗ Versions.`;
+    ue4ssTail += ` The game-specific package on Nexus is v${nx.version || '?'} (${fmtDate(nx.date)}), ${testedVs(nx.testedBuild)} — see ⧗ Versions.`;
   } else if (ue4ssUp.github && fromNexus) {
-    ue4ssTail += ` Also on GitHub: rolling experimental build ${ue4ssUp.github.build} (${fmtDate(ue4ssUp.github.date)}) — see ⧗ Versions.`;
+    ue4ssTail += ` Also on GitHub: the stock upstream build ${ue4ssUp.github.build} (${fmtDate(ue4ssUp.github.date)}), no Zero Company signatures — see ⧗ Versions.`;
   }
   $('#ue4ss-settings-status').textContent = state.ue4ss.message + ue4ssTail;
   const ue4ssBtn = $('#btn-install-ue4ss');
-  ue4ssBtn.textContent = !state.ue4ss.healthy ? 'Download & install'
+  // Nothing usable installed → the default one-click install, which is the
+  // Nexus package. An existing install keeps its own source for Update/Reinstall.
+  const ue4ssDefault = !state.ue4ss.healthy;
+  ue4ssBtn.textContent = ue4ssDefault ? 'Download & install (Nexus package)'
     : (ue4ssUp.available ? (fromNexus ? `Update to Nexus ${ue4ssUp.latestBuild}` : `Update to build ${ue4ssUp.latestBuild}`) : (fromNexus ? 'Reinstall (Nexus)' : 'Reinstall latest'));
+  ue4ssBtn.title = ue4ssDefault
+    ? 'Installs “UE4SS for Star Wars Zero Company” from Nexus Mods — stock UE4SS plus this game’s signatures, loader settings and helpers'
+    : (fromNexus ? 'Reinstalls the Zero Company package from Nexus Mods'
+      : 'Reinstalls the stock upstream build from GitHub — not game-specific; the Zero Company package is in ⧗ Versions');
   ue4ssBtn.classList.toggle('primary', !!ue4ssUp.available);
-  ue4ssBtn.dataset.source = fromNexus ? 'nexus' : 'github';
-  ue4ssBtn.dataset.nexusFileId = fromNexus && ue4ssUp.nexus ? String(ue4ssUp.nexus.fileId) : '';
+  ue4ssBtn.dataset.source = ue4ssDefault ? 'default' : (fromNexus ? 'nexus' : 'github');
+  ue4ssBtn.dataset.nexusFileId = !ue4ssDefault && fromNexus && ue4ssUp.nexus ? String(ue4ssUp.nexus.fileId) : '';
   // ZCSDK Runtime (newest GitHub release; bundled copy as the offline fallback)
   const zc = state.zcsdk || {};
   const zcPkg = zc.available || null;
@@ -1299,15 +1314,22 @@ async function openUe4ssVersionsModal() {
   const cur = data.installed;
   $('#ue4ss-versions-sub').textContent =
     (cur ? `Installed by Mod Command: ${cur.name}${cur.restored ? ' (restored)' : ''}. ` : (data.status.installed ? 'The installed copy was not placed by Mod Command, so its build is unknown. ' : 'UE4SS is not installed. ')) +
-    'Two sources: the game-specific compatibility build on Nexus (stock UE4SS plus signatures for a tested game build — usually the one that works right after a game patch) and the rolling experimental build on GitHub. Every install keeps the build it replaces, so you can go back to whichever matched a frozen game version. The stable 3.0.x zips use a flat layout this manager cannot deploy and predate UE 5.6.';
+    'Two sources: the game-specific package on Nexus (stock UE4SS plus this game’s signatures, loader settings and helpers — what Download & install fetches by default) and the stock upstream build on GitHub, which carries none of that and is only a fallback. Every install keeps the build it replaces, so you can go back to whichever matched a frozen game version. The stable 3.0.x zips use a flat layout this manager cannot deploy and predate UE 5.6.';
   const list = $('#ue4ss-versions-list');
   list.innerHTML = '';
-  const section = (title) => {
+  const section = (title, note) => {
     const h = document.createElement('div');
     h.className = 'dim';
     h.style.cssText = 'padding:10px 4px 4px;letter-spacing:2px;font-size:11px;';
     h.textContent = title;
     list.appendChild(h);
+    if (note) {
+      const n = document.createElement('div');
+      n.className = 'dim';
+      n.style.cssText = 'padding:0 4px 4px;font-size:11px;';
+      n.textContent = note;
+      list.appendChild(n);
+    }
   };
   const row = (title, sub, btnLabel, onClick, disabledNote) => {
     const r = document.createElement('div');
@@ -1368,7 +1390,10 @@ async function openUe4ssVersionsModal() {
     const tested = nx.testedBuild ? `tested on game build ${nx.testedBuild}${data.gameBuild ? (String(data.gameBuild) === String(nx.testedBuild) ? ' — matches yours' : ` — yours is ${data.gameBuild}`) : ''}` : 'tested game build not stated';
     const isCur = cur && cur.source === 'nexus' && Number(cur.fileId) === Number(nx.fileId);
     const badges = [];
-    if (data.gameBuild && nx.testedBuild && String(data.gameBuild) === String(nx.testedBuild)) badges.push('recommended for your game build');
+    // The game-specific package is what Zero Company needs, so it is always the
+    // recommended row; a tested build that matches this PC says so outright.
+    badges.push(data.gameBuild && nx.testedBuild && String(data.gameBuild) === String(nx.testedBuild)
+      ? 'recommended for your game build' : 'recommended');
     if (isCur) badges.push('installed');
     else if (cur && cur.source === 'nexus') badges.push(`installed: older v${cur.version || '?'} — newer available`);
     row(`${nx.name} v${nx.version || '?'}${badges.length ? ` — ${badges.join(' · ')}` : ''}`,
@@ -1378,7 +1403,12 @@ async function openUe4ssVersionsModal() {
         if (!data.isPremium) { $('#ue4ss-versions-modal').classList.add('hidden'); openNexusDownload('UE4SS for Star Wars Zero Company', data.nexusUrl); return; }
         const res = await call('installUe4ss', { nexusFileId: nx.fileId });
         if (!res) return;
-        if (res.opened === 'embed') { $('#ue4ss-versions-modal').classList.add('hidden'); openNexusDownload(res.name, res.url); return; }
+        if (res.opened === 'embed') {
+          $('#ue4ss-versions-modal').classList.add('hidden');
+          openNexusDownload(res.name, res.url);
+          if (res.hint) toast(res.hint, 'info', 9000);
+          return;
+        }
         state = res.state;
         render();
         $('#ue4ss-versions-modal').classList.add('hidden');
@@ -1386,7 +1416,8 @@ async function openUe4ssVersionsModal() {
       });
   }
 
-  section('GITHUB — UE4SS-RE/RE-UE4SS (rolling experimental build)');
+  section('GITHUB — UE4SS-RE/RE-UE4SS (rolling experimental build)',
+    'Stock upstream build — no Zero Company signatures; use only if the Nexus package is unavailable.');
   if (data.releasesError) {
     const err = document.createElement('div');
     err.className = 'dim';
@@ -1418,18 +1449,55 @@ async function openUe4ssVersionsModal() {
   $('#ue4ss-versions-modal').classList.remove('hidden');
 }
 
+// Every one-click UE4SS install funnels through here. No argument means the
+// default: the game-specific package "UE4SS for Star Wars Zero Company" from
+// Nexus Mods. { source:'github' } is the explicit stock upstream build,
+// { nexusFileId } / a tag string are the explicit picks from ⧗ Versions.
+// Handles the two answers only the default can give: a free account, which is
+// sent to the embedded Nexus page, and a signed-out one, which is offered the
+// sign-in or the stock build. Returns the install result, or null when nothing
+// was installed (the embedded page took over, or the user declined).
+async function runUe4ssInstall(arg) {
+  let res = await call('installUe4ss', arg);
+  if (!res) return null;
+  if (res.needsChoice) {
+    const nx = res.nexus || {};
+    const gh = res.github || null;
+    const go = window.confirm(
+      `UE4SS for Zero Company is a game-specific package on Nexus Mods (signatures for this game${nx.testedBuild ? `, tested on build ${nx.testedBuild}` : ''}).\n\n` +
+      'Sign in to Nexus Mods to install it.\n\n' +
+      `Install the stock upstream build from GitHub instead${gh && gh.build ? ` (${gh.build})` : ''}? ` +
+      'It is not tested on this game and may not work after game patches.');
+    if (!go) {
+      toast('UE4SS was not installed. Sign in at Settings → Nexus Mods, then press Download & install to get the Zero Company package.', 'info', 9000);
+      return null;
+    }
+    res = await call('installUe4ss', { source: 'github' });
+    if (!res) return null;
+  }
+  if (res.opened === 'embed') {
+    openNexusDownload(res.name, res.url);
+    if (res.hint) toast(res.hint, 'info', 9000);
+    return null;
+  }
+  state = res.state;
+  render();
+  return res;
+}
+window.runUe4ssInstall = runUe4ssInstall; // reachable for verification harness
+
 $('#btn-install-ue4ss').addEventListener('click', async () => {
   const btn = $('#btn-install-ue4ss');
   btn.disabled = true;
   try {
-    // A Nexus-sourced install stays on Nexus; everything else uses GitHub.
-    const arg = btn.dataset.source === 'nexus' && btn.dataset.nexusFileId ? { nexusFileId: Number(btn.dataset.nexusFileId) } : undefined;
-    const res = await call('installUe4ss', arg);
+    // Nothing installed → the default (Nexus package). An existing install
+    // stays on its own source for Update/Reinstall.
+    const src = btn.dataset.source;
+    const arg = src === 'nexus' && btn.dataset.nexusFileId ? { nexusFileId: Number(btn.dataset.nexusFileId) }
+      : (src === 'github' ? { source: 'github' } : undefined);
+    const res = await runUe4ssInstall(arg);
     if (!res) return;
-    if (res.opened === 'embed') { openNexusDownload(res.name, res.url); return; }
-    state = res.state;
-    render();
-    toast(`UE4SS installed (${res.version}). Lua/DLL mods are now supported.`);
+    toast(`UE4SS installed (${res.version})${res.source === 'github' ? ' — stock upstream build, not game-specific' : ''}. Lua/DLL mods are now supported.`);
   } finally {
     btn.disabled = false;
     $('#progress-toast').classList.add('hidden');
@@ -1470,13 +1538,11 @@ async function installZcsdkRuntime() {
   if (!state.ue4ss || !state.ue4ss.installed) {
     const go = window.confirm(
       'The ZCSDK Runtime runs on UE4SS, which is not installed yet.\n\n' +
-      'Download and install UE4SS from GitHub first, then the runtime?');
+      'Install UE4SS for Zero Company (the game-specific package from Nexus Mods) first, then the runtime?');
     if (!go) return false;
-    const r = await call('installUe4ss');
+    const r = await runUe4ssInstall();
     if (!r) return false;
-    state = r.state;
-    render();
-    toast(`UE4SS installed (${r.version}).`);
+    toast(`UE4SS installed (${r.version})${r.source === 'github' ? ' — stock upstream build, not game-specific' : ''}.`);
   }
   const res = await call('installZcsdkRuntime');
   if (!res) return false;

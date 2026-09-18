@@ -196,25 +196,33 @@ automatically for IoStore package inspection; a different copy can be selected i
   `Retry-After` on a 429, keeps at most two requests in flight, and background
   work (the hourly update check, the file-name index) leaves a reserve for your
   own clicks and reschedules itself rather than spending it.
-- **UE4SS one-click install** — Settings → UE4SS → Download & install fetches the
-  latest experimental UE4SS runtime zip from GitHub (UE4SS-RE/RE-UE4SS) and installs
-  it into `Binaries/Win64`. Every runtime install snapshots the build it
-  replaces (dwmapi.dll + ue4ss\* minus Mods/logs) into `versions/ue4ss-runtime/`
-  (5 kept); ⧗ Versions restores any kept build (the current one is kept first) and
-  lists the GitHub releases (only the rolling experimental builds use the ue4ss\
-  layout this manager deploys — stable 3.0.x zips are flat and shown as not
-  installable). The card shows the build Mod Command installed
-  (`settings.ue4ssInstalled`) and, because the experimental channel is rolling
-  (same tag, new zip every CI build), compares its recorded build id (from the
-  zip name, e.g. `g2bfa839f`) with the current asset at startup / in the update
-  check — "Update to build …" when behind, a once-per-build toast, and the
-  Diagnostics line names the build. A second source is read anonymously via
-  GraphQL: Nexus mod 9 "UE4SS for Star Wars Zero Company" (a game-specific
-  compatibility build; its page states the tested game build, which is compared
-  with the installed game's build id). ⧗ Versions lists both sources; Nexus
-  installs go direct for premium keys and through the embedded page (nxm
-  handoff → handleNxm recognises the runtime) for free accounts; update
-  detection follows the installed source (`settings.ue4ssInstalled.source`).
+- **UE4SS one-click install** — Settings → UE4SS → Download & install fetches
+  **the Zero Company package**: Nexus mod 9 "UE4SS for Star Wars Zero Company"
+  (stock UE4SS plus this game's signatures, loader settings and helpers; its page
+  states the game build it was tested on). That is the default for every one-click
+  path — the Settings card, the ZCSDK-runtime prompt and `install-ue4ss` with no
+  payload. Premium accounts download it directly; free accounts get the embedded
+  Nexus page, whose "Mod Manager Download" comes back as nxm:// into `handleNxm`,
+  which recognises the runtime; signed-out users are offered the sign-in or, on
+  confirmation, the stock upstream build. The page is read anonymously via
+  GraphQL (`refreshNexusLatest()`), and the tested build is recorded with the
+  install (`settings.ue4ssInstalled.testedBuild`) and compared with the installed
+  game's build id in the card and in Diagnostics ("matches yours" / "yours is N").
+  The **stock upstream build** from GitHub (UE4SS-RE/RE-UE4SS) stays available as
+  a fallback — `{ source:'github' }` or `{ tag }` from ⧗ Versions, and
+  automatically, with a warning toast, when the Nexus page cannot be read. It has
+  no Zero Company signatures and is labelled that way everywhere. Every runtime
+  install snapshots the build it replaces (dwmapi.dll + ue4ss\* minus Mods/logs)
+  into `versions/ue4ss-runtime/` (5 kept); ⧗ Versions restores any kept build (the
+  current one is kept first) and lists both sources — Nexus marked *recommended*,
+  the GitHub section carrying the stock-build warning (only the rolling
+  experimental builds use the ue4ss\ layout this manager deploys — stable 3.0.x
+  zips are flat and shown as not installable). Because the experimental channel is
+  rolling (same tag, new zip every CI build), a GitHub install's recorded build id
+  (from the zip name, e.g. `g2bfa839f`) is compared with the current asset at
+  startup / in the update check; a Nexus install compares file ids. Update
+  detection follows the installed source (`settings.ue4ssInstalled.source`), with
+  "Update to …" on the card and a once-per-build toast.
 - **retoc update check** — Settings → retoc compares the installed
   `retoc --version` with the newest GitHub release (trumank/retoc, Windows zip
   asset) and installs it into `<dataDir>/tools/retoc.exe` (+ the bundled Oodle

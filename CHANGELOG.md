@@ -48,6 +48,28 @@
 - Every request to Nexus now carries the app's registered name and version, so
   Nexus can see what its API is being used by. Nothing else changed for you.
 
+**UE4SS now installs the version made for Zero Company**
+- Download & install used to fetch the general-purpose UE4SS from its own
+  GitHub page. That build knows nothing about this game: it has none of Zero
+  Company's signatures, and since the game's last patch it often does nothing
+  at all — which is why Lua and DLL mods stopped loading for some of you.
+- Settings → UE4SS → **Download & install (Nexus package)** now fetches
+  **"UE4SS for Star Wars Zero Company"** by Vercadi from Nexus Mods — the same
+  UE4SS plus this game's signatures, loader settings and helpers, tested against
+  the current game build on both the Steam and EA App editions. Every one-click
+  path uses it now, including the prompt that offers UE4SS before the ZCSDK
+  Runtime.
+- Premium accounts get it downloaded and installed straight away. Free accounts
+  get the file list in the download panel — press **Mod Manager Download** and
+  Mod Command takes it from there. Signed out, Mod Command offers to sign you in
+  first, and tells you plainly what the GitHub build is if you'd rather have that.
+- The Settings card and Diagnostics now say which of the two you have, and for
+  the Zero Company package whether the build it was tested on matches the game
+  you have installed.
+- The stock build from GitHub is still there — ⧗ Versions lists it under a
+  warning, and Mod Command falls back to it (and says so) if the Nexus page
+  cannot be reached.
+
 ## v1.9.12 (2026-09-13)
 
 **Mods that install as a folder in `SWZeroCompany\Mods` now install properly**

@@ -3563,7 +3563,7 @@ refreshState().then(() => {
      • measures #content and tells main where to put the view
      • shows the view on the Forge nav item and hides it on every other
      • renders the ◆ SDK Settings card (link / detect / unlink / errors)
-     • shows or hides the ◆ Forge nav item with the link
+     • dims or lights the ◆ Forge nav item with the link
 
    Every failure is a sentence on the Settings card. Nothing here can stop
    the rest of the app rendering.

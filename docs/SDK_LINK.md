@@ -3,7 +3,8 @@
 Mod Command ships **no Mod SDK panel**. If the Zero Company Mod SDK is
 installed and pointed at from *Settings → ◆ SDK*, Mod Command **hosts the SDK's
 own UI** in a fifth view called ◆ Forge. Nothing else changes: with no SDK
-linked there is no Forge nav item and Mod Command is exactly what it was.
+linked the Forge item is dimmed and opens "Get the SDK", and Mod Command is
+otherwise exactly what it was.
 
 The reason for the shape is release cadence. The SDK moves far faster than Mod
 Command, and its UI is written against its own CLI. Hosting it instead of
@@ -60,8 +61,8 @@ Two independent gates, both checked before anything is loaded:
 `sdkUiVersion` is **not** a gate. It is display only. The SDK is free to ship
 any version it likes as long as the contract number holds.
 
-**Every failure ends in the same place:** the ◆ SDK card shows the sentence, no
-◆ Forge nav item appears, and the rest of Mod Command is untouched. Nothing in
+**Every failure ends in the same place:** the ◆ SDK card shows the sentence, the
+◆ Forge nav item stays dimmed, and the rest of Mod Command is untouched. Nothing in
 `lib/sdk-link.js` is allowed to throw into the host — `link()` catches, tears
 down whatever it had half-built, and returns `{ linked: false, error }`. Same
 for a `cliModule` that loads but exports no `createHandlers`, or whose own
@@ -177,7 +178,7 @@ panel's own Doctor line agrees with the host's badge without a second fetch.
 
 ## Settings keys
 
-Three, in `data/manager-data.json`:
+Four, in `data/manager-data.json`:
 
 | key | meaning |
 |---|---|

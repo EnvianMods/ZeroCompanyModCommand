@@ -161,6 +161,16 @@ automatically for IoStore package inspection; a different copy can be selected i
   INI files get a structured section/key/value view that preserves comments, ordering
   and duplicate keys exactly (only values are editable); Raw view edits the full text.
   The original file is backed up to `.zcbak` on first save.
+- **◆ Forge — the Mod SDK's workbench, hosted** — point Mod Command at an installed
+  Zero Company Mod SDK (Settings → ◆ SDK; Detect looks beside the install and beside
+  the game folder) and the Forge view hosts the SDK's own UI, loaded from the SDK
+  folder against its embed contract (`<sdk>/tools/sdk-ui/manifest.json`; the host's
+  side is `lib/sdk-link.js`, design in `docs/SDK_LINK.md`). Mod Command ships no copy
+  of the panel, so an SDK update needs no Mod Command release. With no SDK linked the
+  Forge item stays in the rail, dimmed, and opens the "Get the SDK" page (what it is,
+  what it needs, Nexus / GitHub links, "point at an installed SDK"). The SDK's own
+  update file (`sdk-version.json`, URL from its manifest) puts a badge on Forge when a
+  newer SDK is published.
 - **Holonet browser** — an in-app Nexus Mods browser for Zero Company: grid of mods
   with thumbnails, author/version/category, download & endorsement counts, live search,
   category filter, and sorting (downloads / endorsements / newest / updated / name),

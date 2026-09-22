@@ -1,5 +1,43 @@
 # Zero Company Mod Command — Changelog
 
+## v1.9.13 (2026-09-22)
+
+**◆ Forge: the Zero Company Mod SDK's workbench, inside Mod Command**
+- Mod Command installs and manages mods. The **Zero Company Mod SDK** is the
+  other half — the toolkit that *makes* them — and it is a separate download
+  (Nexus: `nexusmods.com/starwarszerocompany/mods/163`; GitHub:
+  `github.com/EnvianMods/ZCSDK/releases`). Point Mod Command at an installed
+  SDK — Settings → ◆ SDK, where **Detect** looks beside the Mod Command install
+  and beside the game folder — and the new **◆ Forge** view hosts the SDK's own
+  workbench in this window: scaffold a mod from a recipe, check it, build it,
+  deploy it, run its doctor, browse its templates, read the real build log.
+- Mod Command carries **no copy** of that panel. It loads the SDK's own UI
+  straight out of the SDK folder, so a new SDK release shows up in Forge the
+  moment you update the SDK — no Mod Command update needed. The SDK declares
+  the embed contract it speaks (`tools/sdk-ui/manifest.json`); an SDK that is
+  too new or too old for this Mod Command says so on the ◆ SDK card, and
+  nothing else in the app changes.
+- With **no SDK linked**, ◆ Forge is still in the rail, dimmed. It opens a
+  page that explains what the SDK is, what it needs on your machine (Unreal
+  Engine 5.6.x, MSVC + the Windows SDK, the .NET 4.8.1 Developer Pack, retoc —
+  which Mod Command already bundles — Node, Python, and the game), and where
+  to get it: Nexus first, the GitHub release second, or point Mod Command at
+  a folder you already have. A modder who has never heard of the SDK can now
+  find out it exists without leaving the app.
+- Once linked, Mod Command also reads the SDK's own small update file (the
+  URL is the SDK's, from its manifest). When a newer SDK is published, ◆ Forge
+  gets a badge and the ◆ SDK card names the version and where to get it. The
+  check runs at startup and hourly, like mod updates; offline it stays quiet.
+- A word on trust: linking an SDK runs that SDK's build tooling from the
+  folder you chose, with the same privileges as running its build script
+  yourself. Link only a folder you downloaded from the SDK's own release pages.
+
+**The Holonet's curated-GitHub tab is now labelled GitHub**
+- It used to be called The Forge. That name now belongs to the SDK view, so the
+  Holonet tab says what it is: the GitHub mods curated by Envian Mods. Nothing
+  else about it changed — same list, same Install buttons, same IN HANGAR
+  badges.
+
 ## v1.9.12 (2026-09-13)
 
 **Mods that install as a folder in `SWZeroCompany\Mods` now install properly**

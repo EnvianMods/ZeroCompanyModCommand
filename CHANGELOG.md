@@ -1,6 +1,6 @@
 # Zero Company Mod Command — Changelog
 
-## v1.9.13 (2026-09-22)
+## v1.9.14 (unreleased — ships AFTER the OAuth release v1.9.13 / 1.0.8 is approved on Nexus; date and public number set at release)
 
 **◆ Forge: the Zero Company Mod SDK's workbench, inside Mod Command**
 - Mod Command installs and manages mods. The **Zero Company Mod SDK** is the

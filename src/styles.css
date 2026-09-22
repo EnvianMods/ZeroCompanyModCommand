@@ -1003,3 +1003,49 @@ body.reduced-motion * { transition: none !important; animation: none !important;
   color: var(--good); border-color: rgba(109, 255, 176, 0.5);
   background: rgba(109, 255, 176, 0.08); cursor: default;
 }
+
+/* =======================================================================
+   SDK LINK — the ◆ SDK Settings card and the Forge shell.
+
+   There is no Forge panel in this stylesheet: when an SDK is linked its own
+   page is hosted in a WebContentsView over #content and brings its own CSS.
+   These few rules are only the host's side of the seam.
+   ======================================================================= */
+
+.setting-value.bad { color: var(--danger); }
+.setting-value.warn { color: var(--amber); }
+.ext-link { color: var(--holo); text-decoration: none; }
+.ext-link:hover { text-decoration: underline; }
+
+/* The ◆ Forge nav item is ALWAYS in the rail. Dimmed = no SDK linked, where
+   it opens the pitch below instead of the panel. */
+.nav-item.dim { color: var(--text-dim); opacity: 0.55; }
+.nav-item.dim .nav-glyph { opacity: 0.7; }
+.nav-item.dim:hover { opacity: 0.9; }
+.nav-item.dim.active { color: var(--holo-dim); border-left-color: var(--holo-dim); opacity: 0.85; }
+
+/* The hosted view is parked over #view-forge when an SDK is linked; the
+   fallback is only what shows in the moment before it paints. */
+#forge-fallback { min-height: 50vh; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; }
+#forge-fallback.hidden { display: none; }
+
+/* ---- the "Get the SDK" pitch (no SDK linked) ---- */
+.pitch-lede { font-size: 13px; line-height: 1.65; color: var(--text); margin: 0; }
+.pitch-lede strong { color: var(--holo); }
+.pitch-lede em { color: var(--amber); font-style: normal; }
+
+.pitch-table { display: flex; flex-direction: column; margin-bottom: 4px; }
+.pitch-row {
+  display: grid; grid-template-columns: 300px 1fr; gap: 16px;
+  padding: 9px 4px; border-bottom: 1px solid rgba(79, 209, 255, 0.10);
+  font-size: 12px; line-height: 1.5; align-items: start;
+}
+.pitch-row:last-child { border-bottom: none; }
+.pitch-row.pitch-head {
+  font-size: 9px; letter-spacing: 2px; color: var(--holo-dim);
+  text-transform: uppercase; border-bottom: 1px solid var(--panel-edge);
+}
+.pitch-row > span:first-child { color: var(--holo); }
+.pitch-row.pitch-head > span:first-child { color: var(--holo-dim); }
+.pitch-row em { color: var(--amber); font-style: normal; }

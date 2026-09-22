@@ -71,6 +71,10 @@ const ea = require('./lib/ea');
 const { checkLauncherUpdate } = require('./lib/launcher-update');
 const { log, logText } = require('./lib/log');
 const report = require('./lib/report');
+// SDK LINK: Mod Command hosts the Zero Company Mod SDK's OWN UI when one is
+// installed. It carries no copy of that UI — see lib/sdk-link.js and
+// docs/SDK_LINK.md.
+const sdkLink = require('./lib/sdk-link');
 
 // App data (settings, staging, indexes) lives in the OS per-user app-data
 // folder — %APPDATA%\ZeroCompanyModCommand on Windows — never beside the exe.
@@ -405,6 +409,57 @@ function createWindow() {
     },
   });
   win.loadFile(path.join(__dirname, 'src', 'index.html'));
+
+  // The SDK link hosts a WebContentsView inside THIS window, so it can only be
+  // configured once the window exists. Linking itself is deferred to the
+  // renderer's first `sdk-link-status` call (see below) — nothing about the
+  // link is allowed to slow down or break app start.
+  sdkLink.configure({
+    window: win,
+    appDir: __dirname,
+    // package.json, not app.getVersion(): the manifest's minModCommand is
+    // checked against MOD COMMAND's version, and app.getVersion() reports
+    // Electron's own when the app is started from a script rather than a
+    // folder (which is exactly what the verification harness does).
+    hostVersion: (() => {
+      try { return require('./package.json').version; } catch (_) { return app.getVersion(); }
+    })(),
+    log,
+    getGamePath: () => store.settings.gamePath || null,
+    getSdkPath: () => store.settings.sdkPath || null,
+    setSdkPath: (p) => { store.settings.sdkPath = p || null; store.save(); },
+    // The SDK's own two settings, in OUR store. Note the panel's "SDK folder"
+    // is sdkCliPath, NOT the link: pointing the CLI at a second checkout must
+    // never tear down the UI the user is looking at. null = same folder.
+    getSdkSettings: () => ({
+      sdkPath: store.settings.sdkCliPath || store.settings.sdkPath || null,
+      showCommand: !!store.settings.sdkShowCommand,
+    }),
+    setSdkSettings: (patch) => {
+      if (Object.prototype.hasOwnProperty.call(patch, 'sdkPath')) store.settings.sdkCliPath = patch.sdkPath || null;
+      if (Object.prototype.hasOwnProperty.call(patch, 'showCommand')) store.settings.sdkShowCommand = !!patch.showCommand;
+      store.save();
+      return {
+        sdkPath: store.settings.sdkCliPath || store.settings.sdkPath || null,
+        showCommand: !!store.settings.sdkShowCommand,
+      };
+    },
+    browseFolder: async (title, defaultPath) => {
+      const res = await dialog.showOpenDialog(win, { title, properties: ['openDirectory'], defaultPath: defaultPath || undefined });
+      return res.canceled || !res.filePaths.length ? null : res.filePaths[0];
+    },
+    openPath: (p) => shell.openPath(p),
+    openExternal: (url) => shell.openExternal(url),
+    // The SDK's update answer is cached in OUR store, so the host badge and
+    // the hosted page's own line read one cache and cost one fetch an hour.
+    getUpdateCache: () => store.settings.sdkUpdate || null,
+    setUpdateCache: (c) => { store.settings.sdkUpdate = c; store.save(); },
+  });
+
+  // A window resize must not leave the hosted view at yesterday's size; the
+  // renderer re-measures and pushes a new rect.
+  win.on('resize', () => { try { sendEvent({ type: 'sdk-link-remeasure' }); } catch (_) {} });
+  win.on('closed', () => { try { sdkLink.teardown(); } catch (_) {} });
 }
 
 // The embedded Nexus <webview> is untrusted remote content. We never expose app
@@ -560,7 +615,21 @@ app.whenReady().then(() => {
   // "Check updates" button runs the same check on demand.
   win.webContents.once('did-finish-load', () => maybeCheckUpdates());
   setInterval(() => { if (win && !win.isDestroyed()) maybeCheckUpdates(); }, UPDATE_CHECK_MS);
+  // The linked SDK's own update check, on the SAME hourly cadence and with
+  // the same 60-minute cache. One small JSON fetch, only when an SDK is
+  // linked, and a failure is a state ('unknown'), never a toast.
+  win.webContents.once('did-finish-load', () => maybeCheckSdkUpdate());
+  setInterval(() => { if (win && !win.isDestroyed()) maybeCheckSdkUpdate(); }, UPDATE_CHECK_MS);
 });
+
+async function maybeCheckSdkUpdate() {
+  try {
+    if (!sdkLink.status().linked) return;
+    const info = await sdkLink.checkUpdate({ force: false });
+    sdkLink.pushUpdateToView(info);
+    sendEvent({ type: 'sdk-update', info });
+  } catch (_) { /* never surfaces */ }
+}
 
 const UPDATE_CHECK_MS = 60 * 60 * 1000;
 let lastUpdateSignature = null;
@@ -2088,6 +2157,60 @@ handlers['save-support-report'] = async () => {
   fs.writeFileSync(res.filePath, buildSupportReport());
   log('info', 'support report saved');
   return { saved: true, file: path.basename(res.filePath) };
+};
+
+// ----------------------------------------------------------- SDK LINK
+// Six small channels, all of them ABOUT the link. Everything the SDK panel
+// itself does travels on the SDK's own `sdk:<contract>:*` channels, which
+// lib/sdk-link.js registers out of the linked folder — this host does not
+// know or care what they are.
+
+// The link is established on the renderer's first status call rather than at
+// app start, so a broken or half-installed SDK can never delay the window.
+let sdkLinkRestored = false;
+function sdkLinkEnsure() {
+  if (sdkLinkRestored) return sdkLink.status();
+  sdkLinkRestored = true;
+  try { return sdkLink.restore(); }
+  catch (err) { log('error', `sdk-link restore: ${err.message}`); return sdkLink.status(); }
+}
+
+handlers['sdk-link-status'] = async () => sdkLinkEnsure();
+
+handlers['sdk-link-detect'] = async () => {
+  sdkLinkRestored = true;
+  return sdkLink.detect();
+};
+
+handlers['sdk-link-browse'] = async () => {
+  const res = await dialog.showOpenDialog(win, {
+    title: 'Locate the Zero Company Mod SDK folder',
+    properties: ['openDirectory'],
+    defaultPath: store.settings.sdkPath || undefined,
+  });
+  if (res.canceled || !res.filePaths.length) return sdkLink.status();
+  sdkLinkRestored = true;
+  return sdkLink.link(res.filePaths[0]);
+};
+
+handlers['sdk-link-unlink'] = async () => {
+  sdkLinkRestored = true;
+  return sdkLink.unlink();
+};
+
+// The renderer owns the layout, so it measures the content area and hands the
+// rect over; showing/hiding rides the same call as the view switch.
+handlers['sdk-link-view'] = async (_e, { visible, bounds } = {}) => sdkLink.setVisible(!!visible, bounds || null);
+
+handlers['sdk-link-devtools'] = async () => sdkLink.openDevTools();
+
+// The SDK's update check, for the host's own badge and Settings line.
+// { force: true } is the "Check now" button; everything else is cached.
+handlers['sdk-link-check-update'] = async (_e, { force } = {}) => {
+  sdkLinkEnsure();
+  const info = await sdkLink.checkUpdate({ force: !!force });
+  sdkLink.pushUpdateToView(info);
+  return info;
 };
 
 for (const [channel, fn] of Object.entries(handlers)) {

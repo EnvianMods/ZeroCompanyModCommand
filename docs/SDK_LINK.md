@@ -178,7 +178,7 @@ panel's own Doctor line agrees with the host's badge without a second fetch.
 
 ## Settings keys
 
-Four, in `data/manager-data.json`:
+Five, in `data/manager-data.json`:
 
 | key | meaning |
 |---|---|
@@ -186,9 +186,10 @@ Four, in `data/manager-data.json`:
 | `sdkCliPath` | the checkout the SDK's CLI runs against. `null` = same as `sdkPath`. Separate so that pointing the panel at a second checkout — which a developer with more than one does — cannot tear down the link. |
 | `sdkShowCommand` | the SDK panel's "show CLI command" toggle. |
 | `sdkUpdate` | the update check's cached `{ info, at }`, so the 60-minute TTL survives a restart. |
+| `sdkAssetLinks` | `{ sdk: { url, updateUrl }, at }` — the last `sdk` block the asset file ever carried, written every time a fetch yields one. It is what an **offline** Mod Command shows a Get button from. Never a default, only a memory: a fresh install that has never reached the network shows the dim line instead. |
 
-The last two are the **SDK's** settings. They live here only because the SDK's
-handler map asks its host to store them.
+`sdkShowCommand` and `sdkUpdate` are the **SDK's** settings. They live here only
+because the SDK's handler map asks its host to store them.
 
 ## The security stance — say it plainly
 
@@ -219,25 +220,88 @@ in contract 1.
 
 ## Where the SDK comes from, and the ◆ Forge nav item
 
-`lib/sdk-link.js` holds `SDK_LINKS`, the **only** copy of either download URL:
+**Mod Command hard-codes no download destination — not for the SDK, and not
+for itself.** There is no URL table in `lib/sdk-link.js`. Where to get the SDK
+is *published*, in the asset repo file that already announces Mod Command's own
+updates:
 
-```js
-nexus:          'https://www.nexusmods.com/starwarszerocompany/mods/163'
-githubReleases: 'https://github.com/EnvianMods/ZCSDK/releases'
+`https://raw.githubusercontent.com/EnvianMods/SWZeroCompanyFeaturedAuthors/main/launcher-version.json`
+
+```json
+{
+  "latest": "1.0.8",
+  "url": "…",
+  "notes": "…",
+  "publishedAt": "…",
+  "sdk": {
+    "url":       "https://github.com/EnvianMods/ZCSDK/releases/tag/v1.0.0",
+    "updateUrl": "https://raw.githubusercontent.com/EnvianMods/ZCSDK/main/sdk-version.json"
+  }
+}
 ```
 
-They reach the renderer on `status().links`; a `null` channel hides its button,
-so a channel can be added or retired by editing this table alone.
+| field | meaning |
+|---|---|
+| `sdk` | optional. Absent or unusable ⇒ no Get button at all. |
+| `sdk.url` | the page to send people to for the SDK download. Must be `https://`, else ignored. |
+| `sdk.updateUrl` | where the SDK publishes `sdk-version.json`. Must be `https://`, else ignored. Advisory: the LINKED case still reads the manifest's own `updateUrl` (above), never this. |
+
+**At launch this file flips both halves from GitHub to the Nexus pages** — Mod
+Command's own `url` and the SDK's `sdk.url` — in one edit, for every installed
+launcher, with no release of anything. That is the entire reason the table is
+gone.
+
+**The path.** `lib/launcher-update.js` fetches the file (one `fetch`,
+`cache: 'no-store'`, 6 s `AbortController` timeout, 60-minute TTL) and builds
+its answer **from known keys only**, so a launcher that shipped before a key
+existed ignores it — which is what makes adding one safe. It parses `sdk` onto
+`info.sdk`, or `null`. `main.js`'s `getAssetLinks()` answers, in order:
+
+| source | where it came from |
+|---|---|
+| `asset-file` | the check that ran this session carried a block |
+| `cache` | `settings.sdkAssetLinks` — the last block any fetch ever carried, saved every time one lands, so an **offline restart still has the last good link** |
+| `none` | never fetched one and nothing was saved |
+
+`lib/sdk-link.js` calls that through `ctx.getAssetLinks()` and puts the answer
+on `status().links`:
+
+```js
+{ sdk: { url, updateUrl } | null, source: 'asset-file' | 'cache' | 'none' }
+```
+
+The check runs at startup and hourly, and each answer pushes a `sdk-links`
+event, so a link the operator flips lands **without a restart**.
+
+**One button, and its label is written from the url.** The host in the
+published url decides what the control says — `nexusmods.com` → *"⇓ Get the
+Zero Company Mod SDK on Nexus"*, `github.com` → *"… on GitHub"*, anything else
+→ *"⇓ Get the Zero Company Mod SDK ↗"*, which claims nothing. It cannot say
+Nexus and open GitHub. The ◆ SDK card's Get link is the same url and the same
+rule. With **no url at all** the button is hidden and the pitch shows one dim
+line — *"The download link could not be fetched — check your connection and try
+again."* — while **Point Mod Command at an installed SDK** stays, because that
+path needs no network.
+
+> Note: `open-external` only opens `nexusmods.com`, `github.com` and
+> `discord.gg`. A published url on any other host gets the neutral label and is
+> refused at the door — deliberately, that allow-list is a security control.
+
+**Publishing it.** `owner-tools/update-featured-authors/update-launcher-version.js`
+reads the live file before every write and **carries the `sdk` block through**,
+so announcing a launcher version can never silently drop the SDK's link.
+`--sdk-url` / `--sdk-update-url` set it, `--sdk-only` rewrites *only* that block
+and leaves `latest/url/notes/publishedAt` exactly as published, `--show` prints
+it, and `--dry-run` prints the body it would PUT and sends nothing.
 
 **The ◆ Forge nav item is always in the rail.** With no SDK linked it is
 *dimmed* and opens the "Get the SDK" view — one paragraph on what the SDK is, a
 table of what it needs on the machine (UE 5.6.x, MSVC + Windows SDK 10.0.26100,
-.NET 4.8.1 Developer Pack, retoc, Node, Python 3.8+, the game), a primary
-**Get it on Nexus** button, a secondary **GitHub release** link, and **Point Mod
-Command at an installed SDK**, which jumps to the ◆ SDK card in Settings. Once
-an SDK is linked the same item stops being dim and is the live Forge. A modder
-who has never heard of the SDK has to be able to find out it exists; hiding the
-entry was the wrong answer.
+.NET 4.8.1 Developer Pack, retoc, Node, Python 3.8+, the game), the one **Get**
+button above, and **Point Mod Command at an installed SDK**, which jumps to the
+◆ SDK card in Settings. Once an SDK is linked the same item stops being dim and
+is the live Forge. A modder who has never heard of the SDK has to be able to
+find out it exists; hiding the entry was the wrong answer.
 
 ## Known rough edges
 

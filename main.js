@@ -68,7 +68,7 @@ const configs = require('./lib/configs');
 const { getPromotedAuthors } = require('./lib/featured');
 const github = require('./lib/github');
 const ea = require('./lib/ea');
-const { checkLauncherUpdate } = require('./lib/launcher-update');
+const { checkLauncherUpdate, cachedInfo: cachedLauncherInfo } = require('./lib/launcher-update');
 const { log, logText } = require('./lib/log');
 const report = require('./lib/report');
 // SDK LINK: Mod Command hosts the Zero Company Mod SDK's OWN UI when one is
@@ -428,6 +428,9 @@ function createWindow() {
     getGamePath: () => store.settings.gamePath || null,
     getSdkPath: () => store.settings.sdkPath || null,
     setSdkPath: (p) => { store.settings.sdkPath = p || null; store.save(); },
+    // Where to GET the SDK — the asset file's `sdk` block, or the last copy of
+    // it we saved. Nothing about the destination is written in this app.
+    getAssetLinks: () => getAssetLinks(),
     // The SDK's own two settings, in OUR store. Note the panel's "SDK folder"
     // is sdkCliPath, NOT the link: pointing the CLI at a second checkout must
     // never tear down the UI the user is looking at. null = same folder.
@@ -514,11 +517,14 @@ app.whenReady().then(() => {
   // Handle an nxm:// link this instance was launched with.
   const url = nxmFromArgv(process.argv);
   if (url) win.webContents.once('did-finish-load', () => handleNxm(url));
-  // Launcher self-update banner.
-  win.webContents.once('did-finish-load', async () => {
-    const info = await checkLauncherUpdate();
-    if (info.available) sendEvent({ type: 'launcher-update', info });
-  });
+  // Launcher self-update banner — and, from the same file, where to GET the
+  // Mod SDK (refreshLauncherUpdate persists the `sdk` block and pushes it to
+  // the renderer). Re-run hourly, the same cadence as every other check, so a
+  // link the operator flips lands without a restart.
+  win.webContents.once('did-finish-load', () => refreshLauncherUpdate({ banner: true }).catch(() => {}));
+  setInterval(() => {
+    if (win && !win.isDestroyed()) refreshLauncherUpdate({ force: true, banner: true }).catch(() => {});
+  }, UPDATE_CHECK_MS);
   // ZCSDK Runtime: learn the newest GitHub release (the Settings card and the
   // install path use it); nudge once per version when an installed runtime is
   // behind it.
@@ -621,6 +627,42 @@ app.whenReady().then(() => {
   win.webContents.once('did-finish-load', () => maybeCheckSdkUpdate());
   setInterval(() => { if (win && !win.isDestroyed()) maybeCheckSdkUpdate(); }, UPDATE_CHECK_MS);
 });
+
+// WHERE TO GET THE SDK. Mod Command hard-codes no destination: the operator
+// publishes one in the asset repo's launcher-version.json `sdk` block, which
+// is the same file that announces Mod Command's own updates, so BOTH downloads
+// flip from GitHub to Nexus at launch by editing one published file.
+//
+// Two sources, in order, and the answer says which it used:
+//   'asset-file' — the check that ran this session carried a block
+//   'cache'      — settings.sdkAssetLinks, the last block a fetch ever carried
+//   'none'       — never fetched one and nothing was saved: no button at all
+// Synchronous by contract (sdkLink.status() must never wait on the network).
+function getAssetLinks() {
+  try {
+    const live = cachedLauncherInfo();
+    if (live && live.sdk) return { sdk: live.sdk, source: 'asset-file' };
+  } catch (_) { /* fall through to the saved copy */ }
+  const saved = store.settings.sdkAssetLinks;
+  if (saved && saved.sdk && (saved.sdk.url || saved.sdk.updateUrl)) {
+    return { sdk: { url: saved.sdk.url || null, updateUrl: saved.sdk.updateUrl || null }, source: 'cache' };
+  }
+  return { sdk: null, source: 'none' };
+}
+
+// The launcher check, plus everything that rides on it: the update banner, the
+// persisted copy of the SDK block (so an offline restart still has the last
+// good link), and a push so the "Get the SDK" pitch repaints without a restart.
+async function refreshLauncherUpdate({ force = false, banner = false } = {}) {
+  const info = await checkLauncherUpdate({ force });
+  if (banner && info.available) sendEvent({ type: 'launcher-update', info });
+  if (info.sdk) {
+    store.settings.sdkAssetLinks = { sdk: info.sdk, at: Date.now() };
+    store.save();
+  }
+  try { sendEvent({ type: 'sdk-links', links: getAssetLinks() }); } catch (_) {}
+  return info;
+}
 
 async function maybeCheckSdkUpdate() {
   try {
@@ -1136,7 +1178,8 @@ const handlers = {
     return true;
   },
 
-  'launcher-update-status': async () => checkLauncherUpdate(),
+  // Also refreshes where-to-get-the-SDK, because it is the same published file.
+  'launcher-update-status': async (_e, opts) => refreshLauncherUpdate({ force: !!(opts && opts.force) }),
 
   'run-diagnostics': async () => diagnostics(),
 

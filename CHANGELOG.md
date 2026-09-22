@@ -5,8 +5,8 @@
 **◆ Forge: the Zero Company Mod SDK's workbench, inside Mod Command**
 - Mod Command installs and manages mods. The **Zero Company Mod SDK** is the
   other half — the toolkit that *makes* them — and it is a separate download
-  (Nexus: `nexusmods.com/starwarszerocompany/mods/163`; GitHub:
-  `github.com/EnvianMods/ZCSDK/releases`). Point Mod Command at an installed
+  (Mod Command's Get-the-SDK page always points at wherever it is currently
+  published). Point Mod Command at an installed
   SDK — Settings → ◆ SDK, where **Detect** looks beside the Mod Command install
   and beside the game folder — and the new **◆ Forge** view hosts the SDK's own
   workbench in this window: scaffold a mod from a recipe, check it, build it,
@@ -20,10 +20,17 @@
 - With **no SDK linked**, ◆ Forge is still in the rail, dimmed. It opens a
   page that explains what the SDK is, what it needs on your machine (Unreal
   Engine 5.6.x, MSVC + the Windows SDK, the .NET 4.8.1 Developer Pack, retoc —
-  which Mod Command already bundles — Node, Python, and the game), and where
-  to get it: Nexus first, the GitHub release second, or point Mod Command at
-  a folder you already have. A modder who has never heard of the SDK can now
-  find out it exists without leaving the app.
+  which Mod Command already bundles — Node, Python, and the game), and one
+  **Get** button, plus "point Mod Command at a folder you already have". Mod
+  Command hard-codes **no download address** for the SDK: the address is
+  published alongside Mod Command's own update announcement and read at
+  startup and hourly, so when the SDK's download moves the button follows it
+  with no Mod Command update. The button says where it is about to send you —
+  *on Nexus*, *on GitHub* — written from the address itself, so it can never
+  name one place and open another. It remembers the last address it was
+  given, so it still works offline; if it has never managed to fetch one it
+  says so instead of showing a dead link. A modder who has never heard of the
+  SDK can now find out it exists without leaving the app.
 - Once linked, Mod Command also reads the SDK's own small update file (the
   URL is the SDK's, from its manifest). When a newer SDK is published, ◆ Forge
   gets a badge and the ◆ SDK card names the version and where to get it. The

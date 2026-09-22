@@ -168,9 +168,14 @@ automatically for IoStore package inspection; a different copy can be selected i
   side is `lib/sdk-link.js`, design in `docs/SDK_LINK.md`). Mod Command ships no copy
   of the panel, so an SDK update needs no Mod Command release. With no SDK linked the
   Forge item stays in the rail, dimmed, and opens the "Get the SDK" page (what it is,
-  what it needs, Nexus / GitHub links, "point at an installed SDK"). The SDK's own
-  update file (`sdk-version.json`, URL from its manifest) puts a badge on Forge when a
-  newer SDK is published.
+  what it needs, one **Get** button, "point at an installed SDK"). That button's
+  destination is **not hard-coded**: it comes from the `sdk` block of the asset repo's
+  `launcher-version.json` — the same file that announces Mod Command's own updates —
+  fetched at startup and hourly, cached in `sdkAssetLinks` so it survives offline, and
+  labelled from the url's own host (Nexus / GitHub); with nothing ever fetched it shows
+  a dim "could not be fetched" line instead of a dead link. The SDK's own update file
+  (`sdk-version.json`, URL from its manifest) puts a badge on Forge when a newer SDK is
+  published.
 - **Holonet browser** — an in-app Nexus Mods browser for Zero Company: grid of mods
   with thumbnails, author/version/category, download & endorsement counts, live search,
   category filter, and sorting (downloads / endorsements / newest / updated / name),

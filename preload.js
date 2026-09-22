@@ -60,7 +60,7 @@ contextBridge.exposeInMainWorld('zc', {
   browseGithub: (opts) => invoke('github-browse', opts),
   installGithub: (fullName) => invoke('github-install', { fullName }),
   checkUpdates: () => invoke('check-updates'),
-  launcherUpdateStatus: () => invoke('launcher-update-status'),
+  launcherUpdateStatus: (opts) => invoke('launcher-update-status', opts || {}),
   updateMod: (id) => invoke('update-mod', { id }),
   scanUnmanaged: () => invoke('scan-unmanaged'),
   adoptMods: (ids) => invoke('adopt-mods', { ids }),

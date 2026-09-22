@@ -474,10 +474,15 @@
 
           <div class="card holo wide">
             <div class="card-title">GET IT</div>
-            <div class="card-body actions-row">
-              <button class="btn primary" id="btn-pitch-nexus">&#8659; Get the Zero Company Mod SDK on Nexus</button>
-              <button class="btn ghost" id="btn-pitch-github">GitHub release &#8599;</button>
-              <button class="btn ghost" id="btn-pitch-point">Point Mod Command at an installed SDK</button>
+            <div class="card-body">
+              <!-- ONE Get button, and its label is written from wherever the
+                   published link actually points (see sdkGetLabels in app.js).
+                   No download destination is written in this app. -->
+              <div class="actions-row">
+                <button class="btn primary hidden" id="btn-pitch-get">&#8659; Get the Zero Company Mod SDK &#8599;</button>
+                <button class="btn ghost" id="btn-pitch-point">Point Mod Command at an installed SDK</button>
+              </div>
+              <p class="dim settings-note hidden" id="pitch-get-none">The download link could not be fetched &mdash; check your connection and try again.</p>
             </div>
           </div>
         </div>

@@ -3416,6 +3416,14 @@ window.zc.onEvent((payload) => {
     sdkUpdateRender(payload.info);
     return;
   }
+  if (payload.type === 'sdk-links') {
+    // The asset file's `sdk` block landed (startup, or the hourly re-check).
+    // The pitch repaints where-to-get-it without a restart.
+    sdkLink.links = payload.links || { sdk: null, source: 'none' };
+    if (sdkLink.status) sdkLink.status.links = sdkLink.links;
+    sdkLinkRender();
+    return;
+  }
   if (payload.type === 'sdk-link-remeasure') {
     // The window changed size; the hosted SDK view needs the new rect.
     sdkLinkSync();
@@ -3569,10 +3577,26 @@ refreshState().then(() => {
    the rest of the app rendering.
    ======================================================================= */
 
-// Where to get the SDK is NOT written here: it comes from lib/sdk-link.js's
-// SDK_LINKS, over status().links, so the app has exactly one copy of each URL.
-// A null channel hides its button.
-const sdkLink = { status: null, links: {} };
+// Where to get the SDK is NOT written here, and it is not written in the main
+// process either: the operator publishes it in the asset repo's
+// launcher-version.json and it arrives on status().links as
+// { sdk: { url, updateUrl } | null, source }. No url = no button.
+const sdkLink = { status: null, links: { sdk: null, source: 'none' } };
+
+// The Get control's label is written from where the url ACTUALLY points, never
+// from a constant or from anything the file claims — so it cannot say Nexus and
+// open GitHub. Unknown host: no claim at all, just the external-link arrow.
+function sdkGetLabels(url) {
+  let host = '';
+  try { host = new URL(url).hostname.replace(/^www\./i, '').toLowerCase(); } catch (_) {}
+  const where = (host === 'nexusmods.com' || host.endsWith('.nexusmods.com')) ? ' on Nexus'
+    : (host === 'github.com' || host.endsWith('.github.com')) ? ' on GitHub'
+      : '';
+  return {
+    button: `⇓ Get the Zero Company Mod SDK${where || ' ↗'}`,
+    link: `Get the Zero Company Mod SDK${where} ↗`,
+  };
+}
 
 // The hosted view covers the whole content area, padding included: the SDK's
 // own page brings its own gutter (its embedded stylesheet trims it), so the
@@ -3603,7 +3627,7 @@ function sdkLinkSync() {
 
 function sdkLinkRender() {
   const s = sdkLink.status || { linked: false, sdkPath: null, error: null };
-  sdkLink.links = s.links || sdkLink.links || {};
+  sdkLink.links = s.links || sdkLink.links || { sdk: null, source: 'none' };
 
   // The nav item is ALWAYS there; without an SDK it is dimmed and lands on
   // the pitch. Discoverability is the whole point: a modder who has never
@@ -3611,9 +3635,19 @@ function sdkLinkRender() {
   $('#nav-forge').classList.toggle('dim', !s.linked);
   $('#forge-pitch').classList.toggle('hidden', !!s.linked);
   $('#forge-fallback').classList.toggle('hidden', !s.linked);
-  $('#btn-pitch-nexus').classList.toggle('hidden', !sdkLink.links.nexus);
-  $('#btn-pitch-github').classList.toggle('hidden', !sdkLink.links.githubReleases);
-  $('#link-sdk-get').classList.toggle('hidden', !sdkLink.links.nexus);
+  // ONE Get button on the pitch, ONE Get link on the card, both the published
+  // url. Nothing published yet and nothing cached: no button, one dim line —
+  // "Point Mod Command at an installed SDK" stays, because that path needs no
+  // network at all.
+  const getUrl = (sdkLink.links.sdk && sdkLink.links.sdk.url) || null;
+  const labels = getUrl ? sdkGetLabels(getUrl) : null;
+  $('#btn-pitch-get').classList.toggle('hidden', !getUrl);
+  $('#pitch-get-none').classList.toggle('hidden', !!getUrl);
+  $('#link-sdk-get').classList.toggle('hidden', !getUrl);
+  if (labels) {
+    $('#btn-pitch-get').textContent = labels.button;
+    $('#link-sdk-get').textContent = labels.link;
+  }
   $('#set-sdk-update-row').classList.toggle('hidden', !s.linked);
 
   const pathEl = $('#set-sdk-path');
@@ -3728,18 +3762,15 @@ $('#btn-unlink-sdk').addEventListener('click', async () => {
 
 $('#btn-goto-forge').addEventListener('click', () => $('.nav-item[data-view="forge"]').click());
 
-$('#link-sdk-get').addEventListener('click', (e) => {
-  e.preventDefault();
-  if (sdkLink.links.nexus) call('openExternal', sdkLink.links.nexus);
-});
+function sdkGetOpen() {
+  const url = sdkLink.links.sdk && sdkLink.links.sdk.url;
+  if (url) call('openExternal', url);
+}
 
-// ---- the Get-the-SDK view's three buttons ----
-$('#btn-pitch-nexus').addEventListener('click', () => {
-  if (sdkLink.links.nexus) call('openExternal', sdkLink.links.nexus);
-});
-$('#btn-pitch-github').addEventListener('click', () => {
-  if (sdkLink.links.githubReleases) call('openExternal', sdkLink.links.githubReleases);
-});
+$('#link-sdk-get').addEventListener('click', (e) => { e.preventDefault(); sdkGetOpen(); });
+
+// ---- the Get-the-SDK view's two buttons ----
+$('#btn-pitch-get').addEventListener('click', sdkGetOpen);
 $('#btn-pitch-point').addEventListener('click', () => {
   $('.nav-item[data-view="settings"]').click();
   $('#set-sdk-path').scrollIntoView({ block: 'center', behavior: 'smooth' });

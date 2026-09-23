@@ -403,6 +403,28 @@ The project is a git repo with `origin` set to
   before uploading it and refuses any zip with an entry matching `/HANDOFF/i`
   (`node publish-release.js --check-only <zip>` runs that check alone).
 
+## Third-party components in the shipped build
+
+The packaged app contains this repository's code (`main.js`, `preload.js`,
+`lib/`, `src/`, `package.json`) inside `resources/app.asar`, plus the npm
+dependency `extract-zip` declared in `package.json`. Beside the bundle,
+`resources/tools/` holds binaries that are **not** in this repository: they are
+downloaded unmodified from their official sources by `build/fetch-tools.js` at
+build time (the CI workflow and `npm run build` both run it):
+
+| Component | Version | Source | Purpose |
+|---|---|---|---|
+| 7-Zip command-line build (`7z.exe`, `7z.dll`) | 25.01 x64 | https://www.7-zip.org (official MSI, unpacked) | `.7z`/`.rar` extraction; `tools/7-Zip/BUNDLED.txt` + `License.txt` record it |
+| retoc (`retoc.exe` + the `oo2core_9_win64.dll` it ships with) | 0.1.5 | https://github.com/trumank/retoc release asset | IoStore container listing for conflict detection |
+| ZCSDK Runtime (`ZCSDKRuntime.zip`, `zcsdk-runtime.json`) | per `latest.json` | https://github.com/EnvianMods/ZCSDK-Runtime-Release | offline copy of the UE4SS-based runtime for SDK content mods |
+| `elevate.exe` | — | electron-builder's portable stub | added by the packager, not by this project |
+
+To verify a shipped build against the source: unzip the release, run
+`npx @electron/asar extract resources/app.asar out` on the unpacked app and
+diff `out/` against the tagged commit; everything outside `node_modules/`
+should match, and `resources/tools/` should contain only the items above.
+The packaged `README.txt` comes from `build/README.txt` in this repository.
+
 ## Owner tools (not shipped)
 
 `owner-tools/update-featured-authors/` pushes `featured.json` to the

@@ -46,7 +46,7 @@ Updates, handled
 Two mod sources built in
 - Holonet browser — browse this game's entire Nexus catalogue inside
   the app: thumbnails, search, category filters, and sorting
-- The Forge — a second tab of curated GitHub mods, hand-vetted by
+- GitHub — a second Holonet tab of curated GitHub mods, hand-vetted by
   Envian Mods (the list updates live). Installs come only from release
   archives, behind a confirmation naming the exact repo and file
 - nxm:// one-click downloads — press "Mod Manager Download" on the

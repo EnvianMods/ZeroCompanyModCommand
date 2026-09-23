@@ -414,6 +414,18 @@
                 <button class="btn ghost tiny" id="btn-sdk-update-check" title="Re-read the SDK's update file now, ignoring the hourly cache">&#10227; Check now</button>
               </div>
             </div>
+            <!-- Linked only. The SDK keeps its own paths (Unreal, game, retoc,
+                 reflection) in its own settings; this row just opens them in
+                 the hosted page — see docs/SDK_LINK.md. -->
+            <div class="setting-row hidden" id="set-sdk-paths-row">
+              <div class="setting-info">
+                <span class="setting-name">SDK paths &amp; dependencies</span>
+                <span class="setting-value dim" id="set-sdk-paths-note">The SDK's Unreal, game, retoc and reflection paths are set inside the Forge view's Settings.</span>
+              </div>
+              <div class="setting-actions">
+                <button class="btn ghost tiny" id="btn-sdk-open-settings" title="Open the Forge view on the SDK's own Settings">Paths &amp; dependencies&hellip;</button>
+              </div>
+            </div>
             <p class="dim settings-note" id="set-sdk-help">The SDK is a separate download and updates on its own &mdash; Mod Command only hosts its window, so a new SDK needs no new Mod Command. <a href="#" class="ext-link" id="link-sdk-get">Get the Zero Company Mod SDK &#8599;</a></p>
           </div>
         </div>

@@ -2247,6 +2247,14 @@ handlers['sdk-link-view'] = async (_e, { visible, bounds } = {}) => sdkLink.setV
 
 handlers['sdk-link-devtools'] = async () => sdkLink.openDevTools();
 
+// The ◆ SDK card's "Paths & dependencies…": ask the hosted page to open its
+// own Settings view ({ type: 'open-settings', key? } on the SDK's event
+// channel — the same path the sdk-update push takes).
+handlers['sdk-link-open-settings'] = async (_e, { key } = {}) => {
+  sdkLinkEnsure();
+  return sdkLink.openSettings(key);
+};
+
 // The SDK's update check, for the host's own badge and Settings line.
 // { force: true } is the "Check now" button; everything else is cached.
 handlers['sdk-link-check-update'] = async (_e, { force } = {}) => {

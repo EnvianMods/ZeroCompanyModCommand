@@ -173,7 +173,10 @@ automatically for IoStore package inspection; a different copy can be selected i
   `launcher-version.json` — the same file that announces Mod Command's own updates —
   fetched at startup and hourly, cached in `sdkAssetLinks` so it survives offline, and
   labelled from the url's own host (Nexus / GitHub); with nothing ever fetched it shows
-  a dim "could not be fetched" line instead of a dead link. The SDK's own update file
+  a dim "could not be fetched" line instead of a dead link. Detect also reads the SDK
+  workbench's own settings (`%APPDATA%\Zero Company Mod SDK\sdk-ui-settings.json`); once
+  linked, the ◆ SDK card's **Paths & dependencies…** button opens the Forge view's Settings,
+  where the SDK's Unreal, game, retoc and reflection paths live. The SDK's own update file
   (`sdk-version.json`, URL from its manifest) puts a badge on Forge when a newer SDK is
   published.
 - **Holonet browser** — an in-app Nexus Mods browser for Zero Company: grid of mods

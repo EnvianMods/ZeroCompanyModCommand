@@ -7,8 +7,9 @@
   other half — the toolkit that *makes* them — and it is a separate download
   (Mod Command's Get-the-SDK page always points at wherever it is currently
   published). Point Mod Command at an installed
-  SDK — Settings → ◆ SDK, where **Detect** looks beside the Mod Command install
-  and beside the game folder — and the new **◆ Forge** view hosts the SDK's own
+  SDK — Settings → ◆ SDK, where **Detect** looks beside the Mod Command install,
+  beside the game folder, and wherever the SDK's own workbench last pointed — and
+  the new **◆ Forge** view hosts the SDK's own
   workbench in this window: scaffold a mod from a recipe, check it, build it,
   deploy it, run its doctor, browse its templates, read the real build log.
 - Mod Command carries **no copy** of that panel. It loads the SDK's own UI
@@ -35,6 +36,12 @@
   URL is the SDK's, from its manifest). When a newer SDK is published, ◆ Forge
   gets a badge and the ◆ SDK card names the version and where to get it. The
   check runs at startup and hourly, like mod updates; offline it stays quiet.
+- The SDK keeps its own paths — Unreal, the game, retoc, the reflection
+  dump — in its own settings, and Mod Command stores none of them. Once an
+  SDK is linked, the ◆ SDK card has a **Paths & dependencies…** button that
+  jumps straight to the Forge view's Settings. **Detect** now also finds an
+  SDK you have already opened in the SDK's own workbench — it reads where
+  the workbench last pointed.
 - A word on trust: linking an SDK runs that SDK's build tooling from the
   folder you chose, with the same privileges as running its build script
   yourself. Link only a folder you downloaded from the SDK's own release pages.

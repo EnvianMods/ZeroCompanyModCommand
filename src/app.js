@@ -3649,6 +3649,7 @@ function sdkLinkRender() {
     $('#link-sdk-get').textContent = labels.link;
   }
   $('#set-sdk-update-row').classList.toggle('hidden', !s.linked);
+  $('#set-sdk-paths-row').classList.toggle('hidden', !s.linked);
 
   const pathEl = $('#set-sdk-path');
   const noteEl = $('#set-sdk-note');
@@ -3761,6 +3762,17 @@ $('#btn-unlink-sdk').addEventListener('click', async () => {
 });
 
 $('#btn-goto-forge').addEventListener('click', () => $('.nav-item[data-view="forge"]').click());
+
+// "Paths & dependencies…": the SDK's own paths live in the hosted page's
+// Settings, so switch to the Forge view (which shows the view) and ask the
+// page to open them — { type: 'open-settings' } on the SDK's event channel.
+async function sdkOpenSettings(key) {
+  if (!window.zc.sdkLink || !(sdkLink.status && sdkLink.status.linked)) return null;
+  $('.nav-item[data-view="forge"]').click();
+  const res = await window.zc.sdkLink.openSettings(key ? { key } : {}).catch(() => null);
+  return res && res.ok ? res.data : null;
+}
+$('#btn-sdk-open-settings').addEventListener('click', () => sdkOpenSettings());
 
 function sdkGetOpen() {
   const url = sdkLink.links.sdk && sdkLink.links.sdk.url;

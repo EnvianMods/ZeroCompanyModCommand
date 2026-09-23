@@ -73,8 +73,11 @@ for a `cliModule` that loads but exports no `createHandlers`, or whose own
 *Detect* tries, in order, and keeps the first folder that actually links:
 
 1. the configured path, if any
-2. `%APPDATA%\zero-company-mod-sdk-ui\sdk-ui-settings.json` → `sdkPath`
-   (where the SDK's own standalone UI records the folder it was pointed at)
+2. `%APPDATA%\Zero Company Mod SDK\sdk-ui-settings.json` → `sdkPath`
+   (where the SDK's own standalone UI records the folder it was pointed at —
+   Electron names its userData folder after the package's `productName`),
+   then the same file under `%APPDATA%\zero-company-mod-sdk-ui\` (the
+   package `name`, kept as a fallback)
 3. `%ProgramData%\ZeroCompanyModSDK\install.json` → `sdkPath`
    (reserved for the SDK's future installer)
 4. folders named `ZeroCompanyModSDK*` **beside the Mod Command install**
@@ -175,6 +178,20 @@ check pushes a `sdk-update` event when it lands.
 same check from the same code. Mod Command runs it for its own badge and then
 pushes the answer into the hosted page on the SDK's event channel, so the
 panel's own Doctor line agrees with the host's badge without a second fetch.
+
+## Where the SDK's own paths live
+
+The SDK's Unreal, game, retoc and reflection paths are the **SDK's** settings,
+kept in the SDK's own config and edited in the hosted page's Settings view —
+Mod Command stores none of them. When an SDK is linked, the ◆ SDK card shows a
+**Paths & dependencies…** button (with a one-line note saying so): it switches
+to the ◆ Forge view and pushes `{ type: 'open-settings' }` into the hosted page
+on the SDK's event channel (`EVENT_CHANNEL` from the linked `lib/sdk-cli.js`) —
+the same path the `sdk-update` push takes (`sdkLink.pushEventToView`, IPC
+`sdk-link-open-settings`). An optional `key: '<configKey>'` asks the page to
+scroll to that card. A page still loading gets the event on `did-finish-load`.
+The page's handler lives in the SDK; an SDK that predates it simply ignores
+the event and the button still lands on the Forge view.
 
 ## Settings keys
 

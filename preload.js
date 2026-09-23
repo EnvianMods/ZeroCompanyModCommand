@@ -63,7 +63,7 @@ contextBridge.exposeInMainWorld('zc', {
   browseGithub: (opts) => invoke('github-browse', opts),
   installGithub: (fullName) => invoke('github-install', { fullName }),
   checkUpdates: () => invoke('check-updates'),
-  launcherUpdateStatus: () => invoke('launcher-update-status'),
+  launcherUpdateStatus: (opts) => invoke('launcher-update-status', opts || {}),
   updateMod: (id) => invoke('update-mod', { id }),
   scanUnmanaged: () => invoke('scan-unmanaged'),
   adoptMods: (ids) => invoke('adopt-mods', { ids }),
@@ -79,6 +79,21 @@ contextBridge.exposeInMainWorld('zc', {
   configAddCustom: () => invoke('config-add-custom'),
   configRemoveCustom: (path) => invoke('config-remove-custom', { path }),
   configOpenFolder: (path) => invoke('config-open-folder', { path }),
+  // ---- SDK LINK ----
+  // Nine channels ABOUT the link only. The SDK panel's own traffic never comes
+  // through here: it runs in the hosted WebContentsView, over the SDK's own
+  // preload and its own `sdk:<contract>:*` channels.
+  sdkLink: {
+    status: () => invoke('sdk-link-status'),
+    detect: () => invoke('sdk-link-detect'),
+    browse: () => invoke('sdk-link-browse'),
+    unlink: () => invoke('sdk-link-unlink'),
+    view: (opts) => invoke('sdk-link-view', opts),
+    checkUpdate: (opts) => invoke('sdk-link-check-update', opts || {}),
+    devTools: () => invoke('sdk-link-devtools'),
+    openSettings: (opts) => invoke('sdk-link-open-settings', opts || {}),
+    openChangelog: () => invoke('sdk-link-open-changelog'),
+  },
   onEvent: (cb) => ipcRenderer.on('zc-event', (_e, payload) => cb(payload)),
   pathForFile: (file) => {
     try { return webUtils.getPathForFile(file); } catch (_) { return null; }

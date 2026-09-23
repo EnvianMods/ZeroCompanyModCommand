@@ -192,7 +192,7 @@ function renderMods() {
       srcBadge.addEventListener('click', () => openLinkModal(mod));
     } else {
       srcBadge.textContent = 'LOCAL · link?';
-      srcBadge.title = 'No update source — click to link this mod to its Nexus page or Forge repo so updates can be tracked';
+      srcBadge.title = 'No update source — click to link this mod to its Nexus page or GitHub repo so updates can be tracked';
       srcBadge.addEventListener('click', () => openLinkModal(mod));
     }
 
@@ -2078,7 +2078,11 @@ $('#browse-more').addEventListener('click', () => loadBrowse(false));
 // leftover value is cleared. Storage can throw in a packaged app, hence guarded.
 try { localStorage.removeItem('zc.holonet.showAdult'); } catch (_) { /* nothing to clear */ }
 
-// --------------------------------------------------- The Forge (curated GitHub)
+// ----------------------------------------------------- GitHub (curated repos)
+// Renamed from "The Forge" — Forge is now the name of the SDK's own panel.
+// The element ids, css classes and function names below keep the old spelling
+// on purpose: none of them is user-visible and renaming them would churn every
+// GitHub source path for nothing.
 
 const forge = { mods: [], loaded: false, loading: false };
 
@@ -2097,7 +2101,7 @@ async function loadForge() {
   forge.loading = true;
   const statusEl = $('#forge-status');
   statusEl.classList.remove('hidden');
-  statusEl.textContent = 'Contacting the forge…';
+  statusEl.textContent = 'Contacting GitHub…';
   $('#forge-grid').innerHTML = '';
   try {
     const res = await window.zc.browseGithub({ query: $('#forge-search').value, sort: $('#forge-sort').value });
@@ -2112,7 +2116,7 @@ async function loadForge() {
     if (!forge.mods.length) statusEl.classList.remove('hidden'), statusEl.textContent = 'No curated repos match.';
   } catch (err) {
     statusEl.classList.remove('hidden');
-    statusEl.textContent = `Forge unreachable: ${err.message}`;
+    statusEl.textContent = `GitHub is unreachable: ${err.message}`;
   } finally {
     forge.loading = false;
   }
@@ -2194,7 +2198,7 @@ function buildForgeCard(m) {
           render();
           toast(res.count > 1
             ? `Installed ${res.count} mods from “${m.name}” — each is its own entry.`
-            : `Installed “${m.name}” from the forge.`);
+            : `Installed “${m.name}” from GitHub.`);
         }
       } finally {
         installBtn.disabled = false;
@@ -3517,6 +3521,25 @@ $('#launcher-banner-get').addEventListener('click', () => {
 $('#launcher-banner-dismiss').addEventListener('click', () => $('#launcher-banner').classList.add('hidden'));
 
 window.zc.onEvent((payload) => {
+  if (payload.type === 'sdk-update') {
+    // The hourly background check finished. A state, never a toast.
+    if (sdkLink.status) sdkLink.status.update = payload.info;
+    sdkUpdateRender(payload.info);
+    return;
+  }
+  if (payload.type === 'sdk-links') {
+    // The asset file's `sdk` block landed (startup, or the hourly re-check).
+    // The pitch repaints where-to-get-it without a restart.
+    sdkLink.links = payload.links || { sdk: null, source: 'none' };
+    if (sdkLink.status) sdkLink.status.links = sdkLink.links;
+    sdkLinkRender();
+    return;
+  }
+  if (payload.type === 'sdk-link-remeasure') {
+    // The window changed size; the hosted SDK view needs the new rect.
+    sdkLinkSync();
+    return;
+  }
   if (payload.type === 'launcher-update') {
     showLauncherBanner(payload.info);
     return;
@@ -3632,3 +3655,282 @@ refreshState().then(() => {
     }
   }
 });
+
+/* =======================================================================
+   SDK LINK — the host half, and all of it.
+
+   Mod Command has no Forge panel. When an SDK is linked, lib/sdk-link.js
+   parks a WebContentsView running the SDK'S OWN page over #content, and
+   everything inside that view (doctor, templates, scaffolding, CHECK,
+   BUILD, DEPLOY, the console) belongs to the SDK. This block only:
+
+     • measures #content and tells main where to put the view
+     • shows the view on the Forge nav item and hides it on every other
+     • renders the ◆ SDK Settings card (link / detect / unlink / errors)
+     • dims or lights the ◆ Forge nav item with the link
+
+   Every failure is a sentence on the Settings card. Nothing here can stop
+   the rest of the app rendering.
+   ======================================================================= */
+
+// Where to get the SDK is NOT written here, and it is not written in the main
+// process either: the operator publishes it in the asset repo's
+// launcher-version.json and it arrives on status().links as
+// { sdk: { url, updateUrl } | null, source }. No url = no button.
+const sdkLink = { status: null, links: { sdk: null, source: 'none' }, update: null };
+
+// The Get control's label is written from where the url ACTUALLY points, never
+// from a constant or from anything the file claims — so it cannot say Nexus and
+// open GitHub. Unknown host: no claim at all, just the external-link arrow.
+function sdkGetLabels(url) {
+  let host = '';
+  try { host = new URL(url).hostname.replace(/^www\./i, '').toLowerCase(); } catch (_) {}
+  const where = (host === 'nexusmods.com' || host.endsWith('.nexusmods.com')) ? ' on Nexus'
+    : (host === 'github.com' || host.endsWith('.github.com')) ? ' on GitHub'
+      : '';
+  return {
+    button: `⇓ Get the Zero Company Mod SDK${where || ' ↗'}`,
+    link: `Get the Zero Company Mod SDK${where} ↗`,
+  };
+}
+
+// The hosted view covers the whole content area, padding included: the SDK's
+// own page brings its own gutter (its embedded stylesheet trims it), so the
+// host must not pay for it twice.
+function sdkLinkBounds() {
+  const r = $('#content').getBoundingClientRect();
+  return {
+    x: Math.round(r.left), y: Math.round(r.top),
+    width: Math.round(r.width), height: Math.round(r.height),
+  };
+}
+
+// The hosted view is shown ONLY when an SDK is linked AND the Forge view is
+// the open one. Unlinked, the same nav item shows the pitch instead, which is
+// ordinary host markup and needs no view at all.
+function sdkLinkVisible() {
+  return !!(sdkLink.status && sdkLink.status.linked)
+    && !!document.querySelector('#view-forge.active');
+}
+
+// One call does both jobs — show/hide and re-measure — because the answer to
+// "where" is only meaningful together with "whether".
+function sdkLinkSync() {
+  if (!window.zc.sdkLink) return;
+  const visible = sdkLinkVisible();
+  window.zc.sdkLink.view({ visible, bounds: visible ? sdkLinkBounds() : null }).catch(() => {});
+}
+
+function sdkLinkRender() {
+  const s = sdkLink.status || { linked: false, sdkPath: null, error: null };
+  sdkLink.links = s.links || sdkLink.links || { sdk: null, source: 'none' };
+
+  // The nav item is ALWAYS there; without an SDK it is dimmed and lands on
+  // the pitch. Discoverability is the whole point: a modder who has never
+  // heard of the SDK has to be able to find out it exists.
+  $('#nav-forge').classList.toggle('dim', !s.linked);
+  $('#forge-pitch').classList.toggle('hidden', !!s.linked);
+  $('#forge-fallback').classList.toggle('hidden', !s.linked);
+  // ONE Get button on the pitch, ONE Get link on the card, both the published
+  // url. Nothing published yet and nothing cached: no button, one dim line —
+  // "Point Mod Command at an installed SDK" stays, because that path needs no
+  // network at all.
+  const getUrl = (sdkLink.links.sdk && sdkLink.links.sdk.url) || null;
+  const labels = getUrl ? sdkGetLabels(getUrl) : null;
+  $('#btn-pitch-get').classList.toggle('hidden', !getUrl);
+  $('#pitch-get-none').classList.toggle('hidden', !!getUrl);
+  $('#link-sdk-get').classList.toggle('hidden', !getUrl);
+  if (labels) {
+    $('#btn-pitch-get').textContent = labels.button;
+    $('#link-sdk-get').textContent = labels.link;
+  }
+  $('#set-sdk-update-row').classList.toggle('hidden', !s.linked);
+  $('#set-sdk-paths-row').classList.toggle('hidden', !s.linked);
+
+  const pathEl = $('#set-sdk-path');
+  const noteEl = $('#set-sdk-note');
+  const helpEl = $('#set-sdk-help');
+  $('#btn-goto-forge').classList.toggle('hidden', !s.linked);
+  $('#btn-unlink-sdk').classList.toggle('hidden', !s.sdkPath);
+  helpEl.classList.toggle('hidden', !!s.linked);
+
+  $('#link-sdk-whatsnew').classList.toggle('hidden', !(s.linked && s.hasChangelog));
+  if (s.linked) {
+    pathEl.textContent = s.sdkPath;
+    pathEl.className = 'setting-value mono';
+    sdkNoteRender();
+  } else if (s.error) {
+    pathEl.textContent = s.sdkPath || 'No SDK linked';
+    pathEl.className = 'setting-value mono';
+    noteEl.textContent = s.error;
+    noteEl.className = 'setting-value bad';
+  } else {
+    pathEl.textContent = 'No SDK linked';
+    pathEl.className = 'setting-value mono dim';
+    noteEl.textContent = 'No SDK linked — install the Zero Company Mod SDK and point here.';
+    noteEl.className = 'setting-value dim';
+  }
+
+  $('#forge-fallback-text').textContent = s.linked
+    ? 'Starting the Mod SDK…'
+    : (s.error || 'No SDK linked.');
+  sdkUpdateRender(s.linked ? s.update : null);
+  sdkLinkSync();
+}
+
+// The linked card's one-line identity: the INSTALLED SDK (tools/version.json,
+// from status().installed, falling back to the update answer's `installed`)
+// with its public name when the update answer knows it, then the workbench
+// manifest's own sdkUiVersion (display only — it is not the SDK's version and
+// can lag it), the contract and the Mod Command floor.
+//   current  -> "1.29.6 (public 1.0.3)"
+//   update   -> "1.29.6 (newest public 1.0.4)"
+function sdkVersionLabel(s, info) {
+  const installed = (s && s.installed) || (info && info.installed) || null;
+  if (!installed) return '(version unknown)';
+  let pub = '';
+  if (info && info.publicVersion && (!info.installed || info.installed === installed)) {
+    if (info.state === 'current') pub = ` (public ${info.publicVersion})`;
+    else if (info.state === 'update') pub = ` (newest public ${info.publicVersion})`;
+  }
+  return `${installed}${pub}`;
+}
+
+function sdkNoteRender() {
+  const s = sdkLink.status;
+  if (!s || !s.linked) return;
+  const m = s.manifest || {};
+  const info = sdkLink.update || s.update || null;
+  const cli = s.cliPath && s.cliPath !== s.sdkPath ? ` · CLI runs against ${s.cliPath}` : '';
+  const noteEl = $('#set-sdk-note');
+  noteEl.textContent = `${m.name || 'Mod SDK'} ${sdkVersionLabel(s, info)} · workbench UI ${m.sdkUiVersion || 'dev'} · UI contract ${m.contract} · needs Mod Command ${m.minModCommand}+ (this is ${s.hostVersion})${cli}`;
+  noteEl.className = 'setting-value dim';
+}
+
+// ---- the SDK's own update file ----------------------------------------
+// Four states and only one of them is loud. `unknown` covers offline and
+// not-yet-published alike and NEVER becomes a toast — same rule as the
+// launcher's own check, which simply shows no banner when it cannot reach
+// GitHub.
+let sdkUpdateUrl = null;
+
+function sdkUpdateRender(info) {
+  const line = $('#set-sdk-update');
+  const get = $('#btn-sdk-update-get');
+  const badge = $('#nav-forge-badge');
+  if (!line) return;
+  sdkLink.update = info || null;
+  sdkNoteRender();
+  sdkUpdateUrl = (info && info.url) || null;
+  const installed = (info && info.installed) || 'unknown';
+  let cls = 'dim';
+  let msg = '—';
+  if (info && info.state === 'unsupported') {
+    msg = 'This SDK does not publish an update file.';
+  } else if (info && info.state === 'update') {
+    cls = 'warn';
+    const name = info.publicVersion ? `${info.publicVersion} (sdk ${info.latest})` : info.latest;
+    // Label from where the url ACTUALLY points, not from `preferred`: a file
+    // that prefers Nexus but only carries a GitHub url must not say Nexus.
+    const where = (info.urlSource || info.preferred) === 'github' ? 'GitHub' : 'Nexus';
+    msg = `SDK update available: ${name} — Get it on ${where}. You have ${installed}.${info.notes ? ` ${info.notes}` : ''}`;
+  } else if (info && info.state === 'current') {
+    msg = `SDK ${installed} — up to date${info.publicVersion ? ` (public ${info.publicVersion})` : ''}.`;
+  } else if (info) {
+    msg = `SDK ${installed} — update state unknown (the update file could not be read).`;
+  }
+  line.textContent = msg;
+  line.className = `setting-value ${cls}`;
+  const showGet = !!(info && info.state === 'update' && sdkUpdateUrl);
+  get.classList.toggle('hidden', !showGet);
+  if (showGet) get.textContent = `Get it on ${(info.urlSource || info.preferred) === 'github' ? 'GitHub' : 'Nexus'} ↗`;
+  badge.textContent = info && info.state === 'update' ? '⇧' : '';
+}
+
+async function sdkCheckUpdate(force) {
+  if (!window.zc.sdkLink) return;
+  if (force) { $('#set-sdk-update').textContent = 'Checking…'; $('#set-sdk-update').className = 'setting-value dim'; }
+  const res = await window.zc.sdkLink.checkUpdate({ force: !!force });
+  sdkUpdateRender(res && res.ok ? res.data : null);
+}
+
+async function sdkLinkCall(fn) {
+  if (!window.zc.sdkLink) return null;
+  const res = await window.zc.sdkLink[fn]();
+  if (!res || !res.ok) { toast((res && res.error) || `${fn} failed`, 'error', 6000); return null; }
+  sdkLink.status = res.data;
+  sdkLinkRender();
+  return res.data;
+}
+
+// The view floats above the page, so it must be hidden the instant the user
+// leaves the Forge — this runs AFTER the nav handler at the top of the file,
+// so the `active` classes are already correct.
+$$('.nav-item').forEach((btn) => btn.addEventListener('click', sdkLinkSync));
+window.addEventListener('resize', sdkLinkSync);
+
+$('#btn-browse-sdk-settings').addEventListener('click', async () => {
+  const d = await sdkLinkCall('browse');
+  if (d && d.linked) toast(`Linked ${d.manifest.name} ${d.manifest.sdkUiVersion}.`, 'success');
+  else if (d && d.error) toast(d.error, 'error', 7000);
+});
+
+$('#btn-detect-sdk').addEventListener('click', async () => {
+  const d = await sdkLinkCall('detect');
+  if (d && d.linked) toast(`Found the SDK at ${d.sdkPath}.`, 'success', 6000);
+  else if (d) toast(d.error || 'No SDK found.', 'error', 7000);
+});
+
+$('#btn-unlink-sdk').addEventListener('click', async () => {
+  const d = await sdkLinkCall('unlink');
+  if (d) toast('SDK unlinked.', 'info');
+});
+
+$('#btn-goto-forge').addEventListener('click', () => $('.nav-item[data-view="forge"]').click());
+
+// "Paths & dependencies…": the SDK's own paths live in the hosted page's
+// Settings, so switch to the Forge view (which shows the view) and ask the
+// page to open them — { type: 'open-settings' } on the SDK's event channel.
+async function sdkOpenSettings(key) {
+  if (!window.zc.sdkLink || !(sdkLink.status && sdkLink.status.linked)) return null;
+  $('.nav-item[data-view="forge"]').click();
+  const res = await window.zc.sdkLink.openSettings(key ? { key } : {}).catch(() => null);
+  return res && res.ok ? res.data : null;
+}
+$('#btn-sdk-open-settings').addEventListener('click', () => sdkOpenSettings());
+
+function sdkGetOpen() {
+  const url = sdkLink.links.sdk && sdkLink.links.sdk.url;
+  if (url) call('openExternal', url);
+}
+
+$('#link-sdk-get').addEventListener('click', (e) => { e.preventDefault(); sdkGetOpen(); });
+
+// "What's new in the SDK": the linked SDK's own docs/CHANGELOG.md, through the
+// host's openPath (main resolves the path inside the linked tree).
+$('#link-sdk-whatsnew').addEventListener('click', async (e) => {
+  e.preventDefault();
+  if (!window.zc.sdkLink || !window.zc.sdkLink.openChangelog) return;
+  const res = await window.zc.sdkLink.openChangelog().catch(() => null);
+  const d = res && res.ok ? res.data : null;
+  if (!d || !d.opened) toast((d && d.error) || (res && res.error) || 'Could not open the SDK changelog.', 'error', 6000);
+});
+
+// ---- the Get-the-SDK view's two buttons ----
+$('#btn-pitch-get').addEventListener('click', sdkGetOpen);
+$('#btn-pitch-point').addEventListener('click', () => {
+  $('.nav-item[data-view="settings"]').click();
+  $('#set-sdk-path').scrollIntoView({ block: 'center', behavior: 'smooth' });
+  $('#btn-detect-sdk').focus();
+});
+
+$('#btn-sdk-update-check').addEventListener('click', () => sdkCheckUpdate(true));
+$('#btn-sdk-update-get').addEventListener('click', () => { if (sdkUpdateUrl) call('openExternal', sdkUpdateUrl); });
+
+// Ask once at startup. main.js only tries to link on this first call, so a
+// broken SDK folder costs the window nothing.
+sdkLinkCall('status').then((s) => { if (s && s.linked) sdkCheckUpdate(false); });
+// Reachable for the verification harness.
+window.sdkLinkState = sdkLink;
+window.sdkLinkRefresh = () => sdkLinkCall('status');
+window.sdkCheckUpdate = sdkCheckUpdate;

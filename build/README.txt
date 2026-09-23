@@ -1,4 +1,4 @@
-ZERO COMPANY MOD COMMAND v1.0.8
+ZERO COMPANY MOD COMMAND v1.0.9
 A dedicated mod manager & launcher for STAR WARS: Zero Company
 by Envian Mods
 
@@ -26,8 +26,11 @@ entry: use its "versions" button to roll back or try an archived version.
 
 NOTES
 -----
-- The Holonet has two tabs: Nexus Mods, and The Forge - GitHub mods curated
+- The Holonet has two tabs: Nexus Mods, and GitHub - GitHub mods curated
   by Envian Mods. Installed mods are checked for updates automatically.
+- The Forge tab in the side rail hosts the Zero Company Mod SDK (a separate
+  download for making mods) once you point Mod Command at it in
+  Settings -> SDK. Without the SDK it explains what it is and where to get it.
 - Adult-rated content follows your Nexus Mods account preference; there is no
   separate switch in the app.
 - .zip, .7z and .rar archives all work out of the box (7-Zip ships with the app).

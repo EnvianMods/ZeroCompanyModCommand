@@ -141,7 +141,7 @@ automatically for IoStore package inspection; a different copy can be selected i
   update check). LAUNCH GAME always goes through Steam; it and Steam's own Play button
   fail with "Disk write error – appmanifest_2075800.acf" whenever an update is pending —
   that is the freeze working, and turning it off lets Steam update.
-- **Installed badges in Holonet/Forge** — cards for mods already in the hangar
+- **Installed badges in Holonet/GitHub** — cards for mods already in the hangar
   show a green IN HANGAR tag; the Install button becomes ✓ Installed, or
   ⬆ Update when one is waiting.
 - **Featured transmissions** — the Holonet opens with a rotating 3-slot promo strip of
@@ -172,6 +172,28 @@ automatically for IoStore package inspection; a different copy can be selected i
   it, blurring adult thumbnails when your account asks for that (hover to reveal).
   Adult-rated mods always carry an **18+** chip. Settings → Nexus Mods states what is
   in force and links to your Nexus content-preferences page to change it.
+- **◆ Forge — the Mod SDK's workbench, hosted** — point Mod Command at an installed
+  Zero Company Mod SDK (Settings → ◆ SDK; Detect looks beside the install and beside
+  the game folder) and the Forge view hosts the SDK's own UI, loaded from the SDK
+  folder against its embed contract (`<sdk>/tools/sdk-ui/manifest.json`; the host's
+  side is `lib/sdk-link.js`, design in `docs/SDK_LINK.md`). Mod Command ships no copy
+  of the panel, so an SDK update needs no Mod Command release. With no SDK linked the
+  Forge item stays in the rail, dimmed, and opens the "Get the SDK" page (what it is,
+  what it needs — including Node.js 22.12+ — one **Get** button, "point at an installed SDK", and a note that the SDK is not open source). That button's
+  destination is **not hard-coded**: it comes from the `sdk` block of the asset repo's
+  `launcher-version.json` — the same file that announces Mod Command's own updates —
+  fetched at startup and hourly, cached in `sdkAssetLinks` so it survives offline, and
+  labelled from the url's own host (Nexus / GitHub); with nothing ever fetched it shows
+  a dim "could not be fetched" line instead of a dead link. Detect also reads the SDK
+  workbench's own settings (`%APPDATA%\Zero Company Mod SDK\sdk-ui-settings.json`); once
+  linked, the ◆ SDK card's **Paths & dependencies…** button opens the Forge view's Settings,
+  where the SDK's Unreal, game, retoc and reflection paths live. The SDK's own update file
+  (`sdk-version.json`, URL from its manifest) puts a badge on Forge when a newer SDK is
+  published.
+  The ◆ SDK card names the installed SDK version with its public name and links the SDK's own
+  `docs/CHANGELOG.md` ("What's new in the SDK"). Against SDK 1.0.3 the hosted workbench also brings
+  its first-run walkthrough, build stepper, mod-def editor, asset drop zone and Test / Conflicts /
+  Publish views, with no change to Mod Command.
 - **Holonet browser** — an in-app Nexus Mods browser for Zero Company: grid of mods
   with thumbnails, author/version/category, download & endorsement counts, live search,
   category filter, and sorting (downloads / endorsements / newest / updated / name),

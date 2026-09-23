@@ -43,9 +43,12 @@ contextBridge.exposeInMainWorld('zc', {
   saveProfile: (name) => invoke('save-profile', { name }),
   applyProfile: (id) => invoke('apply-profile', { id }),
   deleteProfile: (id) => invoke('delete-profile', { id }),
-  setNexusKey: (key) => invoke('set-nexus-key', { key }),
-  clearNexusKey: () => invoke('clear-nexus-key'),
-  validateNexusKey: () => invoke('validate-nexus-key'),
+  // Nexus OAuth sign-in. No credential ever crosses this bridge: the browser
+  // does the login and the tokens stay in the main process.
+  nexusSignIn: () => invoke('nexus-sign-in'),
+  nexusSignOut: () => invoke('nexus-sign-out'),
+  nexusRefreshUser: () => invoke('nexus-refresh-user'),
+  nexusQuota: () => invoke('nexus-quota'),
   registerNxm: () => invoke('register-nxm'),
   unregisterNxm: () => invoke('unregister-nxm'),
   // installUe4ss('experimental-latest') | installUe4ss({ nexusFileId: 743 }) | installUe4ss()

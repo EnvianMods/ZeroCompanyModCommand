@@ -507,12 +507,6 @@ body.reduced-motion * { transition: none !important; animation: none !important;
 }
 .browse-search { width: 280px; font-family: var(--sans); }
 .browse-count { font-size: 11px; margin-left: auto; }
-.adult-toggle {
-  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;
-  font-size: 11px; letter-spacing: 0.5px; color: var(--text-dim);
-}
-.adult-toggle:hover { color: var(--holo); }
-.adult-toggle input { width: 13px; height: 13px; margin: 0; cursor: pointer; accent-color: var(--holo); }
 .browse-status {
   padding: 40px 0; text-align: center; color: var(--text-dim);
   font-size: 13px; letter-spacing: 1.5px;
@@ -534,6 +528,11 @@ body.reduced-motion * { transition: none !important; animation: none !important;
   border-bottom: 1px solid rgba(79, 209, 255, 0.15);
 }
 .browse-pic img { width: 100%; height: 100%; object-fit: cover; }
+/* Adult thumbnails, when the signed-in Nexus account asks for blurred adult
+   images. Hovering the card reveals it — the same gesture the site uses. */
+.browse-pic.adult-blur img { filter: blur(12px); transition: filter 0.15s ease; }
+.browse-card:hover .browse-pic.adult-blur img,
+.browse-pic.adult-blur:hover img { filter: none; }
 .browse-body { padding: 12px 14px 8px; flex: 1; display: flex; flex-direction: column; gap: 5px; }
 .browse-name {
   font-size: 13px; font-weight: 700; color: var(--text);
@@ -825,7 +824,7 @@ body.reduced-motion * { transition: none !important; animation: none !important;
 .browse-card.in-hangar { border-color: rgba(109, 255, 176, 0.35); }
 .freeze-note { font-size: 11.5px; line-height: 1.5; margin: 6px 2px 0; }
 
-/* ---------- API key guidance ---------- */
+/* ---------- settings guidance notes ---------- */
 .setting-note { font-size: 11.5px; line-height: 1.55; margin: 4px 0 0; max-width: 560px; }
 .setting-note b { color: var(--text); }
 

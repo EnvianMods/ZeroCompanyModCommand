@@ -1,5 +1,86 @@
 # Zero Company Mod Command — Changelog
 
+## v1.9.13 (2026-09-14)
+
+**Signing in to Nexus Mods replaces the personal API key**
+- Nexus Mods requires apps like this one to sign you in with your Nexus account
+  instead of asking for a personal API key, so the key box is gone from Settings
+  and from the first-run assistant.
+- What you do now: Settings → Nexus Mods → **Sign in with Nexus Mods**. Your
+  browser opens on nexusmods.com, you approve Mod Command there, and the app
+  picks it up. That's the whole thing — the app never sees your password.
+- Mod Command stores only the tokens Nexus hands back, encrypted with your
+  Windows/OS account, and only ever sends them to nexusmods.com. Settings shows
+  who you are signed in as, whether the account is Premium, and a **Sign out**
+  button. You can also revoke the app's access at any time from your Nexus
+  account page.
+- Any API key you had saved is **discarded** when this version first starts —
+  it is no longer used for anything. One-click downloads, update checking,
+  version pickers and mod linking all work again as soon as you sign in.
+
+**Adult content now follows your Nexus account**
+- The Holonet's "Show adult content" checkbox is gone. Whether adult-rated mods
+  appear is decided by the **content preference on your own Nexus account** —
+  the one behind Nexus's age verification — and nothing else.
+- Signed out, adult-rated mods are hidden everywhere: browsing, categories,
+  searching, the featured strip and the Link wizard alike. (Searching by name
+  used to slip past the filter; it no longer does.)
+- Signed in, Mod Command asks Nexus what your account says and follows it. If
+  your account also asks for adult images to be blurred, those thumbnails are
+  blurred here too — hover a card to reveal it. Adult-rated mods always carry
+  an **18+** chip either way.
+- Settings → Nexus Mods shows what is in force and links straight to your Nexus
+  content-preferences page to change it.
+
+**Nexus's request limits are respected**
+- Mod Command now reads the request allowance Nexus sends back with every reply
+  and shows it in Settings → Nexus Mods: how many requests are left this hour
+  and today, and when each resets.
+- When the allowance runs out, the app stops rather than hammering, and tells
+  you plainly: *"Nexus Mods request limit reached — try again after 16:00."*
+  If Nexus asks it to wait a moment, it waits and tries once more.
+- Background work — the hourly update check and the file-name index — keeps a
+  reserve so your own clicks always have requests to spend, spaces itself out,
+  and quietly reschedules for when the allowance refills. Nothing you press has
+  to queue behind it.
+
+**Mod Command identifies itself to Nexus Mods**
+- Every request to Nexus now carries the app's registered name and version, so
+  Nexus can see what its API is being used by. Nothing else changed for you.
+
+**UE4SS now installs the version made for Zero Company**
+- Download & install used to fetch the general-purpose UE4SS from its own
+  GitHub page. That build knows nothing about this game: it has none of Zero
+  Company's signatures, and since the game's last patch it often does nothing
+  at all — which is why Lua and DLL mods stopped loading for some of you.
+- Settings → UE4SS → **Download & install (Nexus package)** now fetches
+  **"UE4SS for Star Wars Zero Company"** by Vercadi from Nexus Mods — the same
+  UE4SS plus this game's signatures, loader settings and helpers, tested against
+  the current game build on both the Steam and EA App editions. Every one-click
+  path uses it now, including the prompt that offers UE4SS before the ZCSDK
+  Runtime.
+- Premium accounts get it downloaded and installed straight away. Free accounts
+  get the file list in the download panel — press **Mod Manager Download** and
+  Mod Command takes it from there. Signed out, Mod Command offers to sign you in
+  first, and tells you plainly what the GitHub build is if you'd rather have that.
+- The Settings card and Diagnostics now say which of the two you have, and for
+  the Zero Company package whether the build it was tested on matches the game
+  you have installed.
+- The stock build from GitHub is still there — ⧗ Versions lists it under a
+  warning, and Mod Command falls back to it (and says so) if the Nexus page
+  cannot be reached.
+
+**UE4SS mods that bring their own paks install correctly again**
+- A UE4SS mod can ship a `paks` folder next to its dll and mount that content
+  itself. Mod Command used to spot those pak files first, scatter them into
+  `~mods` under new names and throw the dll away, so the mod installed but did
+  nothing. Now the whole mod folder goes down intact — dll, settings and its
+  `paks` folder — into `ue4ss/Mods/<Mod>`, exactly where the mod expects it.
+- ZCUnlocked 1.4.5 is the mod that hit this; reinstall it and it lands right.
+  Archives that really are loose paks, LogicMods, plugin mods or a UE4SS runtime
+  build are unaffected, and an archive holding both a UE4SS mod and separate
+  loose paks still installs each part as its own entry.
+
 ## v1.9.12 (2026-09-13)
 
 **Mods that install as a folder in `SWZeroCompany\Mods` now install properly**

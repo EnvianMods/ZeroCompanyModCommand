@@ -48,7 +48,10 @@ automatically for IoStore package inspection; a different copy can be selected i
   - UE4SS Lua/DLL mods (folders with `Scripts/main.lua` or `dlls/main.dll`) →
     `SWZeroCompany/Binaries/Win64/ue4ss/Mods/<Name>` with `enabled.txt`. The
     display name defaults to the folder name; a `modinfo.json` in the mod folder
-    can override it with a friendly title (see **Mod metadata** below).
+    can override it with a friendly title (see **Mod metadata** below). A mod's
+    own `paks/` folder travels with it into `ue4ss/Mods/<Name>/paks/`, unrenamed
+    — the mod mounts those containers itself at startup, so they are never moved
+    into `~mods`.
   - UE4SS runtime archives (dwmapi.dll + ue4ss folder) → installed into `Binaries/Win64`.
   - `gamefolder` (GAMEFILES) — archives laid out against the game root
     (`SWZeroCompany/...`, `Engine/...`, e.g. replacement movies) deploy over the
@@ -161,39 +164,68 @@ automatically for IoStore package inspection; a different copy can be selected i
   INI files get a structured section/key/value view that preserves comments, ordering
   and duplicate keys exactly (only values are editable); Raw view edits the full text.
   The original file is backed up to `.zcbak` on first save.
+- **Adult content follows your Nexus account** — there is no "show adult content"
+  switch in Mod Command, by design. Signed out, adult-rated mods are filtered out of
+  every listing: browsing, categories, search, the featured strip and the Link wizard
+  (a search by name is not a way past it). Signed in, the app reads your own Nexus
+  account's content preference — the one behind Nexus's age verification — and follows
+  it, blurring adult thumbnails when your account asks for that (hover to reveal).
+  Adult-rated mods always carry an **18+** chip. Settings → Nexus Mods states what is
+  in force and links to your Nexus content-preferences page to change it.
 - **Holonet browser** — an in-app Nexus Mods browser for Zero Company: grid of mods
   with thumbnails, author/version/category, download & endorsement counts, live search,
   category filter, and sorting (downloads / endorsements / newest / updated / name),
-  with paging. Powered by the Nexus GraphQL v2 API (no key needed to browse). The
+  with paging. Powered by the Nexus GraphQL v2 API (browsing needs no sign-in). The
   Install button downloads+installs directly for premium accounts; non-premium
   accounts get the mod's Files page opened — pressing "Mod Manager Download" there
   sends the nxm:// link back into the manager, which installs it automatically.
-- **Nexus Mods integration** — paste your personal API key in Settings (validated
-  against the Nexus API; stored encrypted with your OS user credentials — Windows
-  DPAPI via Electron safeStorage — and never shown to the UI; a legacy plaintext
-  key is migrated automatically). Register the `nxm://` handler and "Mod Manager Download" buttons on
-  nexusmods.com install straight into the manager, with download progress, auto
-  naming/version from Nexus mod info. Non-premium accounts must start downloads from
-  the website button (the nxm link carries the required key/expires).
-- **UE4SS one-click install** — Settings → UE4SS → Download & install fetches the
-  latest experimental UE4SS runtime zip from GitHub (UE4SS-RE/RE-UE4SS) and installs
-  it into `Binaries/Win64`. Every runtime install snapshots the build it
-  replaces (dwmapi.dll + ue4ss\* minus Mods/logs) into `versions/ue4ss-runtime/`
-  (5 kept); ⧗ Versions restores any kept build (the current one is kept first) and
-  lists the GitHub releases (only the rolling experimental builds use the ue4ss\
-  layout this manager deploys — stable 3.0.x zips are flat and shown as not
-  installable). The card shows the build Mod Command installed
-  (`settings.ue4ssInstalled`) and, because the experimental channel is rolling
-  (same tag, new zip every CI build), compares its recorded build id (from the
-  zip name, e.g. `g2bfa839f`) with the current asset at startup / in the update
-  check — "Update to build …" when behind, a once-per-build toast, and the
-  Diagnostics line names the build. A second source is read anonymously via
-  GraphQL: Nexus mod 9 "UE4SS for Star Wars Zero Company" (a game-specific
-  compatibility build; its page states the tested game build, which is compared
-  with the installed game's build id). ⧗ Versions lists both sources; Nexus
-  installs go direct for premium keys and through the embedded page (nxm
-  handoff → handleNxm recognises the runtime) for free accounts; update
-  detection follows the installed source (`settings.ue4ssInstalled.source`).
+- **Nexus Mods integration** — press **Sign in with Nexus Mods** in Settings: the
+  app opens nexusmods.com in your own browser (OAuth 2.0 authorization code +
+  PKCE, per Nexus's app guidelines), you approve Mod Command there, and it never
+  sees your password. Only the access tokens Nexus issues are kept, encrypted
+  with your OS user credentials (Windows DPAPI via Electron safeStorage), never
+  shown to the UI, and only ever sent to nexusmods.com; revoke access any time
+  from your Nexus account page. Register the `nxm://` handler and "Mod Manager
+  Download" buttons on nexusmods.com install straight into the manager, with
+  download progress, auto naming/version from Nexus mod info. Non-premium
+  accounts must start downloads from the website button (the nxm link carries the
+  required key/expires). Every request to Nexus — v1, GraphQL, the OAuth endpoints
+  and the download CDN — goes out through one helper (`lib/nexus-http.js`) that
+  identifies the app by registered name, version and User-Agent.
+- **Request allowance, read from Nexus** — Settings → Nexus Mods shows the quota
+  Nexus reports on every reply ("API requests: 1,950 of 2,000 this hour (resets
+  16:00) · 19,900 of 20,000 today (resets 00:00 UTC)"). When it runs out the app
+  stops instead of retrying, with a readable "try again after HH:MM"; it honours
+  `Retry-After` on a 429, keeps at most two requests in flight, and background
+  work (the hourly update check, the file-name index) leaves a reserve for your
+  own clicks and reschedules itself rather than spending it.
+- **UE4SS one-click install** — Settings → UE4SS → Download & install fetches
+  **the Zero Company package**: Nexus mod 9 "UE4SS for Star Wars Zero Company"
+  (stock UE4SS plus this game's signatures, loader settings and helpers; its page
+  states the game build it was tested on). That is the default for every one-click
+  path — the Settings card, the ZCSDK-runtime prompt and `install-ue4ss` with no
+  payload. Premium accounts download it directly; free accounts get the embedded
+  Nexus page, whose "Mod Manager Download" comes back as nxm:// into `handleNxm`,
+  which recognises the runtime; signed-out users are offered the sign-in or, on
+  confirmation, the stock upstream build. The page is read anonymously via
+  GraphQL (`refreshNexusLatest()`), and the tested build is recorded with the
+  install (`settings.ue4ssInstalled.testedBuild`) and compared with the installed
+  game's build id in the card and in Diagnostics ("matches yours" / "yours is N").
+  The **stock upstream build** from GitHub (UE4SS-RE/RE-UE4SS) stays available as
+  a fallback — `{ source:'github' }` or `{ tag }` from ⧗ Versions, and
+  automatically, with a warning toast, when the Nexus page cannot be read. It has
+  no Zero Company signatures and is labelled that way everywhere. Every runtime
+  install snapshots the build it replaces (dwmapi.dll + ue4ss\* minus Mods/logs)
+  into `versions/ue4ss-runtime/` (5 kept); ⧗ Versions restores any kept build (the
+  current one is kept first) and lists both sources — Nexus marked *recommended*,
+  the GitHub section carrying the stock-build warning (only the rolling
+  experimental builds use the ue4ss\ layout this manager deploys — stable 3.0.x
+  zips are flat and shown as not installable). Because the experimental channel is
+  rolling (same tag, new zip every CI build), a GitHub install's recorded build id
+  (from the zip name, e.g. `g2bfa839f`) is compared with the current asset at
+  startup / in the update check; a Nexus install compares file ids. Update
+  detection follows the installed source (`settings.ue4ssInstalled.source`), with
+  "Update to …" on the card and a once-per-build toast.
 - **retoc update check** — Settings → retoc compares the installed
   `retoc --version` with the newest GitHub release (trumank/retoc, Windows zip
   asset) and installs it into `<dataDir>/tools/retoc.exe` (+ the bundled Oodle
@@ -370,6 +402,28 @@ The project is a git repo with `origin` set to
   after every HANDOFF edit. As a backstop, `publish-release.js` lists each .zip
   before uploading it and refuses any zip with an entry matching `/HANDOFF/i`
   (`node publish-release.js --check-only <zip>` runs that check alone).
+
+## Third-party components in the shipped build
+
+The packaged app contains this repository's code (`main.js`, `preload.js`,
+`lib/`, `src/`, `package.json`) inside `resources/app.asar`, plus the npm
+dependency `extract-zip` declared in `package.json`. Beside the bundle,
+`resources/tools/` holds binaries that are **not** in this repository: they are
+downloaded unmodified from their official sources by `build/fetch-tools.js` at
+build time (the CI workflow and `npm run build` both run it):
+
+| Component | Version | Source | Purpose |
+|---|---|---|---|
+| 7-Zip command-line build (`7z.exe`, `7z.dll`) | 25.01 x64 | https://www.7-zip.org (official MSI, unpacked) | `.7z`/`.rar` extraction; `tools/7-Zip/BUNDLED.txt` + `License.txt` record it |
+| retoc (`retoc.exe` + the `oo2core_9_win64.dll` it ships with) | 0.1.5 | https://github.com/trumank/retoc release asset | IoStore container listing for conflict detection |
+| ZCSDK Runtime (`ZCSDKRuntime.zip`, `zcsdk-runtime.json`) | per `latest.json` | https://github.com/EnvianMods/ZCSDK-Runtime-Release | offline copy of the UE4SS-based runtime for SDK content mods |
+| `elevate.exe` | — | electron-builder's portable stub | added by the packager, not by this project |
+
+To verify a shipped build against the source: unzip the release, run
+`npx @electron/asar extract resources/app.asar out` on the unpacked app and
+diff `out/` against the tagged commit; everything outside `node_modules/`
+should match, and `resources/tools/` should contain only the items above.
+The packaged `README.txt` comes from `build/README.txt` in this repository.
 
 ## Owner tools (not shipped)
 

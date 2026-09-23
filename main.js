@@ -61,6 +61,8 @@ const steam = require('./lib/steam');
 const { ModEngine, compareVersions, MODS_REL, LOGIC_MODS_REL, WIN64_REL, UE4SS_MODS_REL, GAME_MODS_REL } = require('./lib/mods');
 const { findSevenZip, bundledSevenZip } = require('./lib/archive');
 const nexus = require('./lib/nexus');
+const nexusHttp = require('./lib/nexus-http');
+const oauth = require('./lib/nexus-oauth');
 const ue4ssDl = require('./lib/ue4ss');
 const zcsdkRt = require('./lib/zcsdk');
 const retocDl = require('./lib/retoc');
@@ -171,40 +173,254 @@ async function autoRestoreFromArchive() {
   return null;
 }
 
-// ---------------------------------------------------------- Nexus API key at rest
-// The key is kept encrypted with the OS user's credentials (DPAPI on Windows)
-// via Electron safeStorage. Plaintext is only the fallback when the OS store is
-// unavailable; a legacy plaintext key is migrated on startup.
+// ---------------------------------------------------------- Nexus sign-in at rest
+// Nexus Mods' guidelines forbid third-party apps from collecting a user's own
+// credentials, so the app signs the user in with OAuth 2.0 (Authorization Code
+// + PKCE, see lib/nexus-oauth.js) and keeps only the tokens Nexus issues. They are
+// encrypted with the OS user's credentials (DPAPI on Windows) via Electron
+// safeStorage; plaintext is the fallback when the OS store is unavailable.
+// Tokens never reach the renderer and are never written to the log.
 
-function nexusKey() {
+const SIGN_IN_REQUIRED = 'Sign in to Nexus Mods in Settings first.';
+const SIGN_IN_EXPIRED = 'Your Nexus Mods sign-in expired or was revoked. Sign in again in Settings.';
+const REFRESH_MARGIN_MS = 60 * 1000; // refresh this long before the token lapses
+
+let nexusTokens = null; // { access_token, refresh_token, expires_at, obtained_at }
+let nexusRefreshInFlight = null;
+let nexusSignInFlow = null;
+let legacyCredentialsDropped = false;
+
+function loadNexusTokens() {
   const s = store.settings;
-  if (s.nexusApiKeyEncrypted) {
+  let raw = null;
+  if (s.nexusOAuthEncrypted) {
     try {
       if (safeStorage.isEncryptionAvailable()) {
-        return safeStorage.decryptString(Buffer.from(s.nexusApiKeyEncrypted, 'base64'));
+        raw = safeStorage.decryptString(Buffer.from(s.nexusOAuthEncrypted, 'base64'));
       }
-    } catch (_) { /* wrong OS user / corrupted blob — treat as no key */ }
-    return null;
+    } catch (_) { /* wrong OS user / corrupted blob — treat as signed out */ }
+    if (!raw) return null;
+  } else if (s.nexusOAuth) {
+    raw = s.nexusOAuth;
   }
-  return s.nexusApiKey || null;
+  if (!raw) return null;
+  try {
+    const t = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return t && t.access_token ? t : null;
+  } catch (_) { return null; }
 }
 
-function storeNexusKey(key) {
-  if (key && safeStorage.isEncryptionAvailable()) {
-    store.settings.nexusApiKeyEncrypted = safeStorage.encryptString(key).toString('base64');
-    store.settings.nexusApiKey = null;
+function saveNexusTokens(tokens) {
+  if (tokens && safeStorage.isEncryptionAvailable()) {
+    store.settings.nexusOAuthEncrypted = safeStorage.encryptString(JSON.stringify(tokens)).toString('base64');
+    store.settings.nexusOAuth = null;
   } else {
-    store.settings.nexusApiKeyEncrypted = null;
-    store.settings.nexusApiKey = key || null;
+    store.settings.nexusOAuthEncrypted = null;
+    store.settings.nexusOAuth = tokens || null;
   }
   store.save();
 }
 
-function migrateNexusKey() {
-  const s = store.settings;
-  if (s.nexusApiKey && !s.nexusApiKeyEncrypted && safeStorage.isEncryptionAvailable()) {
-    storeNexusKey(s.nexusApiKey);
+// A token set fresh from the token endpoint. The access token's RS256 signature
+// is verified against Nexus's public key BEFORE anything it claims (the
+// username, the premium flag) is trusted or stored.
+function applyNexusTokens(fresh) {
+  const next = {
+    access_token: fresh.access_token,
+    // A refresh response may omit the refresh token — keep the one we have.
+    refresh_token: fresh.refresh_token || (nexusTokens && nexusTokens.refresh_token) || null,
+    expires_at: fresh.expires_at,
+    obtained_at: fresh.obtained_at,
+  };
+  const who = oauth.userFromToken(next.access_token); // throws on a token we cannot verify
+  nexusTokens = next;
+  saveNexusTokens(next);
+  nexusUser = {
+    name: who.name,
+    isPremium: who.isPremium,
+    // Until the account's own preferences come back, adult content is hidden.
+    adult: false, adultBlurImages: false, ageVerified: false,
+  };
+  // Every fresh token — sign-in and refresh alike — re-reads the account's
+  // content preferences, so a change made on nexusmods.com lands here.
+  refreshNexusPreferences().catch(() => {});
+  return next;
+}
+
+// --------------------------------------------------------- adult content
+//
+// THE one place that decides whether adult-tagged mods are listed. There is no
+// in-app opt-in and no way to reach them while signed out: the answer is the
+// signed-in account's own Nexus content preference, which Nexus itself gates
+// behind its age verification. This app never second-guesses it in the other
+// direction, and every listing path (browse, category, search, the featured
+// strip and its backfill, the Link wizard) is handed this answer rather than
+// deciding for itself.
+function adultAllowed() {
+  return !!(nexusSignedIn() && nexusUser && nexusUser.adult === true);
+}
+
+// Fold what /users/validate.json says into the cached user WITHOUT losing the
+// content preferences already read from the account.
+function mergeNexusUser(patch) {
+  nexusUser = {
+    adult: false, adultBlurImages: false, ageVerified: false,
+    ...(nexusUser || {}),
+    ...(patch || {}),
+  };
+  return nexusUser;
+}
+
+// Ask Nexus what this account's content preferences are and cache them on
+// nexusUser. Any failure leaves adult content hidden.
+async function refreshNexusPreferences() {
+  if (!nexusSignedIn() || !nexusUser) return null;
+  let prefs;
+  try {
+    prefs = await nexus.userPreferences(await nexusAccessToken());
+  } catch (_) {
+    prefs = { adult: false, adultBlurImages: false, ageVerified: false };
   }
+  if (!nexusUser) return null;
+  const changed = nexusUser.adult !== prefs.adult || nexusUser.adultBlurImages !== prefs.adultBlurImages;
+  Object.assign(nexusUser, prefs);
+  if (changed) {
+    log('info', `nexus account preferences: adult content ${prefs.adult ? 'shown' : 'hidden'}`
+      + `${prefs.adult && prefs.adultBlurImages ? ', images blurred' : ''}`);
+    try { sendEvent({ type: 'state', state: fullState() }); } catch (_) {}
+  }
+  return prefs;
+}
+
+function nexusSignOutLocal() {
+  nexusTokens = null;
+  nexusUser = null;
+  store.settings.nexusOAuth = null;
+  store.settings.nexusOAuthEncrypted = null;
+  store.save();
+}
+
+// Sync "have we got credentials?" — the presence check every feature gate uses.
+function nexusSignedIn() {
+  return !!(nexusTokens && nexusTokens.access_token);
+}
+
+async function refreshNexusTokens() {
+  if (nexusRefreshInFlight) return nexusRefreshInFlight;
+  nexusRefreshInFlight = (async () => {
+    if (!nexusTokens || !nexusTokens.refresh_token) {
+      nexusSignOutLocal();
+      throw new Error(SIGN_IN_EXPIRED);
+    }
+    let fresh;
+    try {
+      fresh = await oauth.refreshTokens(nexusTokens.refresh_token);
+    } catch (err) {
+      // A 4xx means the grant is gone — the user revoked the app on their
+      // Nexus account page, or the refresh token lapsed. That is a sign-out.
+      if (err && err.revoked) {
+        log('info', 'nexus sign-in: the refresh grant was refused — signed out');
+        nexusSignOutLocal();
+        sendEvent({ type: 'state', state: fullState() });
+        throw new Error(SIGN_IN_EXPIRED);
+      }
+      throw err;
+    }
+    log('info', 'nexus sign-in: access token refreshed');
+    return applyNexusTokens(fresh);
+  })();
+  const flow = nexusRefreshInFlight;
+  flow.catch(() => {}).then(() => { if (nexusRefreshInFlight === flow) nexusRefreshInFlight = null; });
+  return flow;
+}
+
+// The async counterpart to nexusSignedIn(): a usable access token, refreshed
+// proactively when the current one is about to lapse.
+async function nexusAccessToken() {
+  if (!nexusSignedIn()) throw new Error(SIGN_IN_REQUIRED);
+  if (nexusTokens.expires_at && Date.now() >= nexusTokens.expires_at - REFRESH_MARGIN_MS) {
+    await refreshNexusTokens();
+  }
+  return nexusTokens.access_token;
+}
+
+// One Nexus API call with a live token; a 401 buys exactly one refresh + retry.
+async function withNexusToken(fn) {
+  const token = await nexusAccessToken();
+  try {
+    return await fn(token);
+  } catch (err) {
+    if (!err || !err.nexusUnauthorized) throw err;
+    const fresh = await refreshNexusTokens();
+    return fn(fresh.access_token);
+  }
+}
+
+// Settings that builds before the OAuth sign-in wrote: the user's own stored
+// Nexus credential, plaintext and OS-encrypted. Names only — nothing in this
+// app reads, sends or migrates them; they exist here solely so the values can
+// be deleted off disk. Spelled through a shared prefix so a search of the
+// source for the old credential name finds no live use anywhere.
+const LEGACY_NEXUS_PREFIX = 'nexusApi';
+const LEGACY_NEXUS_SETTING_KEYS = [`${LEGACY_NEXUS_PREFIX}Key`, `${LEGACY_NEXUS_PREFIX}KeyEncrypted`];
+
+// Startup: a credential left behind by an older build is DROPPED, never
+// migrated and never used. The renderer is told once, so a user whose
+// downloads suddenly ask for a sign-in learns why.
+function dropLegacyNexusCredentials() {
+  const s = store.settings;
+  const had = LEGACY_NEXUS_SETTING_KEYS.some((k) => !!s[k]);
+  let present = false;
+  for (const k of LEGACY_NEXUS_SETTING_KEYS) {
+    if (k in s) { present = true; delete s[k]; }
+  }
+  if (present) store.save();
+  if (had) log('info', 'dropped a Nexus credential left by an older build — the app signs in with OAuth now');
+  return had;
+}
+
+function initNexusAuth() {
+  legacyCredentialsDropped = dropLegacyNexusCredentials();
+  nexusTokens = loadNexusTokens();
+  if (!nexusTokens) return;
+  // Name and premium status come from the token itself (expiry is ignored here:
+  // a lapsed token is still proof of who signed in, and the next API call
+  // refreshes it). A token we cannot verify is refused outright.
+  try {
+    const who = oauth.userFromToken(nexusTokens.access_token, { ignoreExpiry: true });
+    // Adult content stays hidden until the account's own preferences answer.
+    nexusUser = { name: who.name, isPremium: who.isPremium, adult: false, adultBlurImages: false, ageVerified: false };
+    refreshNexusPreferences().catch(() => {});
+  } catch (err) {
+    log('error', `stored Nexus access token failed verification (${err.message}) — signed out`);
+    nexusSignOutLocal();
+  }
+}
+
+// The whole browser round trip: listen on loopback, open the authorization page
+// in the system browser, wait for the callback, swap the code for tokens. A
+// second call while one is pending joins the pending flow.
+function nexusSignIn() {
+  if (nexusSignInFlow) return nexusSignInFlow;
+  const flow = (async () => {
+    const verifier = oauth.makeVerifier();
+    const state = oauth.randomState();
+    const server = await oauth.startCallbackServer({ state });
+    try {
+      const url = oauth.buildAuthorizeUrl({ state, codeChallenge: oauth.challengeFor(verifier) });
+      log('info', `nexus sign-in: listening on ${server.redirectUri}, opening the authorization page in the browser`);
+      await shell.openExternal(url);
+      const { code } = await server.result;
+      applyNexusTokens(await oauth.exchangeCode({ code, codeVerifier: verifier }));
+      log('info', `nexus sign-in: signed in as ${nexusUser.name}${nexusUser.isPremium ? ' (premium)' : ''}`);
+      return fullState();
+    } finally {
+      server.close();
+    }
+  })();
+  nexusSignInFlow = flow;
+  flow.catch(() => {}).then(() => { if (nexusSignInFlow === flow) nexusSignInFlow = null; });
+  return flow;
 }
 
 // ---------------------------------------------------------- single instance / nxm
@@ -261,17 +477,16 @@ const protocolArgs = () => {
 async function handleNxm(rawUrl) {
   try {
     const link = nexus.parseNxm(rawUrl);
-    const apiKey = nexusKey();
-    if (!apiKey) throw new Error('A Nexus Mods API key is required. Add one in Settings.');
+    const token = await nexusAccessToken();
     sendEvent({ type: 'toast', message: `Nexus download requested (mod ${link.modId})…` });
     let info = null;
-    try { info = await nexus.modInfo(link.modId, apiKey); } catch (_) {}
+    try { info = await nexus.modInfo(link.modId, token); } catch (_) {}
     // Authoritative filename + version from the file API — CDN URLs aren't
     // reliable for the name, and the page-level mod version is free text.
     let fileMeta = null;
-    try { fileMeta = await nexus.fileInfo(link.modId, link.fileId, apiKey); } catch (_) {}
+    try { fileMeta = await nexus.fileInfo(link.modId, link.fileId, token); } catch (_) {}
     const fileName = (fileMeta && fileMeta.file_name) || null;
-    const uri = await nexus.downloadLink(link, apiKey);
+    const uri = await nexus.downloadLink(link, token);
     const dest = await nexus.downloadToFile(uri, store.stagingDir, fileName, (got, total) => {
       sendEvent({ type: 'progress', label: info ? info.name : `mod ${link.modId}`, received: got, total });
     });
@@ -327,17 +542,48 @@ async function handleNxm(rawUrl) {
 
 // ---------------------------------------------------------- update checks
 
-async function checkForUpdates() {
-  const results = { checked: 0, updates: 0, errors: [] };
+// One v1 request per Nexus-linked mod, so this is exactly the kind of loop
+// that must not eat the user's quota. `background` (the startup/hourly run)
+// keeps the reserve; the Hangar's "Check updates" button is the user asking,
+// so it spends freely — but it still refuses to start when Nexus has already
+// said there is nothing left, and it still honours Retry-After.
+async function checkForUpdates({ background = false } = {}) {
+  const results = { checked: 0, updates: 0, errors: [], limited: null, skippedNexus: null };
+  const nexusMods = store.mods.filter((m) => m.origin && m.origin.type === 'nexus');
+  // Would this run leave the user without a reserve? Then don't start it.
+  let skipNexus = false;
+  if (background && nexusSignedIn() && nexusMods.length) {
+    // One v1 request per linked mod: if that would not fit above the reserve,
+    // the whole Nexus pass waits for the reset rather than half-running.
+    const plan = nexusHttp.backgroundPlan(nexusMods.length);
+    if (!plan.ok) {
+      skipNexus = true;
+      results.skippedNexus = { reason: plan.reason, retryAt: plan.retryAt || null };
+      log('info', `update check: skipping the Nexus part for ${nexusMods.length} linked mod(s) — ${plan.reason}`);
+    }
+  }
   for (const mod of store.mods) {
     const origin = mod.origin;
     if (!origin || origin.type === 'local') continue;
+    if (origin.type === 'nexus' && skipNexus) continue;
     results.checked += 1;
     try {
-      if (origin.type === 'nexus' && nexusKey()) {
+      if (origin.type === 'nexus' && nexusSignedIn()) {
+        // Re-check the reserve every time round: another part of the app may
+        // have spent the quota while this loop was running.
+        if (background) {
+          const allowed = nexusHttp.backgroundAllowed();
+          if (!allowed.ok) {
+            results.checked -= 1;
+            skipNexus = true;
+            results.skippedNexus = { reason: allowed.reason, retryAt: allowed.retryAt || null };
+            log('info', `update check: stopping the Nexus part — ${allowed.reason}`);
+            continue;
+          }
+        }
         // The site's file-update chain decides (see nexus.resolveUpdate) — the
         // page-level "Mod version" field is free text authors rarely maintain.
-        const data = await nexus.filesData(origin.modId, nexusKey());
+        const data = await withNexusToken((t) => nexus.filesData(origin.modId, t, { background }));
         const r = nexus.resolveUpdate(data, origin, compareVersions);
         if (r.target) {
           mod.updateInfo = {
@@ -366,6 +612,15 @@ async function checkForUpdates() {
         }
       }
     } catch (err) {
+      // Out of quota / a 429 we would not wait out: stop the whole Nexus pass
+      // and let the caller reschedule for when Nexus says to come back.
+      if (err && err.quota) {
+        skipNexus = true;
+        results.checked -= 1;
+        results.limited = { message: err.message, retryAt: err.retryAt || null };
+        log('info', `update check: ${err.message}`);
+        continue;
+      }
       results.errors.push(`${mod.name}: ${err.message}`);
     }
   }
@@ -380,7 +635,10 @@ async function checkForUpdates() {
   } catch (_) { results.ue4ssUpdate = null; results.retocUpdate = null; }
   store.settings.lastUpdateCheck = new Date().toISOString();
   store.save();
-  log('info', `update check: ${results.checked} checked, ${results.updates} update(s), ${results.errors.length} error(s)${results.ue4ssUpdate ? ', UE4SS build update available' : ''}`);
+  log('info', `update check: ${results.checked} checked, ${results.updates} update(s), ${results.errors.length} error(s)`
+    + `${results.ue4ssUpdate ? ', UE4SS build update available' : ''}`
+    + `${results.limited ? ', cut short by the Nexus request limit' : ''}`
+    + `${results.skippedNexus ? ', Nexus part skipped' : ''}`);
   return results;
 }
 
@@ -436,8 +694,9 @@ app.on('web-contents-created', (_e, contents) => {
 
 app.whenReady().then(() => {
   log('info', `app start v${app.getVersion()} on ${process.platform} ${require('os').release()}`);
-  // Move a legacy plaintext Nexus key into the OS-encrypted store.
-  try { migrateNexusKey(); } catch (_) {}
+  // Load the stored OAuth tokens — and throw away any credential an older
+  // build left behind.
+  try { initNexusAuth(); } catch (err) { log('error', `Nexus sign-in state could not be read: ${err.message}`); }
   // Archive lives in the game folder (or the custom location) — migrate any
   // app-side content there, then restore from it when this store is fresh.
   try { ensureStorage(); } catch (err) { log('error', `archive setup failed: ${err.message}`); }
@@ -456,6 +715,15 @@ app.whenReady().then(() => {
     }
   }
   createWindow();
+  // One-time explanation for anyone upgrading from a build that stored a
+  // credential of its own.
+  if (legacyCredentialsDropped) {
+    win.webContents.once('did-finish-load', () => sendEvent({
+      type: 'toast',
+      kind: 'warn',
+      message: 'Nexus Mods sign-in has changed. Sign in with your Nexus account in Settings to restore downloads and update checks.',
+    }));
+  }
   // Handle an nxm:// link this instance was launched with.
   const url = nxmFromArgv(process.argv);
   if (url) win.webContents.once('did-finish-load', () => handleNxm(url));
@@ -564,12 +832,32 @@ app.whenReady().then(() => {
 
 const UPDATE_CHECK_MS = 60 * 60 * 1000;
 let lastUpdateSignature = null;
+let updateRetryTimer = null;
+let updateHoldUntil = 0;
+
+// Come back when Nexus said to, instead of retrying into a closed door.
+function rescheduleUpdateCheck(retryAt, why) {
+  const at = Number(retryAt) || 0;
+  const delay = Math.min(Math.max(at - Date.now(), 60 * 1000), UPDATE_CHECK_MS);
+  updateHoldUntil = Date.now() + delay;
+  log('info', `update check: rescheduled for ${nexusHttp.hhmm(updateHoldUntil)} — ${why}`);
+  if (updateRetryTimer) clearTimeout(updateRetryTimer);
+  updateRetryTimer = setTimeout(() => {
+    updateRetryTimer = null;
+    if (win && !win.isDestroyed()) maybeCheckUpdates();
+  }, delay);
+  if (updateRetryTimer.unref) updateRetryTimer.unref();
+}
+
 async function maybeCheckUpdates() {
+  if (Date.now() < updateHoldUntil) return;
   const last = store.settings.lastUpdateCheck ? Date.parse(store.settings.lastUpdateCheck) : 0;
   if (Date.now() - last < UPDATE_CHECK_MS) return;
   if (!store.mods.some((m) => m.origin && m.origin.type !== 'local')) return;
   try {
-    const results = await checkForUpdates();
+    const results = await checkForUpdates({ background: true });
+    const held = results.limited || results.skippedNexus;
+    if (held) rescheduleUpdateCheck(held.retryAt, held.reason || held.message);
     // Badges refresh every time; the toast only when the set of available
     // updates changed, so an hourly re-check never nags about the same ones.
     const signature = store.mods
@@ -589,9 +877,24 @@ app.on('window-all-closed', () => app.quit());
 
 // ------------------------------------------------------------------ helpers
 
-let nexusUser = null; // cached result of the last successful key validation
+// { name, isPremium } from the verified access token (or /users/validate.json),
+// plus { adult, adultBlurImages, ageVerified } from the account's own Nexus
+// content preferences. adult/adultBlurImages reach the renderer in
+// fullState().nexus.user; the policy itself lives in adultAllowed().
+let nexusUser = null;
 let eaAppDetected = false; // probed once at startup (reg.exe is too slow per-state)
-const promotedCache = { mods: null, at: 0, authors: [] };
+
+// The quota Nexus reports, trimmed for the renderer: counts, and the reset
+// times as plain ISO strings. `known` is false until a v1 call has answered.
+function compactQuota() {
+  const q = nexusHttp.quotaState();
+  const win = (w) => ({
+    limit: w.limit, remaining: w.remaining,
+    resetAt: w.resetAt ? new Date(w.resetAt).toISOString() : null,
+  });
+  return { known: q.known, hourly: win(q.hourly), daily: win(q.daily), updatedAt: q.updatedAt };
+}
+const promotedCache = { mods: null, at: 0, authors: [], adult: false };
 
 function fullState() {
   const detection = steam.detectGame(store.settings.gamePath);
@@ -603,16 +906,29 @@ function fullState() {
   const modCompat = {};
   for (const m of store.mods) modCompat[m.id] = ea.evaluateMod(m, compat);
   return {
-    settings: { ...store.settings, nexusApiKey: undefined, nexusApiKeyEncrypted: undefined, hasNexusKey: !!nexusKey() },
+    // Tokens NEVER cross into the renderer — only whether we have them.
+    settings: { ...store.settings, nexusOAuth: undefined, nexusOAuthEncrypted: undefined },
     profiles: store.profiles,
     lastOrderBackup: store.data.lastOrderBackup
       ? { at: store.data.lastOrderBackup.at }
       : null,
     nexus: {
-      hasKey: !!nexusKey(),
-      keyEncrypted: !!store.settings.nexusApiKeyEncrypted,
-      user: nexusUser,
+      signedIn: nexusSignedIn(),
+      tokensEncrypted: !!store.settings.nexusOAuthEncrypted,
+      user: nexusUser ? {
+        name: nexusUser.name,
+        isPremium: !!nexusUser.isPremium,
+        // The account's own Nexus content preferences, for display only.
+        adult: !!nexusUser.adult,
+        adultBlurImages: !!nexusUser.adultBlurImages,
+        ageVerified: !!nexusUser.ageVerified,
+      } : null,
+      // The one policy answer, decided in main by adultAllowed(). The renderer
+      // reads it to describe the state; it never gets to change it.
+      adultAllowed: adultAllowed(),
       nxmRegistered: app.isDefaultProtocolClient('nxm', exe, args),
+      // What Nexus's own x-rl-* headers last said about the request quota.
+      quota: compactQuota(),
     },
     detection: {
       found: detection.found,
@@ -667,10 +983,10 @@ async function md5Match(mod) {
   // Game Feature plugin mods are skipped for the same reason as UE4SS mods:
   // their files (.uplugin, AssetRegistry.bin, the paks inside Content/Paks) are
   // only ever uploaded inside an archive, so they never hash-match a Nexus file.
-  if (!mod || !nexusKey() || mod.modType === 'ue4ss-mod' || mod.modType === 'gfp') return null;
+  if (!mod || !nexusSignedIn() || mod.modType === 'ue4ss-mod' || mod.modType === 'gfp') return null;
   for (const f of mod.files.slice(0, 4)) {
     try {
-      const hit = await nexus.md5Lookup(path.join(store.modLibraryDir(mod.id), f.libraryRelative), nexusKey());
+      const hit = await withNexusToken((t) => nexus.md5Lookup(path.join(store.modLibraryDir(mod.id), f.libraryRelative), t));
       if (hit) return hit;
     } catch (_) {}
   }
@@ -812,8 +1128,8 @@ async function scoreCandidates(m, index, fileCache) {
   if (nexusArchive) {
     const e = entry(nexusArchive.modId);
     if (e) note(e, 'archive');
-    else if (nexusKey()) {
-      try { const info = await nexus.modInfo(nexusArchive.modId, nexusKey()); note({ modId: nexusArchive.modId, name: info.name, author: info.author, version: info.version }, 'archive'); } catch (_) {}
+    else if (nexusSignedIn()) {
+      try { const info = await withNexusToken((t) => nexus.modInfo(nexusArchive.modId, t)); note({ modId: nexusArchive.modId, name: info.name, author: info.author, version: info.version }, 'archive'); } catch (_) {}
     }
   }
   // 2) md5 of the library files (loose paks only).
@@ -826,7 +1142,7 @@ async function scoreCandidates(m, index, fileCache) {
   try {
     const q = searchQuery(localName);
     if (q && q.length >= 2) {
-      const res = await nexus.browseMods({ query: q, sort: 'downloads', count: 25 });
+      const res = await nexus.browseMods({ query: q, sort: 'downloads', count: 25, includeAdult: adultAllowed() });
       for (const r of (res.mods || [])) {
         const s = titleScore(localName, r.name);
         if (s >= 0.34) note(r, confOf(s));
@@ -837,7 +1153,7 @@ async function scoreCandidates(m, index, fileCache) {
   //    mods are few, so each gets a live file check for a name match too.
   if (author) {
     try {
-      for (const r of (await nexus.modsByAuthors([author])).slice(0, 10)) {
+      for (const r of (await nexus.modsByAuthors([author], { includeAdult: adultAllowed() })).slice(0, 10)) {
         note(r, 'author');
         if (!byId.get(r.modId).reasons.has('file') && await modHasMatchingFile(r.modId, localName, fileCache)) note(r, 'file');
       }
@@ -860,12 +1176,12 @@ function authorFromName(name) {
   return m ? m[1].trim() : null;
 }
 // Does any of this Nexus mod's files stem-match the local name? Best-effort
-// (v1 filesList needs a key; any failure = no match); memoised per run so the
+// (v1 filesList needs a sign-in; any failure = no match); memoised per run so the
 // same mod is never fetched twice while one scan/search is underway.
 async function modHasMatchingFile(modId, localName, cache) {
-  if (!nexusKey()) return false;
+  if (!nexusSignedIn()) return false;
   try {
-    if (!cache.has(modId)) cache.set(modId, nexus.filesList(modId, nexusKey()));
+    if (!cache.has(modId)) cache.set(modId, withNexusToken((t) => nexus.filesList(modId, t)));
     const files = await cache.get(modId);
     return (files || []).some((f) => fileStemMatches(localName, f));
   } catch (_) { return false; }
@@ -1102,24 +1418,30 @@ const handlers = {
   },
   'delete-profile': async (_e, { id }) => { engine.deleteProfile(id); return fullState(); },
 
-  'set-nexus-key': async (_e, { key }) => {
-    const trimmed = (key || '').trim();
-    if (!trimmed) throw new Error('The API key is empty.');
-    const user = await nexus.validateKey(trimmed); // throws on a bad key
-    storeNexusKey(trimmed);
-    nexusUser = user;
+  // OAuth sign-in: opens nexusmods.com in the user's own browser and waits for
+  // the loopback callback. The app never sees the password, only the tokens.
+  'nexus-sign-in': async () => nexusSignIn(),
+
+  'nexus-sign-out': async () => {
+    const tokens = nexusTokens;
+    nexusSignOutLocal();
+    if (tokens) {
+      // Best-effort — a revoke that fails must never leave the user signed in here.
+      try { await oauth.revoke(tokens.refresh_token); } catch (_) {}
+      try { await oauth.revoke(tokens.access_token); } catch (_) {}
+    }
+    log('info', 'nexus sign-in: signed out (tokens cleared and revocation requested)');
     return fullState();
   },
-  'clear-nexus-key': async () => {
-    store.settings.nexusApiKey = null;
-    store.settings.nexusApiKeyEncrypted = null;
-    store.save();
-    nexusUser = null;
-    return fullState();
-  },
-  'validate-nexus-key': async () => {
-    if (!nexusKey()) throw new Error('A Nexus Mods API key is required. Add one in Settings.');
-    nexusUser = await nexus.validateKey(nexusKey());
+
+  // What Nexus's rate-limit headers last reported, for Settings.
+  'nexus-quota': async () => compactQuota(),
+
+  // "Verify": ask the API itself who this token belongs to, and re-read the
+  // account's content preferences while we are there.
+  'nexus-refresh-user': async () => {
+    mergeNexusUser(await withNexusToken((t) => nexus.validateToken(t)));
+    await refreshNexusPreferences();
     return fullState();
   },
   'register-nxm': async () => {
@@ -1167,39 +1489,42 @@ const handlers = {
   },
 
   'nexus-browse': async (_e, opts) => {
-    const result = await nexus.browseMods(opts || {});
+    // Browsing itself needs no sign-in. Whether adult-tagged mods are in the
+    // listing is NEVER the renderer's call: adultAllowed() decides, and any
+    // includeAdult that arrived from the renderer is discarded here.
+    const result = await nexus.browseMods({ ...(opts || {}), includeAdult: adultAllowed() });
     // Premium accounts can pull download links straight from the API.
-    if (nexusKey() && !nexusUser) {
-      try { nexusUser = await nexus.validateKey(nexusKey()); } catch (_) {}
+    if (nexusSignedIn() && !nexusUser) {
+      try { mergeNexusUser(await withNexusToken((t) => nexus.validateToken(t))); } catch (_) {}
     }
-    return { ...result, hasKey: !!nexusKey(), isPremium: !!(nexusUser && nexusUser.isPremium) };
+    return { ...result, signedIn: nexusSignedIn(), isPremium: !!(nexusUser && nexusUser.isPremium) };
   },
 
   'nexus-promoted': async () => {
-    // Session cache — the featured pool rarely changes.
+    // Session cache — the featured pool rarely changes. It is also keyed on
+    // the adult answer, so signing in or out never serves a stale mix.
     const now = Date.now();
-    if (promotedCache.mods && now - promotedCache.at < 5 * 60 * 1000) return promotedCache;
+    const adult = adultAllowed();
+    if (promotedCache.mods && promotedCache.adult === adult && now - promotedCache.at < 5 * 60 * 1000) return promotedCache;
     const roster = await getPromotedAuthors();
-    const mods = await nexus.modsByAuthors(roster);
+    const mods = await nexus.modsByAuthors(roster, { includeAdult: adult });
     // When the roster can't fill all 3 slots, backfill from the game's top mods.
     let fillers = [];
     if (mods.length < 3) {
       try {
-        // Default surface — no adult-tagged mods in the featured strip.
-        const top = await nexus.browseMods({ sort: 'downloads', count: 12, includeAdult: false });
+        const top = await nexus.browseMods({ sort: 'downloads', count: 12, includeAdult: adult });
         const promotedIds = new Set(mods.map((m) => m.modId));
         fillers = top.mods.filter((m) => !promotedIds.has(m.modId));
       } catch (_) { /* strip just shows what it has */ }
     }
-    Object.assign(promotedCache, { mods, fillers, at: now, authors: roster });
+    Object.assign(promotedCache, { mods, fillers, at: now, authors: roster, adult });
     return promotedCache;
   },
 
   'nexus-install-remote': async (_e, { modId, name }) => {
-    const apiKey = nexusKey();
-    if (!apiKey) throw new Error('A Nexus Mods API key is required. Add one in Settings.');
+    const token = await nexusAccessToken();
     if (!nexusUser) {
-      try { nexusUser = await nexus.validateKey(apiKey); } catch (err) { throw new Error(err.message); }
+      try { mergeNexusUser(await nexus.validateToken(token)); } catch (err) { throw new Error(err.message); }
     }
     if (!nexusUser.isPremium) {
       // Nexus policy: non-premium downloads must start on the website. Rather
@@ -1212,10 +1537,10 @@ const handlers = {
         name,
       };
     }
-    const files = await nexus.filesList(modId, apiKey);
+    const files = await nexus.filesList(modId, token);
     const file = nexus.pickPrimaryFile(files);
     if (!file) throw new Error('That mod has no downloadable main file.');
-    const uri = await nexus.downloadLink({ modId, fileId: file.file_id }, apiKey);
+    const uri = await nexus.downloadLink({ modId, fileId: file.file_id }, token);
     const dest = await nexus.downloadToFile(uri, store.stagingDir, file.file_name, (got, total) => {
       sendEvent({ type: 'progress', label: name || `mod ${modId}`, received: got, total });
     });
@@ -1365,9 +1690,8 @@ const handlers = {
   },
 
   'nexus-file-versions': async (_e, { modId }) => {
-    const apiKey = nexusKey();
-    if (!apiKey) throw new Error('A Nexus Mods API key is required. Add one in Settings.');
-    const files = await nexus.filesList(modId, apiKey);
+    const token = await nexusAccessToken();
+    const files = await nexus.filesList(modId, token);
     const usable = files
       .filter((f) => !['ARCHIVED', 'DELETED'].includes(f.category_name || ''))
       .sort((a, b) => (b.uploaded_timestamp || 0) - (a.uploaded_timestamp || 0))
@@ -1379,14 +1703,13 @@ const handlers = {
         sizeKb: f.size_kb || f.size || 0,
         uploaded: f.uploaded_timestamp ? new Date(f.uploaded_timestamp * 1000).toISOString() : null,
       }));
-    if (!nexusUser) { try { nexusUser = await nexus.validateKey(apiKey); } catch (_) {} }
+    if (!nexusUser) { try { mergeNexusUser(await nexus.validateToken(token)); } catch (_) {} }
     return { files: usable, isPremium: !!(nexusUser && nexusUser.isPremium) };
   },
 
   'nexus-install-file': async (_e, { modId, fileId, name }) => {
-    const apiKey = nexusKey();
-    if (!apiKey) throw new Error('A Nexus Mods API key is required. Add one in Settings.');
-    if (!nexusUser) { try { nexusUser = await nexus.validateKey(apiKey); } catch (err) { throw new Error(err.message); } }
+    const token = await nexusAccessToken();
+    if (!nexusUser) { try { mergeNexusUser(await nexus.validateToken(token)); } catch (err) { throw new Error(err.message); } }
     if (!nexusUser.isPremium) {
       // Free accounts: the website mints the link. Open the mod's Files page in
       // the embedded Nexus panel; the nxm handoff installs the file the user
@@ -1397,10 +1720,10 @@ const handlers = {
         name,
       };
     }
-    const files = await nexus.filesList(modId, apiKey);
+    const files = await nexus.filesList(modId, token);
     const file = files.find((f) => f.file_id === fileId);
     if (!file) throw new Error('That file is no longer listed on the mod page.');
-    const uri = await nexus.downloadLink({ modId, fileId }, apiKey);
+    const uri = await nexus.downloadLink({ modId, fileId }, token);
     const dest = await nexus.downloadToFile(uri, store.stagingDir, file.file_name, (got, total) => {
       sendEvent({ type: 'progress', label: `${name || `mod ${modId}`} ${file.version || ''}`, received: got, total });
     });
@@ -1430,7 +1753,7 @@ const handlers = {
     const targets = store.mods.filter((m) => !m.origin || m.origin.type === 'local');
     const total = targets.length;
     if (!total) return { checked: 0, suggestions: [], state: fullState() };
-    const hasKey = !!nexusKey();
+    const signedIn = nexusSignedIn();
     const suggestions = [];
     const fileCache = new Map(); // modId -> Promise<files>, shared across the run
     // Catalog-wide file-name index: the one matcher that finds a page from a
@@ -1438,7 +1761,18 @@ const handlers = {
     // at most); later runs only refresh mods that changed.
     const index = getFileIndex();
     try {
-      await index.refresh(nexusKey(), (done, all) => sendEvent({ type: 'progress', label: 'Indexing Nexus file names', received: done, total: all }));
+      const token = signedIn ? await nexusAccessToken() : null;
+      await index.refresh(
+        token,
+        (done, all) => sendEvent({ type: 'progress', label: 'Indexing Nexus file names', received: done, total: all }),
+        // One v1 request per changed mod: it stands down the moment Nexus's
+        // remaining quota reaches the reserve kept for the user's own actions.
+        { shouldContinue: () => nexusHttp.backgroundAllowed() },
+      );
+      if (index.stoppedEarly) {
+        log('info', `file-name index: stopped early — ${index.stoppedEarly.reason}; the next run picks up the rest`);
+        sendEvent({ type: 'toast', kind: 'warn', message: 'Nexus Mods request limit reached while indexing file names — matching continues with what is already known.' });
+      }
     } catch (_) { /* index stays as it was; the other matchers still run */ }
     let i = 0;
     for (const m of targets) {
@@ -1449,14 +1783,14 @@ const handlers = {
       suggestions.push({ id: m.id, name: m.name, modType: m.modType, candidates: candidates.slice(0, 5) });
     }
     const withCands = suggestions.filter((s) => s.candidates.length).length;
-    log('info', `link-mods: ${withCands}/${total} unlinked mod(s) have candidate source(s)${hasKey ? '' : ' (no API key — linking needs one)'}`);
-    return { checked: total, hasKey, suggestions, state: fullState() };
+    log('info', `link-mods: ${withCands}/${total} unlinked mod(s) have candidate source(s)${signedIn ? '' : ' (signed out — linking needs a Nexus sign-in)'}`);
+    return { checked: total, signedIn, suggestions, state: fullState() };
   },
 
   // Wizard search box: title OR author (anonymous), then flag results whose
   // uploaded file is named like the local mod so the right page stands out.
   'link-search': async (_e, { query, modId } = {}) => {
-    const mods = await nexus.searchMods(query, 10);
+    const mods = await nexus.searchMods(query, 10, { includeAdult: adultAllowed() });
     const local = modId ? store.getMod(modId) : null;
     const fileCache = new Map();
     const out = [];
@@ -1497,8 +1831,7 @@ const handlers = {
       const m = String(ref).match(/mods\/(\d+)/) || String(ref).match(/^(\d+)$/);
       if (!m) throw new Error('Enter a Nexus mod ID or mod page URL.');
       const modId = Number(m[1]);
-      if (!nexusKey()) throw new Error('A Nexus Mods API key is required. Add one in Settings.');
-      const info = await nexus.modInfo(modId, nexusKey());
+      const info = await withNexusToken((t) => nexus.modInfo(modId, t));
       // Assume the installed copy is current; future version bumps get flagged.
       engine.setOrigin(id, { type: 'nexus', modId, fileId: null, version: info.version || null, linked: true });
       const stored = store.getMod(id);
@@ -1579,11 +1912,12 @@ const handlers = {
       if (nexusUser && nexusUser.isPremium) {
         // The file the update chain pointed at (so a mod with several file
         // lines never jumps lines); newest main file only as a fallback.
-        const data = await nexus.filesData(origin.modId, nexusKey());
+        const token = await nexusAccessToken();
+        const data = await nexus.filesData(origin.modId, token);
         const file = (mod.updateInfo.fileId && data.files.find((f) => f.file_id === mod.updateInfo.fileId))
           || nexus.pickPrimaryFile(data.files);
         if (!file) throw new Error('The updated mod has no downloadable main file.');
-        const uri = await nexus.downloadLink({ modId: origin.modId, fileId: file.file_id }, nexusKey());
+        const uri = await nexus.downloadLink({ modId: origin.modId, fileId: file.file_id }, token);
         const dest = await nexus.downloadToFile(uri, store.stagingDir, file.file_name, (got, total) => {
           sendEvent({ type: 'progress', label: mod.name, received: got, total });
         });
@@ -1605,13 +1939,48 @@ const handlers = {
     throw new Error('That mod has no update source.');
   },
 
-  // UE4SS runtime: the default pick (experimental-latest, else latest stable)
-  // or, with { tag }, any published release — Settings → UE4SS → ⧗ Versions,
-  // so a user who has frozen game updates can match UE4SS to their game build.
+  // UE4SS runtime. With NO payload this installs the game-specific package —
+  // Nexus mod 9 "UE4SS for Star Wars Zero Company" (stock UE4SS plus this
+  // game's signatures, loader settings and helpers). That is what a Zero
+  // Company install needs; the stock upstream build from GitHub carries none of
+  // it and stops working after a game patch, so it is only ever a deliberate
+  // fallback: { source:'github' } (the explicit "stock build" choice),
+  // { tag } (one published release — Settings → UE4SS → ⧗ Versions, for a user
+  // who has frozen game updates), or the automatic fallback below when the
+  // Nexus page cannot be read. { nexusFileId } installs one specific Nexus file.
+  //
+  // Default result, by account: premium → downloaded and installed here; free →
+  // { opened:'embed', url, name, hint } for the embedded Nexus page (its "Mod
+  // Manager Download" comes back as nxm:// into handleNxm); signed out →
+  // { needsChoice, nexus, github } so the renderer can offer the sign-in or the
+  // stock build.
   'install-ue4ss': async (_e, payload) => {
     if (!store.settings.gamePath) throw new Error('Locate the game folder in Settings first.');
     if (payload && payload.nexusFileId) return installUe4ssFromNexus(Number(payload.nexusFileId));
     const tag = payload && payload.tag ? String(payload.tag) : null;
+    const wantsGithub = !!(payload && payload.source === 'github');
+    if (!tag && !wantsGithub) {
+      let nx = ue4ssDl.cachedNexusLatest();
+      if (!nx) { try { nx = await ue4ssDl.refreshNexusLatest(); } catch (_) { nx = null; } }
+      if (nx && nx.fileId) {
+        if (!nexusSignedIn()) {
+          let gh = ue4ssDl.cachedLatest();
+          if (!gh) { try { gh = await ue4ssDl.refreshLatest(); } catch (_) { gh = null; } }
+          return {
+            needsChoice: true,
+            nexus: { version: nx.version || null, testedBuild: nx.testedBuild || null, date: nx.publishedAt || null },
+            github: gh ? { build: ue4ssDl.shortBuild(gh.name), date: gh.publishedAt || null } : null,
+          };
+        }
+        return installUe4ssFromNexus(Number(nx.fileId));
+      }
+      // Offline, or the Nexus page/API changed: GitHub still gets UE4SS onto
+      // the disk, but the user is told exactly what they are getting.
+      sendEvent({
+        type: 'toast', kind: 'warn',
+        message: 'The Nexus page for “UE4SS for Star Wars Zero Company” could not be read, so Mod Command is installing the stock upstream build from GitHub instead — it has no Zero Company signatures and may not work after a game patch.',
+      });
+    }
     const asset = tag ? await ue4ssDl.runtimeByTag(tag) : await ue4ssDl.latestRuntime();
     // Keep the build that is there now, so it can be restored from ⧗ Versions.
     const cur = store.settings.ue4ssInstalled || null;
@@ -1635,8 +2004,8 @@ const handlers = {
     };
     store.settings.ue4ssNoticedBuild = asset.name;
     store.save();
-    log('info', `UE4SS ${asset.releaseName} (${asset.tag}) installed from GitHub`);
-    return { state: fullState(), version: asset.releaseName, tag: asset.tag };
+    log('info', `UE4SS ${asset.releaseName} (${asset.tag}) installed from GitHub (stock upstream build)`);
+    return { state: fullState(), version: asset.releaseName, tag: asset.tag, source: 'github' };
   },
 
   // Every UE4SS release that carries a runtime zip, newest build first, plus
@@ -1648,13 +2017,13 @@ const handlers = {
     const installed = store.settings.ue4ssInstalled || null;
     const latest = releases.find((r) => r.recommended) || null;
     const [, nexusLatest] = await Promise.all([latest ? ue4ssDl.refreshLatest(true) : null, ue4ssDl.refreshNexusLatest(true)]);
-    const apiKey = nexusKey();
-    if (apiKey && !nexusUser) { try { nexusUser = await nexus.validateKey(apiKey); } catch (_) {} }
+    const signedIn = nexusSignedIn();
+    if (signedIn && !nexusUser) { try { mergeNexusUser(await withNexusToken((t) => nexus.validateToken(t))); } catch (_) {} }
     const det = steam.detectGame(store.settings.gamePath);
     return {
       releases, releasesError, installed, status: engine.ue4ssStatus(), vault: engine.ue4ssListVault(),
       update: ue4ssDl.updateInfo(installed, latest || undefined),
-      nexus: nexusLatest, nexusUrl: ue4ssDl.NEXUS_URL, hasApiKey: !!apiKey, isPremium: !!(nexusUser && nexusUser.isPremium),
+      nexus: nexusLatest, nexusUrl: ue4ssDl.NEXUS_URL, signedIn, isPremium: !!(nexusUser && nexusUser.isPremium),
       gameBuild: det.found ? det.buildId : null,
     };
   },
@@ -1762,17 +2131,22 @@ function spawnGameExe(detection) {
 // Premium: direct download. Free: the embedded Nexus page — its Mod Manager
 // Download button hands the file to handleNxm, which recognises the runtime.
 async function installUe4ssFromNexus(fileId) {
-  const apiKey = nexusKey();
-  if (!apiKey) throw new Error('A Nexus Mods API key is required to install from Nexus. Add one in Settings, or install the GitHub build.');
-  if (!nexusUser) { try { nexusUser = await nexus.validateKey(apiKey); } catch (err) { throw new Error(err.message); } }
-  if (!nexusUser.isPremium) return { opened: 'embed', url: ue4ssDl.NEXUS_URL, name: 'UE4SS for Star Wars Zero Company' };
-  const files = await nexus.filesList(ue4ssDl.NEXUS_MOD_ID, apiKey);
+  if (!nexusSignedIn()) throw new Error('Sign in to Nexus Mods in Settings first, or install the GitHub build.');
+  const token = await nexusAccessToken();
+  if (!nexusUser) { try { mergeNexusUser(await nexus.validateToken(token)); } catch (err) { throw new Error(err.message); } }
+  if (!nexusUser.isPremium) {
+    return {
+      opened: 'embed', url: ue4ssDl.NEXUS_URL, name: 'UE4SS for Star Wars Zero Company',
+      hint: 'Press Mod Manager Download on the file list and Mod Command installs it.',
+    };
+  }
+  const files = await nexus.filesList(ue4ssDl.NEXUS_MOD_ID, token);
   const file = files.find((f) => f.file_id === fileId);
   if (!file) throw new Error('That file is no longer listed on the Nexus page.');
   const cur = store.settings.ue4ssInstalled || null;
   const kept = engine.ue4ssSnapshot(ue4ssLabel(cur), cur);
   if (kept) log('info', `UE4SS runtime kept before update: ${kept}`);
-  const uri = await nexus.downloadLink({ modId: ue4ssDl.NEXUS_MOD_ID, fileId }, apiKey);
+  const uri = await nexus.downloadLink({ modId: ue4ssDl.NEXUS_MOD_ID, fileId }, token);
   const dest = await nexus.downloadToFile(uri, store.stagingDir, file.file_name, (got, total) => {
     sendEvent({ type: 'progress', label: `UE4SS (Nexus) ${file.version || ''}`, received: got, total });
   });
@@ -1788,9 +2162,15 @@ async function installUe4ssFromNexus(fileId) {
 }
 
 function recordNexusUe4ss({ fileId, version, asset, publishedAt }) {
+  // Remember the game build the package states it was tested on, so Settings
+  // and Diagnostics can compare it with the installed game even while the Nexus
+  // page is unreachable.
+  const page = ue4ssDl.cachedNexusLatest();
+  const testedBuild = page && Number(page.fileId) === Number(fileId) ? (page.testedBuild || null) : null;
   store.settings.ue4ssInstalled = {
     source: 'nexus', modId: ue4ssDl.NEXUS_MOD_ID, fileId, tag: null, name: 'UE4SS for Star Wars Zero Company',
-    version: version || null, asset: asset || null, publishedAt: publishedAt || null, installedAt: new Date().toISOString(),
+    version: version || null, asset: asset || null, publishedAt: publishedAt || null, testedBuild,
+    installedAt: new Date().toISOString(),
   };
   store.settings.ue4ssNoticedBuild = String(fileId);
   store.save();
@@ -1978,8 +2358,25 @@ function diagnostics() {
   {
     const u = ue4ssDl.updateInfo(store.settings.ue4ssInstalled);
     const rec = store.settings.ue4ssInstalled;
-    const tail = u.available ? ` Newer ${u.source === 'nexus' ? 'Nexus compatibility ' : ''}build available: ${u.latestBuild} (you have ${u.currentBuild}) — Settings → UE4SS.`
-      : (ue4ss.installed && rec ? ` Build ${u.currentBuild || rec.asset || rec.name}${u.latest && !u.available ? ' — current' : ''}.` : (ue4ss.installed ? ' Build unknown (not installed by Mod Command) — reinstall from Settings → UE4SS to be on the newest build.' : ''));
+    const fromNexus = u.source === 'nexus';
+    const gameBuild = detection.found ? detection.buildId : null;
+    let tail = '';
+    if (ue4ss.installed && rec) {
+      // Which build, and — for the game-specific package — whether the build it
+      // was tested on is the build this PC is actually running.
+      tail = fromNexus
+        ? ` Installed: the Zero Company package from Nexus${u.currentBuild ? ` ${u.currentBuild}` : ''}.`
+        : ` Installed: GitHub build ${u.currentBuild || rec.asset || rec.name} — stock upstream build, not game-specific.`;
+      const tested = fromNexus ? (rec.testedBuild || (u.nexus && u.nexus.testedBuild) || null) : null;
+      if (tested) {
+        tail += ` Tested on game build ${tested}${gameBuild ? (String(gameBuild) === String(tested) ? ' — matches yours' : ` — yours is ${gameBuild}`) : ''}.`;
+      }
+      if (u.available) tail += ` Newer ${fromNexus ? 'Zero Company package' : 'stock build'} available: ${u.latestBuild} (you have ${u.currentBuild}) — Settings → UE4SS.`;
+      else if (u.latest) tail += ' Current.';
+      if (!fromNexus) tail += ' The Zero Company package on Nexus is the tested one — Settings → UE4SS.';
+    } else if (ue4ss.installed) {
+      tail = ' Build unknown (not installed by Mod Command) — reinstall from Settings → UE4SS to get the Zero Company package from Nexus.';
+    }
     add(u.available ? 'warning' : (ue4ss.healthy ? 'good' : (ue4ss.installed ? 'warning' : 'info')), 'UE4SS runtime', ue4ss.message + tail);
   }
   const zc = engine.zcsdkStatus();
@@ -2057,8 +2454,8 @@ function buildSupportReport() {
     detection,
     eaAppPresent: eaAppDetected,
     settings: store.settings,
-    hasNexusKey: !!nexusKey(),
-    keyEncrypted: !!store.settings.nexusApiKeyEncrypted,
+    nexusSignedIn: nexusSignedIn(),
+    nexusTokensEncrypted: !!store.settings.nexusOAuthEncrypted,
     mods: store.mods,
     modCompat,
     conflicts,

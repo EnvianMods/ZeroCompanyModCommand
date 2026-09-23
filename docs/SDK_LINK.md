@@ -22,7 +22,7 @@ The link reads `<sdk>/tools/sdk-ui/manifest.json`:
 {
   "contract": 1,
   "name": "Zero Company Mod SDK",
-  "sdkUiVersion": "1.28.52",
+  "sdkUiVersion": "1.29.0",
   "entry": "src/index.html",
   "preload": "preload.js",
   "cliModule": "lib/sdk-cli.js",
@@ -35,7 +35,7 @@ The link reads `<sdk>/tools/sdk-ui/manifest.json`:
 |---|---|---|
 | `contract` | yes, numeric | must equal `HOST_CONTRACT` (currently **1**) |
 | `name` | no | shown on the ◆ SDK card |
-| `sdkUiVersion` | no | shown on the ◆ SDK card; `dev` if the SDK has no version |
+| `sdkUiVersion` | no | shown on the ◆ SDK card as *workbench UI x.y.z*; `dev` if absent. **Display only** — it is the workbench's own label, not the SDK's version, and it can lag it (see below) |
 | `entry` | yes | loaded as `file://…/<entry>?embedded=1` |
 | `preload` | yes | set as the hosted view's preload, by absolute path |
 | `cliModule` | yes | `require()`d, and its `createHandlers(ctx)` registered |
@@ -60,6 +60,18 @@ Two independent gates, both checked before anything is loaded:
 
 `sdkUiVersion` is **not** a gate. It is display only. The SDK is free to ship
 any version it likes as long as the contract number holds.
+
+**The SDK's own version is not in the manifest.** The ◆ SDK card leads with the
+*installed* SDK — `<sdk>/tools/version.json` → `"sdk"`, read through the SDK's
+exported `installedSdkVersion()` (and `status().installed`) — plus its public name
+when the update answer knows it: *"Zero Company Mod SDK 1.29.6 (public 1.0.3)
+· workbench UI 1.29.0 · UI contract 1 · …"*. That is why the two can disagree:
+the public 1.0.3 SDK (internal 1.29.6) still ships `"sdkUiVersion": "1.29.0"` in
+its manifest — an SDK-side label that was not bumped, harmless to the host because
+nothing compares it. When the SDK has a `docs/CHANGELOG.md`, the card also shows
+**What's new in the SDK ↗**, which opens that file with the host's `openPath`
+(IPC `sdk-link-open-changelog`; the path is resolved inside the linked tree by
+`lib/sdk-link.js`, the renderer sends none).
 
 **Every failure ends in the same place:** the ◆ SDK card shows the sentence, the
 ◆ Forge nav item stays dimmed, and the rest of Mod Command is untouched. Nothing in
@@ -108,8 +120,11 @@ Leaving the Forge view does not destroy the view, it parks it at 0×0 and calls
 `setVisible(false)` — so the SDK page keeps its console buffer, doctor rows and
 scroll position across view switches. **Unlink** does destroy it: the job is
 cancelled, every `sdk:1:*` handler is removed from `ipcMain`, the view is
-closed and the module is dropped from `require.cache` so a later link to a
-different folder loads that folder's code.
+closed and **every module loaded from `<sdk>/tools/sdk-ui`** is dropped from
+`require.cache` — not only `cliModule`: since SDK 1.29.6 `lib/sdk-cli.js` loads
+siblings of its own (`sdk-cli-more.js`, `moddef-edit.js`, `asset-info.js`) — so a
+later link to a different folder, or to the same folder after an SDK update, loads
+that folder's code.
 
 Navigation out of the SDK folder is blocked (`will-navigate`) and popups are
 denied. Anything the SDK wants opened in the OS goes through its own
@@ -179,6 +194,51 @@ same check from the same code. Mod Command runs it for its own badge and then
 pushes the answer into the hosted page on the SDK's event channel, so the
 panel's own Doctor line agrees with the host's badge without a second fetch.
 
+## What the hosted page offers
+
+Everything below is the **SDK's** page (1.0.3 / internal 1.29.6), running in the
+hosted view; Mod Command adds none of it and needs no release for it. The page's
+rail: **Forge** (the recipe gallery with search, group and needs filters, card
+previews, and the console with the build **stepper** — preflight, author, cook,
+convert, package, verify — which explains a failure from the SDK's own errors
+catalog), **Mods** (every mod in the SDK with badges — built, stale, deployed —
+and Edit, Test, Publish, Rebuild, **Duplicate as…**), the **mod-def editor** (a
+form plus the raw JSON, save with a backup, a check whose errors land on their
+line, key help, outside-edit detection) with the **asset drop zone** under it,
+**Test** (game status, launch via Steam or the exe, a per-recipe checklist, the
+UE4SS session audit), **Conflicts** (what the mod touches and who else touches
+it), **Publish** (version + changelog line, then a packaged zip and the Nexus
+upload page), **Doctor**, and **Settings → Paths & dependencies** (each path with
+Browse… on its root folder, **Detect all**, a **Get it ›** link per dependency
+and an **Other prerequisites** list). A fresh profile opens on the **first-run
+walkthrough** — prerequisites, paths, pick a recipe, create + check + build,
+deploy, done — which Doctor's "Walk me through setup" reopens.
+
+Its second verb set (`lib/sdk-cli-more.js`, 19 verbs: `more-caps`, `moddef-*`,
+`asset-*`, `pick-asset`, `open-in-blender`, `launch-game`, `game-status`,
+`session-audit`, `test-checklist`, `footprint`, `mod-release-prepare`,
+`mod-package*`, `open-nexus-upload`, `open-package-folder`, `duplicate-mod`)
+rides the same contract: `sdk-cli.js`'s `createHandlers()` spreads it into the
+map this host registers (39 `sdk:1:*` channels in 1.0.3), so nothing here had
+to change to host it. What the host's `ctx` does and does not offer decides a
+few things on the page:
+
+* **no `browseFile`** — this host passes `browseFolder` only. `more-caps` answers
+  `canPickFile: false`, `pick-file` / `pick-asset` answer `{ unsupported: true }`,
+  the page hides its File… / Pick… buttons, and a **typed path** (or a drag of a
+  path) is the way in; a dropped file the sandboxed page cannot name a path for
+  says so rather than throwing.
+* **`openExternal`** — the page's Get-it links and "Open the Nexus upload page"
+  go through the SDK's own `sdk:1:open-url` (https only) to `ctx.openExternal`,
+  which is `shell.openExternal`. That path is **not** the renderer's
+  `open-external` allow-list (below): the SDK module is already trusted
+  main-process code (see the security stance), so an allow-list there would add
+  nothing but broken links (unrealengine.com, nodejs.org, python.org, …).
+* **`openPath`** — the page's Open folder / Open mod-def / Open config.
+* The SDK needs **Node.js 22.12+ on PATH** for its build driver. The host never
+  runs the SDK's own Electron; it `require()`s `lib/sdk-cli.js` into its own
+  Electron 33 main process, and that module spawns `node` / `python` itself.
+
 ## Where the SDK's own paths live
 
 The SDK's Unreal, game, retoc and reflection paths are the **SDK's** settings,
@@ -190,8 +250,13 @@ on the SDK's event channel (`EVENT_CHANNEL` from the linked `lib/sdk-cli.js`) �
 the same path the `sdk-update` push takes (`sdkLink.pushEventToView`, IPC
 `sdk-link-open-settings`). An optional `key: '<configKey>'` asks the page to
 scroll to that card. A page still loading gets the event on `did-finish-load`.
-The page's handler lives in the SDK; an SDK that predates it simply ignores
-the event and the button still lands on the Forge view.
+The page's handler lives in the SDK (`cfgOpenAt(key)` in 1.29.6 / public 1.0.3,
+the first release that has one): it switches the page to its Settings view,
+loads the card and scrolls to it — or to the row, focusing its input, when `key`
+is one of the card's config keys (`ueEditorCmd`, `gamePaks`, `retoc`, `project`,
+`jmap`, `gameMods`, `modStudio`; an unknown key lands on the card). An SDK that
+predates it (1.0.0 – 1.0.2) ignores the event and the button still lands on the
+Forge view.
 
 ## Settings keys
 
@@ -202,7 +267,7 @@ Five, in `data/manager-data.json`:
 | `sdkPath` | the linked SDK folder. `null` = no SDK, no Forge view. |
 | `sdkCliPath` | the checkout the SDK's CLI runs against. `null` = same as `sdkPath`. Separate so that pointing the panel at a second checkout — which a developer with more than one does — cannot tear down the link. |
 | `sdkShowCommand` | the SDK panel's "show CLI command" toggle. |
-| `sdkUpdate` | the update check's cached `{ info, at }`, so the 60-minute TTL survives a restart. |
+| `sdkUpdate` | the update check's cached `{ info, at }`, so the 60-minute TTL survives a restart. Dropped on link when its `info.installed` is not the linked SDK's installed version, so linking another SDK — or unzipping a newer one over the old folder — never shows the previous tree's version for up to an hour. |
 | `sdkAssetLinks` | `{ sdk: { url, updateUrl }, at }` — the last `sdk` block the asset file ever carried, written every time a fetch yields one. It is what an **offline** Mod Command shows a Get button from. Never a default, only a memory: a fresh install that has never reached the network shows the dim line instead. |
 
 `sdkShowCommand` and `sdkUpdate` are the **SDK's** settings. They live here only
@@ -314,9 +379,11 @@ it, and `--dry-run` prints the body it would PUT and sends nothing.
 **The ◆ Forge nav item is always in the rail.** With no SDK linked it is
 *dimmed* and opens the "Get the SDK" view — one paragraph on what the SDK is, a
 table of what it needs on the machine (UE 5.6.x, MSVC + Windows SDK 10.0.26100,
-.NET 4.8.1 Developer Pack, retoc, Node, Python 3.8+, the game), the one **Get**
-button above, and **Point Mod Command at an installed SDK**, which jumps to the
-◆ SDK card in Settings. Once an SDK is linked the same item stops being dim and
+.NET 4.8.1 Developer Pack, retoc, Node.js 22.12 or newer, Python 3.8+, the game),
+the one **Get** button above, a line saying the SDK is not open source (all
+rights reserved; the mods you make with it are yours; see its LICENSE), and
+**Point Mod Command at an installed SDK**, which jumps to the ◆ SDK card in
+Settings. Once an SDK is linked the same item stops being dim and
 is the live Forge. A modder who has never heard of the SDK has to be able to
 find out it exists; hiding the entry was the wrong answer.
 

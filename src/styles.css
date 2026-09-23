@@ -1016,6 +1016,8 @@ body.reduced-motion * { transition: none !important; animation: none !important;
 .setting-value.warn { color: var(--amber); }
 .ext-link { color: var(--holo); text-decoration: none; }
 .ext-link:hover { text-decoration: underline; }
+#link-sdk-whatsnew { font-size: 12px; align-self: flex-start; margin-top: 2px; }
+#pitch-license { margin-top: 8px; }
 
 /* The ◆ Forge nav item is ALWAYS in the rail. Dimmed = no SDK linked, where
    it opens the pitch below instead of the panel. */

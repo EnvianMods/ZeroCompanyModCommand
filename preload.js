@@ -77,7 +77,7 @@ contextBridge.exposeInMainWorld('zc', {
   configRemoveCustom: (path) => invoke('config-remove-custom', { path }),
   configOpenFolder: (path) => invoke('config-open-folder', { path }),
   // ---- SDK LINK ----
-  // Eight channels ABOUT the link only. The SDK panel's own traffic never comes
+  // Nine channels ABOUT the link only. The SDK panel's own traffic never comes
   // through here: it runs in the hosted WebContentsView, over the SDK's own
   // preload and its own `sdk:<contract>:*` channels.
   sdkLink: {
@@ -89,6 +89,7 @@ contextBridge.exposeInMainWorld('zc', {
     checkUpdate: (opts) => invoke('sdk-link-check-update', opts || {}),
     devTools: () => invoke('sdk-link-devtools'),
     openSettings: (opts) => invoke('sdk-link-open-settings', opts || {}),
+    openChangelog: () => invoke('sdk-link-open-changelog'),
   },
   onEvent: (cb) => ipcRenderer.on('zc-event', (_e, payload) => cb(payload)),
   pathForFile: (file) => {

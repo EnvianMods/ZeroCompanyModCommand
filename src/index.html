@@ -396,6 +396,8 @@
                 <span class="setting-name">Zero Company Mod SDK <span class="dim">(the modder's toolkit &mdash; scaffold, check, build &amp; deploy)</span></span>
                 <span id="set-sdk-path" class="setting-value mono">No SDK linked</span>
                 <span id="set-sdk-note" class="setting-value dim">&mdash;</span>
+                <!-- Linked only: the SDK's own changelog, opened with the host's openPath. -->
+                <a href="#" class="ext-link hidden" id="link-sdk-whatsnew" title="Open the linked SDK's docs/CHANGELOG.md">What's new in the SDK &#8599;</a>
               </div>
               <div class="setting-actions">
                 <button class="btn ghost tiny hidden" id="btn-goto-forge">Open Forge</button>
@@ -463,7 +465,9 @@
               the game's own reflected data before you build, cooks it through Unreal, and deploys it into the game
               &mdash; each step a button, with the real build log in front of you. It is a separate download on its own
               release cadence. Install it, point Mod Command at it here, and this view becomes the SDK's own workbench
-              inside this window.</p>
+              inside this window. The workbench walks you through it: a guided first mod, a build stepper that
+              explains failures, an editor for your mod's definition, an asset drop zone, and test / conflicts /
+              publish pages &mdash; all inside this Forge view.</p>
             </div>
           </div>
 
@@ -476,7 +480,7 @@
                 <div class="pitch-row"><span class="mono">MSVC (VS Build Tools) + Windows SDK 10.0.26100</span><span>Compiles the SDK's UE project.</span></div>
                 <div class="pitch-row"><span class="mono">.NET Framework 4.8.1 Developer Pack</span><span>The NetFxSDK Unreal's build tool needs &mdash; the one prerequisite that is easy to miss.</span></div>
                 <div class="pitch-row"><span class="mono">retoc 0.1.5</span><span>Pak/IoStore conversion. <em>Mod Command already bundles it</em> &mdash; see Settings.</span></div>
-                <div class="pitch-row"><span class="mono">Node.js on PATH</span><span>Runs <span class="mono">zcmod-build.js</span>, the build driver.</span></div>
+                <div class="pitch-row"><span class="mono">Node.js 22.12 or newer on PATH</span><span>Runs <span class="mono">zcmod-build.js</span>, the build driver.</span></div>
                 <div class="pitch-row"><span class="mono">Python 3.8+ on PATH</span><span>Runs the gates, the localisation pass and <span class="mono">doctor.py</span>.</span></div>
                 <div class="pitch-row"><span class="mono">STAR WARS: Zero Company</span><span>Installed, for the reflection data and for deploying what you build.</span></div>
               </div>
@@ -495,6 +499,7 @@
                 <button class="btn ghost" id="btn-pitch-point">Point Mod Command at an installed SDK</button>
               </div>
               <p class="dim settings-note hidden" id="pitch-get-none">The download link could not be fetched &mdash; check your connection and try again.</p>
+              <p class="dim settings-note" id="pitch-license">The SDK is not open source (all rights reserved; use it to make mods, which are yours; see its LICENSE).</p>
             </div>
           </div>
         </div>

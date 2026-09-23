@@ -2203,7 +2203,7 @@ handlers['save-support-report'] = async () => {
 };
 
 // ----------------------------------------------------------- SDK LINK
-// Six small channels, all of them ABOUT the link. Everything the SDK panel
+// Nine small channels, all of them ABOUT the link. Everything the SDK panel
 // itself does travels on the SDK's own `sdk:<contract>:*` channels, which
 // lib/sdk-link.js registers out of the linked folder — this host does not
 // know or care what they are.
@@ -2253,6 +2253,14 @@ handlers['sdk-link-devtools'] = async () => sdkLink.openDevTools();
 handlers['sdk-link-open-settings'] = async (_e, { key } = {}) => {
   sdkLinkEnsure();
   return sdkLink.openSettings(key);
+};
+
+// The ◆ SDK card's "What's new in the SDK": the linked SDK's own
+// docs/CHANGELOG.md through the host's openPath. No path crosses the IPC —
+// lib/sdk-link.js resolves it inside the linked tree.
+handlers['sdk-link-open-changelog'] = async () => {
+  sdkLinkEnsure();
+  return sdkLink.openChangelog();
 };
 
 // The SDK's update check, for the host's own badge and Settings line.

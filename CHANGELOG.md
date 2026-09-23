@@ -21,7 +21,7 @@
 - With **no SDK linked**, ◆ Forge is still in the rail, dimmed. It opens a
   page that explains what the SDK is, what it needs on your machine (Unreal
   Engine 5.6.x, MSVC + the Windows SDK, the .NET 4.8.1 Developer Pack, retoc —
-  which Mod Command already bundles — Node, Python, and the game), and one
+  which Mod Command already bundles — Node.js 22.12 or newer, Python, and the game), and one
   **Get** button, plus "point Mod Command at a folder you already have". Mod
   Command hard-codes **no download address** for the SDK: the address is
   published alongside Mod Command's own update announcement and read at
@@ -42,6 +42,17 @@
   jumps straight to the Forge view's Settings. **Detect** now also finds an
   SDK you have already opened in the SDK's own workbench — it reads where
   the workbench last pointed.
+- Current with the SDK's 1.0.3 workbench. Inside ◆ Forge the SDK now walks a
+  first-time modder through a guided first mod, shows a build stepper that
+  explains failures, and adds an editor for the mod's definition, an asset
+  drop zone (type or drop a file's path — this window offers no file picker),
+  and Test / Conflicts / Publish pages; **Paths & dependencies…** now lands
+  directly on the SDK's Settings card (or on one row). The ◆ SDK card shows
+  the installed SDK version and its public name (for example 1.29.6 — public
+  1.0.3) and a **What's new in the SDK** link that opens the SDK's own
+  changelog. The Get-the-SDK page now asks for Node.js 22.12 or newer and
+  says plainly that the SDK is not open source (all rights reserved; the mods
+  you make with it are yours).
 - A word on trust: linking an SDK runs that SDK's build tooling from the
   folder you chose, with the same privileges as running its build script
   yourself. Link only a folder you downloaded from the SDK's own release pages.

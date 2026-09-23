@@ -3581,7 +3581,7 @@ refreshState().then(() => {
 // process either: the operator publishes it in the asset repo's
 // launcher-version.json and it arrives on status().links as
 // { sdk: { url, updateUrl } | null, source }. No url = no button.
-const sdkLink = { status: null, links: { sdk: null, source: 'none' } };
+const sdkLink = { status: null, links: { sdk: null, source: 'none' }, update: null };
 
 // The Get control's label is written from where the url ACTUALLY points, never
 // from a constant or from anything the file claims — so it cannot say Nexus and
@@ -3658,13 +3658,11 @@ function sdkLinkRender() {
   $('#btn-unlink-sdk').classList.toggle('hidden', !s.sdkPath);
   helpEl.classList.toggle('hidden', !!s.linked);
 
+  $('#link-sdk-whatsnew').classList.toggle('hidden', !(s.linked && s.hasChangelog));
   if (s.linked) {
-    const m = s.manifest || {};
     pathEl.textContent = s.sdkPath;
     pathEl.className = 'setting-value mono';
-    const cli = s.cliPath && s.cliPath !== s.sdkPath ? ` · CLI runs against ${s.cliPath}` : '';
-    noteEl.textContent = `${m.name || 'Mod SDK'} ${m.sdkUiVersion || 'dev'} · UI contract ${m.contract} · needs Mod Command ${m.minModCommand}+ (this is ${s.hostVersion})${cli}`;
-    noteEl.className = 'setting-value dim';
+    sdkNoteRender();
   } else if (s.error) {
     pathEl.textContent = s.sdkPath || 'No SDK linked';
     pathEl.className = 'setting-value mono';
@@ -3684,6 +3682,35 @@ function sdkLinkRender() {
   sdkLinkSync();
 }
 
+// The linked card's one-line identity: the INSTALLED SDK (tools/version.json,
+// from status().installed, falling back to the update answer's `installed`)
+// with its public name when the update answer knows it, then the workbench
+// manifest's own sdkUiVersion (display only — it is not the SDK's version and
+// can lag it), the contract and the Mod Command floor.
+//   current  -> "1.29.6 (public 1.0.3)"
+//   update   -> "1.29.6 (newest public 1.0.4)"
+function sdkVersionLabel(s, info) {
+  const installed = (s && s.installed) || (info && info.installed) || null;
+  if (!installed) return '(version unknown)';
+  let pub = '';
+  if (info && info.publicVersion && (!info.installed || info.installed === installed)) {
+    if (info.state === 'current') pub = ` (public ${info.publicVersion})`;
+    else if (info.state === 'update') pub = ` (newest public ${info.publicVersion})`;
+  }
+  return `${installed}${pub}`;
+}
+
+function sdkNoteRender() {
+  const s = sdkLink.status;
+  if (!s || !s.linked) return;
+  const m = s.manifest || {};
+  const info = sdkLink.update || s.update || null;
+  const cli = s.cliPath && s.cliPath !== s.sdkPath ? ` · CLI runs against ${s.cliPath}` : '';
+  const noteEl = $('#set-sdk-note');
+  noteEl.textContent = `${m.name || 'Mod SDK'} ${sdkVersionLabel(s, info)} · workbench UI ${m.sdkUiVersion || 'dev'} · UI contract ${m.contract} · needs Mod Command ${m.minModCommand}+ (this is ${s.hostVersion})${cli}`;
+  noteEl.className = 'setting-value dim';
+}
+
 // ---- the SDK's own update file ----------------------------------------
 // Four states and only one of them is loud. `unknown` covers offline and
 // not-yet-published alike and NEVER becomes a toast — same rule as the
@@ -3696,6 +3723,8 @@ function sdkUpdateRender(info) {
   const get = $('#btn-sdk-update-get');
   const badge = $('#nav-forge-badge');
   if (!line) return;
+  sdkLink.update = info || null;
+  sdkNoteRender();
   sdkUpdateUrl = (info && info.url) || null;
   const installed = (info && info.installed) || 'unknown';
   let cls = 'dim';
@@ -3780,6 +3809,16 @@ function sdkGetOpen() {
 }
 
 $('#link-sdk-get').addEventListener('click', (e) => { e.preventDefault(); sdkGetOpen(); });
+
+// "What's new in the SDK": the linked SDK's own docs/CHANGELOG.md, through the
+// host's openPath (main resolves the path inside the linked tree).
+$('#link-sdk-whatsnew').addEventListener('click', async (e) => {
+  e.preventDefault();
+  if (!window.zc.sdkLink || !window.zc.sdkLink.openChangelog) return;
+  const res = await window.zc.sdkLink.openChangelog().catch(() => null);
+  const d = res && res.ok ? res.data : null;
+  if (!d || !d.opened) toast((d && d.error) || (res && res.error) || 'Could not open the SDK changelog.', 'error', 6000);
+});
 
 // ---- the Get-the-SDK view's two buttons ----
 $('#btn-pitch-get').addEventListener('click', sdkGetOpen);

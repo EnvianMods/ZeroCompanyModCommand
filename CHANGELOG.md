@@ -1,5 +1,43 @@
 # Zero Company Mod Command — Changelog
 
+## v1.9.16 (unreleased)
+
+**Uninstaller fixes**
+- **Mod Command kept in the game folder is now removed.** If
+  `ZeroCompanyModCommand.exe` sits in the game folder itself, the uninstaller
+  used to refuse to delete it (and its README, changelog and old data folders)
+  while still deleting itself. Exactly those files next to the uninstaller are
+  now removed; everything else in the game folder, and every mod, still stays.
+- The uninstaller only deletes itself once `ZeroCompanyModCommand.exe` is
+  really gone. If the exe could not be removed it stays, and says so, so you
+  can run it again.
+- An nxm:// registration for a program whose name merely *starts* with
+  `ZeroCompanyModCommand.exe` (say `ZeroCompanyModCommand.exe.bak.exe`) is no
+  longer mistaken for Mod Command's and is left alone.
+- Run from a developer's build folder (electron-builder's `release\`), the
+  uninstaller no longer offers the README, changelog or old data folders there.
+- Test mode (the `/appdata:` `/temp:` `/game:` `/regroot:` switches) no longer
+  follows a game or archive folder named in the settings file — a new
+  `/storage:` switch stands in for a custom archive folder — and an empty
+  `/regroot:` is refused instead of meaning the real nxm:// registration.
+- The README's Uninstalling section now lists the retoc download folders, the
+  pre-1.9.0 archive and data folders, and what happens to an archive folder of
+  your own.
+
+**Nexus Mods**
+- File downloads from the Nexus CDN (`*.nexus-cdn.com`) now identify Mod
+  Command like every other request to Nexus and share the same two-at-a-time
+  limit. Downloads do not count against the Nexus API quota, so running the
+  API quota down can never block a download.
+- The version Mod Command reports to Nexus is now read from the app's own
+  version, so it can no longer fall out of step after an update.
+
+**Get the Zero Company Mod SDK**
+- The Get button only appears for an address Mod Command will actually open,
+  and it names Nexus or GitHub only for the exact sites it can open. An address
+  anywhere else is ignored, and the page shows its usual "the download link could
+  not be fetched" line instead of a button that does nothing.
+
 ## v1.9.15 (2026-09-27)
 
 **Uninstaller: remove Mod Command, keep your mods**

@@ -80,16 +80,39 @@ async function retoc() {
   log('retoc: ok');
 }
 
+// Re-downloaded whenever latest.json names a different version than the one
+// recorded in zcsdk-runtime.json; an unreachable latest.json keeps the copy
+// already in tools/.
 async function zcsdkRuntime() {
   const zip = path.join(TOOLS, 'ZCSDKRuntime.zip');
-  if (fs.existsSync(zip)) return log('ZCSDK Runtime: already present');
+  const info = path.join(TOOLS, 'zcsdk-runtime.json');
+  let have = null;
+  if (fs.existsSync(zip)) {
+    try { have = JSON.parse(fs.readFileSync(info, 'utf8')).version || null; } catch (_) {}
+  }
   log('ZCSDK Runtime: reading latest.json…');
-  const j = await fetch(ZCSDK_LATEST, { headers: { 'User-Agent': 'zero-company-mod-command-build' } }).then((r) => r.json());
-  if (!j || !j.version || !/^https:\/\/github\.com\/EnvianMods\/ZCSDK-Runtime-Release\/releases\/download\/.+\.zip$/i.test(j.url || '')) throw new Error('unexpected latest.json');
-  await download(j.url, zip);
-  fs.writeFileSync(path.join(TOOLS, 'zcsdk-runtime.json'), JSON.stringify({
+  let j;
+  try {
+    const res = await fetch(ZCSDK_LATEST, { headers: { 'User-Agent': 'zero-company-mod-command-build' } });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    j = await res.json();
+    if (!j || !j.version || !/^https:\/\/github\.com\/EnvianMods\/ZCSDK-Runtime-Release\/releases\/download\/.+\.zip$/i.test(j.url || '')) throw new Error('unexpected latest.json');
+  } catch (e) {
+    if (fs.existsSync(zip)) return log(`ZCSDK Runtime: kept the copy in tools/ (${have || 'unknown version'}); latest.json unreadable: ${e.message}`);
+    throw e;
+  }
+  if (have && have === String(j.version)) return log(`ZCSDK Runtime: already present (${have})`);
+  log(`ZCSDK Runtime: downloading ${j.version}${have ? ` (replacing ${have})` : ''}…`);
+  const part = zip + '.part';
+  try {
+    await download(j.url, part);
+    fs.renameSync(part, zip);
+  } finally {
+    fs.rmSync(part, { force: true });
+  }
+  fs.writeFileSync(info, JSON.stringify({
     version: j.version, bridge: j.bridge || null, loader: j.loader || null, file: 'ZCSDKRuntime.zip',
-    source: `EnvianMods/ZCSDK-Runtime-Release ${j.version} (fetched by build/fetch-tools.js)`,
+    source: `EnvianMods/ZCSDK-Runtime-Release v${j.version} asset ${j.asset || path.basename(j.url)} (offline fallback, fetched by build/fetch-tools.js; the app installs the newest release from that repo when online)`,
   }, null, 2) + '\n');
   log(`ZCSDK Runtime: ok (${j.version})`);
 }

@@ -44,6 +44,8 @@
 - The license texts of the bundled tools (7-Zip, retoc) and a source note for
   the ZCSDK Runtime now ship in `resources\tools\licenses`, and the README
   lists each bundled tool with its version, source and license.
+- The offline copy of the ZCSDK Runtime that ships with Mod Command is now
+  v0.10 (was v0.5). Online, the newest release from GitHub is still installed.
 
 ## v1.9.15 (2026-09-27)
 

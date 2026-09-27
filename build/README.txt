@@ -77,7 +77,7 @@ app's resources\tools folder. None of it is part of the app's own source code.
 - 7-Zip 25.01 (x64) command-line build (7z.exe, 7z.dll) from
   https://www.7-zip.org - archive extraction. License: LGPL + unRAR restriction
   (see tools\7-Zip\License.txt).
-- retoc 0.1.5 (retoc.exe, with the oo2core_9_win64.dll it ships with) from
+- retoc 0.1.5 (retoc.exe only; the Oodle dll is not bundled) from
   https://github.com/trumank/retoc - reads IoStore containers for conflict
   detection.
 - ZCSDK Runtime (ZCSDKRuntime.zip, offline copy) from

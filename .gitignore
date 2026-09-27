@@ -19,3 +19,6 @@ token.txt
 # Internal working notes - lives in the archive repo at docs/HANDOFF.md, never published
 HANDOFF*.md
 *.lnk
+
+# Epic/RAD's Oodle dll is not ours to redistribute - never bundle it
+tools/oo2core*.dll

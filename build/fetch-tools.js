@@ -7,7 +7,6 @@
 //   tools/7-Zip/7z.exe + 7z.dll  — .7z/.rar mod archives (7-Zip 25.01, LGPL)
 //   tools/retoc.exe              — lists files inside pak/iostore mods (retoc 0.1.5)
 //   tools/ZCSDKRuntime.zip       — offline copy of the newest ZCSDK Runtime
-//   tools/oo2core_9_win64.dll    — copied from the game folder when present
 // Windows only; on other platforms it exits without doing anything.
 
 const fs = require('fs');
@@ -79,25 +78,11 @@ async function zcsdkRuntime() {
   log(`ZCSDK Runtime: ok (${j.version})`);
 }
 
-function oodle() {
-  const dest = path.join(TOOLS, 'oo2core_9_win64.dll');
-  if (fs.existsSync(dest)) return;
-  const rel = path.join('SWZeroCompany', 'Binaries', 'Win64', 'oo2core_9_win64.dll');
-  const roots = [
-    process.env['ProgramFiles(x86)'] ? path.join(process.env['ProgramFiles(x86)'], 'Steam', 'steamapps', 'common', 'Star Wars Zero Company') : null,
-    ...'CDEFGH'.split('').flatMap((d) => [`${d}:\\SteamLibrary\\steamapps\\common\\Star Wars Zero Company`, `${d}:\\Games\\steamapps\\common\\Star Wars Zero Company`]),
-  ].filter(Boolean);
-  for (const root of roots) {
-    const p = path.join(root, rel);
-    if (fs.existsSync(p)) { fs.copyFileSync(p, dest); return log('Oodle dll: copied from the game folder'); }
-  }
-}
-
 (async () => {
   if (process.platform !== 'win32') { console.log('fetch-tools: Windows only, nothing to do.'); return; }
   fs.mkdirSync(TOOLS, { recursive: true });
   console.log('Fetching the bundled tools that are not shipped in the source package…');
-  for (const [name, step] of [['7-Zip', sevenZip], ['retoc', retoc], ['ZCSDK Runtime', zcsdkRuntime], ['Oodle', oodle]]) {
+  for (const [name, step] of [['7-Zip', sevenZip], ['retoc', retoc], ['ZCSDK Runtime', zcsdkRuntime]]) {
     try { await step(); } catch (e) { log(`${name}: skipped (${e.message}) — the app still works without it`); }
   }
 })();

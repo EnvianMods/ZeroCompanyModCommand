@@ -250,10 +250,9 @@ automatically for IoStore package inspection; a different copy can be selected i
   "Update to …" on the card and a once-per-build toast.
 - **retoc update check** — Settings → retoc compares the installed
   `retoc --version` with the newest GitHub release (trumank/retoc, Windows zip
-  asset) and installs it into `<dataDir>/tools/retoc.exe` (+ the bundled Oodle
-  dll), which `retocPath()` prefers over the copy bundled in `tools/`
-  (`settings.retocInstalled`). Reported at startup, in the update check and in
-  Diagnostics.
+  asset) and installs it into `<dataDir>/tools/retoc.exe`, which `retocPath()`
+  prefers over the copy bundled in `tools/` (`settings.retocInstalled`).
+  Reported at startup, in the update check and in Diagnostics.
 - **ZCSDK Runtime one-click install** — Settings → ZCSDK Runtime installs the two
   UE4SS mods (ZCSDKBridge + ZCSDKLoader) that SDK-built content mods need. The SDK
   publishes every runtime build to `github.com/EnvianMods/ZCSDK-Runtime-Release`
@@ -472,7 +471,7 @@ build time (the CI workflow and `npm run build` both run it):
 | Component | Version | Source | Purpose |
 |---|---|---|---|
 | 7-Zip command-line build (`7z.exe`, `7z.dll`) | 25.01 x64 | https://www.7-zip.org (official MSI, unpacked) | `.7z`/`.rar` extraction; `tools/7-Zip/BUNDLED.txt` + `License.txt` record it |
-| retoc (`retoc.exe` + the `oo2core_9_win64.dll` it ships with) | 0.1.5 | https://github.com/trumank/retoc release asset | IoStore container listing for conflict detection |
+| retoc (`retoc.exe` only; the Oodle dll is not bundled) | 0.1.5 | https://github.com/trumank/retoc release asset | IoStore container listing for conflict detection |
 | ZCSDK Runtime (`ZCSDKRuntime.zip`, `zcsdk-runtime.json`) | per `latest.json` | https://github.com/EnvianMods/ZCSDK-Runtime-Release | offline copy of the UE4SS-based runtime for SDK content mods |
 | `elevate.exe` | — | electron-builder's portable stub | added by the packager, not by this project |
 

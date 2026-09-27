@@ -38,6 +38,10 @@
   anywhere else is ignored, and the page shows its usual "the download link could
   not be fetched" line instead of a button that does nothing.
 
+**Bundled tools**
+- The Oodle DLL (`oo2core_9_win64.dll`) is no longer bundled with retoc.
+  Conflict detection is unaffected: listing a mod's containers does not need it.
+
 ## v1.9.15 (2026-09-27)
 
 **Uninstaller: remove Mod Command, keep your mods**

@@ -1,0 +1,5 @@
+ZCSDK Runtime (ZCSDKBridge + ZCSDKLoader), offline copy in ZCSDKRuntime.zip
+(version recorded in zcsdk-runtime.json).
+Source: https://github.com/EnvianMods/ZCSDK-Runtime-Release
+By EnvianMods, the author of Zero Company Mod Command. The release does not
+publish a separate license file.

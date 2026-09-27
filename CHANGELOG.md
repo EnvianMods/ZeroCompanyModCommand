@@ -1,8 +1,6 @@
 # Zero Company Mod Command — Changelog
 
-## v1.9.15 (2026-09-27)
-
-Proposed public 1.0.10.
+## v1.9.17 (unreleased)
 
 **UE4SS comes from one place now — and stays up to date**
 - Mod Command installs, updates and repairs exactly one UE4SS: **"UE4SS for
@@ -70,6 +68,70 @@ Proposed public 1.0.10.
   free-account notice.
 - Restoring the oldest kept build no longer removes it from ⧗ Versions before
   it is put back.
+
+## v1.9.16 (2026-09-27)
+
+Ships together with v1.9.15 below as public 1.0.10.
+
+**Uninstaller fixes**
+- **Mod Command kept in the game folder is now removed.** If
+  `ZeroCompanyModCommand.exe` sits in the game folder itself, the uninstaller
+  used to refuse to delete it (and its README, changelog and old data folders)
+  while still deleting itself. Exactly those files next to the uninstaller are
+  now removed; everything else in the game folder, and every mod, still stays.
+- The uninstaller only deletes itself once `ZeroCompanyModCommand.exe` is
+  really gone. If the exe could not be removed it stays, and says so, so you
+  can run it again.
+- An nxm:// registration for a program whose name merely *starts* with
+  `ZeroCompanyModCommand.exe` (say `ZeroCompanyModCommand.exe.bak.exe`) is no
+  longer mistaken for Mod Command's and is left alone.
+- Run from a developer's build folder (electron-builder's `release\`), the
+  uninstaller no longer offers the README, changelog or old data folders there.
+- Test mode (the `/appdata:` `/temp:` `/game:` `/regroot:` switches) no longer
+  follows a game or archive folder named in the settings file — a new
+  `/storage:` switch stands in for a custom archive folder — and an empty
+  `/regroot:` is refused instead of meaning the real nxm:// registration.
+- The README's Uninstalling section now lists the retoc download folders, the
+  pre-1.9.0 archive and data folders, and what happens to an archive folder of
+  your own.
+
+**Nexus Mods**
+- File downloads from the Nexus CDN (`*.nexus-cdn.com`) now identify Mod
+  Command like every other request to Nexus and share the same two-at-a-time
+  limit. Downloads do not count against the Nexus API quota, so running the
+  API quota down can never block a download.
+- The version Mod Command reports to Nexus is now read from the app's own
+  version, so it can no longer fall out of step after an update.
+
+**Get the Zero Company Mod SDK**
+- The Get button only appears for an address Mod Command will actually open,
+  and it names Nexus or GitHub only for the exact sites it can open. An address
+  anywhere else is ignored, and the page shows its usual "the download link could
+  not be fetched" line instead of a button that does nothing.
+
+**Bundled tools**
+- The Oodle DLL (`oo2core_9_win64.dll`) is no longer bundled with retoc.
+  Conflict detection is unaffected: listing a mod's containers does not need it.
+- The license texts of the bundled tools (7-Zip, retoc) and a source note for
+  the ZCSDK Runtime now ship in `resources\tools\licenses`, and the README
+  lists each bundled tool with its version, source and license.
+- The offline copy of the ZCSDK Runtime that ships with Mod Command is now
+  v0.10 (was v0.5). Online, the newest release from GitHub is still installed.
+
+## v1.9.15 (2026-09-27)
+
+**Uninstaller: remove Mod Command, keep your mods**
+- The download now includes **ZeroCompanyModCommand-Uninstall.exe**. Close Mod
+  Command and run it: it shows everything Mod Command put on this PC — its
+  settings and caches in %APPDATA%, the temporary unpack folder, the mod archive
+  (library copies, backups, archived versions), the Steam update freeze, the
+  nxm:// link registration and the app exe itself — and removes what you tick.
+- **Your installed mods are not touched**: everything in `~mods`, `LogicMods`,
+  `Binaries\Win64\ue4ss`, `SWZeroCompany\Mods` and any game file a mod replaced
+  stays in place and keeps working. Untick the archive to keep it for a later
+  reinstall; an nxm:// registration that belongs to another mod manager is left
+  alone. No admin rights needed; `/silent`, `/keep-archive` and `/dry-run` work
+  from the command line.
 
 ## v1.9.14 (2026-09-23)
 

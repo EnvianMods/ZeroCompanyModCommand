@@ -3710,13 +3710,13 @@ const sdkLink = { status: null, links: { sdk: null, source: 'none' }, update: nu
 
 // The Get control's label is written from where the url ACTUALLY points, never
 // from a constant or from anything the file claims — so it cannot say Nexus and
-// open GitHub. Unknown host: no claim at all, just the external-link arrow.
+// open GitHub. Main only passes a url on here if it can open it, and the
+// pattern below is lib/external-url.js's own list cut down to those two sites,
+// so a label is never written for a url that could not open. Anything else:
+// no claim at all, just the external-link arrow.
 function sdkGetLabels(url) {
-  let host = '';
-  try { host = new URL(url).hostname.replace(/^www\./i, '').toLowerCase(); } catch (_) {}
-  const where = (host === 'nexusmods.com' || host.endsWith('.nexusmods.com')) ? ' on Nexus'
-    : (host === 'github.com' || host.endsWith('.github.com')) ? ' on GitHub'
-      : '';
+  const site = /^https:\/\/(?:www\.|next\.)?(nexusmods\.com|github\.com)\//.exec(String(url || ''));
+  const where = !site ? '' : site[1] === 'nexusmods.com' ? ' on Nexus' : ' on GitHub';
   return {
     button: `⇓ Get the Zero Company Mod SDK${where || ' ↗'}`,
     link: `Get the Zero Company Mod SDK${where} ↗`,

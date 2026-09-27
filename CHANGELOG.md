@@ -1,5 +1,20 @@
 # Zero Company Mod Command — Changelog
 
+## Unreleased
+
+**Uninstaller: remove Mod Command, keep your mods**
+- The download now includes **ZeroCompanyModCommand-Uninstall.exe**. Close Mod
+  Command and run it: it shows everything Mod Command put on this PC — its
+  settings and caches in %APPDATA%, the temporary unpack folder, the mod archive
+  (library copies, backups, archived versions), the Steam update freeze, the
+  nxm:// link registration and the app exe itself — and removes what you tick.
+- **Your installed mods are not touched**: everything in `~mods`, `LogicMods`,
+  `Binaries\Win64\ue4ss`, `SWZeroCompany\Mods` and any game file a mod replaced
+  stays in place and keeps working. Untick the archive to keep it for a later
+  reinstall; an nxm:// registration that belongs to another mod manager is left
+  alone. No admin rights needed; `/silent`, `/keep-archive` and `/dry-run` work
+  from the command line.
+
 ## v1.9.14 (2026-09-23)
 
 Ships together with v1.9.13 below as public 1.0.9.

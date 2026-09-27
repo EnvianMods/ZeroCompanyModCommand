@@ -117,6 +117,11 @@ Ships together with v1.9.15 below as public 1.0.10.
   lists each bundled tool with its version, source and license.
 - The offline copy of the ZCSDK Runtime that ships with Mod Command is now
   v0.10 (was v0.5). Online, the newest release from GitHub is still installed.
+- Installing or updating the ZCSDK Runtime (v0.10 and later) now also puts its
+  UE4SS signature files in `ue4ss\UE4SS_Signatures`; they used to be left out.
+  Removing the runtime removes only those files: your own signature files stay,
+  and one of yours that shared a name is put back. If your runtime was installed
+  without them, Settings → ZCSDK Runtime offers the update.
 
 ## v1.9.15 (2026-09-27)
 

@@ -2175,8 +2175,9 @@ const handlers = {
     }
     store.settings.zcsdkNoticedVersion = version || null;
     store.save();
-    log('info', `ZCSDK Runtime ${version || ''} installed from ${source} (${res.replaced} previous cop${res.replaced === 1 ? 'y' : 'ies'} replaced)`);
-    return { state: fullState(), version, source, replaced: res.replaced };
+    const sigs = (res.signatures || []).length;
+    log('info', `ZCSDK Runtime ${version || ''} installed from ${source} (${res.replaced} previous cop${res.replaced === 1 ? 'y' : 'ies'} replaced${sigs ? `; ${sigs} UE4SS signature file${sigs === 1 ? '' : 's'} in ue4ss\\UE4SS_Signatures` : ''})`);
+    return { state: fullState(), version, source, replaced: res.replaced, signatures: sigs };
   },
 
   // Settings → retoc: check GitHub now / install the newest release into

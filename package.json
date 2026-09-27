@@ -37,7 +37,13 @@
     "extraResources": [
       {
         "from": "tools",
-        "to": "tools"
+        "to": "tools",
+        "filter": [
+          "**/*",
+          "!**/oo2core*.dll",
+          "!**/*.log",
+          "!**/*.{pak,utoc,ucas}"
+        ]
       }
     ],
     "win": {

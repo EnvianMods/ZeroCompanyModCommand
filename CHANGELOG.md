@@ -1,6 +1,8 @@
 # Zero Company Mod Command — Changelog
 
-## v1.9.16 (unreleased)
+## v1.9.16 (2026-09-27)
+
+Ships together with v1.9.15 below as public 1.0.10.
 
 **Uninstaller fixes**
 - **Mod Command kept in the game folder is now removed.** If

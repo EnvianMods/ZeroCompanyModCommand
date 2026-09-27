@@ -1,6 +1,6 @@
 # Zero Company Mod Command — Changelog
 
-## Unreleased
+## v1.9.15 (2026-09-27)
 
 **Uninstaller: remove Mod Command, keep your mods**
 - The download now includes **ZeroCompanyModCommand-Uninstall.exe**. Close Mod

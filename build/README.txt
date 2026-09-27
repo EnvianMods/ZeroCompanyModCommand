@@ -1,4 +1,4 @@
-ZERO COMPANY MOD COMMAND v1.0.9
+ZERO COMPANY MOD COMMAND v1.0.10
 A dedicated mod manager & launcher for STAR WARS: Zero Company
 by Envian Mods
 

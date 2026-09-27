@@ -280,6 +280,14 @@ automatically for IoStore package inspection; a different copy can be selected i
     UE4SS.pdb / API.txt / Changelog.md / README.md). A package or restore that
     overwrites a non-runtime file of the same name (an SDK signature) keeps it
     in the snapshot first (`foreign` in vault.json), and a restore puts it back.
+    A signature the ZCSDK Runtime installer placed and still owns (listed in
+    `<data>\zcsdk-signatures.json`, unchanged since) is never overwritten by a
+    package or restore: the incoming copy is held in
+    `<data>\zcsdk-signatures-backup\` as the one put back when the runtime is
+    removed (a held copy the Mod SDK generated is never replaced; one a later
+    package no longer ships is dropped), snapshots keep a held copy with their
+    build, and those runtime signatures never count in the *stock*/*unknown*
+    signature check.
     Every replacement first snapshots the old runtime into
     `versions/ue4ss-runtime/` (5 kept; the entry being restored is never
     pruned), with its shipped list and shipped settings; restore removes only

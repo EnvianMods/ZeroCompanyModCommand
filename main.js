@@ -2229,7 +2229,9 @@ function spawnGameExe(detection) {
 const GAME_RUNNING_UE4SS = 'Close Star Wars Zero Company first — the running game has UE4SS loaded, so its files cannot be replaced until the game exits.';
 
 function ue4ssFingerprint() {
-  return ue4ssDl.fingerprint(store.settings.gamePath ? path.join(store.settings.gamePath, WIN64_REL) : null);
+  if (!store.settings.gamePath) return ue4ssDl.fingerprint(null);
+  // The ZCSDK Runtime's own signature files are no evidence of the UE4SS build.
+  return ue4ssDl.fingerprint(path.join(store.settings.gamePath, WIN64_REL), { ignoreSignatures: engine.zcsdkSignatureNames() });
 }
 
 // Which UE4SS is on disk: { origin: 'none'|'nexus'|'stock'|'unknown', switchable, label, reason, build }.

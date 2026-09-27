@@ -69,6 +69,21 @@
 - Restoring the oldest kept build no longer removes it from ⧗ Versions before
   it is put back.
 
+**ZCSDK Runtime: its UE4SS signatures**
+- Installing or updating the ZCSDK Runtime (v0.10 and later) now also puts its
+  UE4SS signature files in `ue4ss\UE4SS_Signatures`; they used to be left out.
+  Removing the runtime removes only those files: your own signature files stay,
+  and one of yours that shared a name is put back. If your runtime was installed
+  without them, Settings → ZCSDK Runtime offers the update.
+- UE4SS installs, updates, switches and restores leave the ZCSDK Runtime's
+  signature files in place. When the UE4SS package ships a signature with the
+  same name, its copy is kept aside and put back when you remove the runtime
+  (and dropped if a later UE4SS no longer ships it); a signature you generated
+  with the Mod SDK is never replaced. Kept builds in ⧗ Versions carry that
+  copy with them.
+- The runtime's signature files no longer make a stock UE4SS look like one
+  Mod Command cannot identify — it is still recognised as the stock build.
+
 ## v1.9.16 (2026-09-27)
 
 Ships together with v1.9.15 below as public 1.0.10.
@@ -117,11 +132,6 @@ Ships together with v1.9.15 below as public 1.0.10.
   lists each bundled tool with its version, source and license.
 - The offline copy of the ZCSDK Runtime that ships with Mod Command is now
   v0.10 (was v0.5). Online, the newest release from GitHub is still installed.
-- Installing or updating the ZCSDK Runtime (v0.10 and later) now also puts its
-  UE4SS signature files in `ue4ss\UE4SS_Signatures`; they used to be left out.
-  Removing the runtime removes only those files: your own signature files stay,
-  and one of yours that shared a name is put back. If your runtime was installed
-  without them, Settings → ZCSDK Runtime offers the update.
 
 ## v1.9.15 (2026-09-27)
 

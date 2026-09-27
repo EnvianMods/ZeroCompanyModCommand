@@ -46,15 +46,21 @@ the same zip as the app). It shows what it found and removes, one checkbox each:
 - the app's settings and caches: %APPDATA%\ZeroCompanyModCommand and
   %APPDATA%\Zero Company Mod Command (this signs you out of Nexus on this PC;
   you can also revoke the app's access in your Nexus account settings)
-- the temporary unpack folder %TEMP%\ZeroCompanyModCommand
+- the temporary unpack folder %TEMP%\ZeroCompanyModCommand, plus the
+  %TEMP%\zc-retoc and zc-retoc-x-* folders left by retoc updates
 - the mod archive, <game folder>\ModCommandArchive: the library copies of your
-  mods, the backups of game files that mods replaced, and archived versions.
+  mods, the backups of game files that mods replaced, and archived versions
+  (and ZeroCompanyModArchive, its name before v1.9.0, if one is still there).
+  If you moved the archive to a folder of your own in Settings, only Mod
+  Command's library, backups and versions folders and its copy of the settings
+  go from it - anything else of yours in that folder stays.
   Untick it to keep it: a later Mod Command install restores everything from it
 - the Steam update freeze on appmanifest_2075800.acf, if you froze updates
 - the nxm:// link registration, only while it still points at Mod Command
   (another mod manager's registration is left alone)
-- ZeroCompanyModCommand.exe with this README and the changelog next to it; the
-  uninstaller then deletes itself
+- ZeroCompanyModCommand.exe with this README, the changelog and any old
+  ZeroCompanyModCommand-data folders (data from before v1.9.0) next to it; once
+  the exe is gone the uninstaller deletes itself
 WHAT STAYS: every mod you installed. The paks in
 SWZeroCompany\Content\Paks\~mods and LogicMods, UE4SS and its mods in
 SWZeroCompany\Binaries\Win64\ue4ss, plugin mods in SWZeroCompany\Mods and any
@@ -68,16 +74,19 @@ THIRD-PARTY COMPONENTS SHIPPED WITH THE APP
 Everything below is downloaded unmodified from its official source by the
 build script (build/fetch-tools.js in the source repository) and placed in the
 app's resources\tools folder. None of it is part of the app's own source code.
+The full license texts are in resources\tools\licenses inside the app.
 - 7-Zip 25.01 (x64) command-line build (7z.exe, 7z.dll) from
-  https://www.7-zip.org - archive extraction. License: LGPL + unRAR restriction
-  (see tools\7-Zip\License.txt).
-- retoc 0.1.5 (retoc.exe, with the oo2core_9_win64.dll it ships with) from
-  https://github.com/trumank/retoc - reads IoStore containers for conflict
-  detection.
+  https://www.7-zip.org - archive extraction. License: GNU LGPL + unRAR
+  restriction, with BSD-licensed parts (licenses\7-Zip-License.txt, also
+  tools\7-Zip\License.txt).
+- retoc 0.1.5 (retoc.exe) from https://github.com/trumank/retoc - reads IoStore
+  containers for conflict detection. License: MIT (licenses\retoc-LICENSE.txt).
 - ZCSDK Runtime (ZCSDKRuntime.zip, offline copy) from
   https://github.com/EnvianMods/ZCSDK-Runtime-Release - the UE4SS-based runtime
   that Zero Company Mod SDK content mods need; the app installs the newest
-  release from that repository when online.
+  release from that repository when online. Made by the author of Mod Command;
+  the release has no separate license file (licenses\ZCSDK-Runtime.txt).
+The Oodle compression library (oo2core) is not bundled.
 - Electron (the application framework) and the npm package extract-zip, both
   declared in package.json.
 

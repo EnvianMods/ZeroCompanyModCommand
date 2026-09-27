@@ -250,10 +250,9 @@ automatically for IoStore package inspection; a different copy can be selected i
   "Update to …" on the card and a once-per-build toast.
 - **retoc update check** — Settings → retoc compares the installed
   `retoc --version` with the newest GitHub release (trumank/retoc, Windows zip
-  asset) and installs it into `<dataDir>/tools/retoc.exe` (+ the bundled Oodle
-  dll), which `retocPath()` prefers over the copy bundled in `tools/`
-  (`settings.retocInstalled`). Reported at startup, in the update check and in
-  Diagnostics.
+  asset) and installs it into `<dataDir>/tools/retoc.exe`, which `retocPath()`
+  prefers over the copy bundled in `tools/` (`settings.retocInstalled`).
+  Reported at startup, in the update check and in Diagnostics.
 - **ZCSDK Runtime one-click install** — Settings → ZCSDK Runtime installs the two
   UE4SS mods (ZCSDKBridge + ZCSDKLoader) that SDK-built content mods need. The SDK
   publishes every runtime build to `github.com/EnvianMods/ZCSDK-Runtime-Release`
@@ -469,12 +468,19 @@ dependency `extract-zip` declared in `package.json`. Beside the bundle,
 downloaded unmodified from their official sources by `build/fetch-tools.js` at
 build time (the CI workflow and `npm run build` both run it):
 
-| Component | Version | Source | Purpose |
-|---|---|---|---|
-| 7-Zip command-line build (`7z.exe`, `7z.dll`) | 25.01 x64 | https://www.7-zip.org (official MSI, unpacked) | `.7z`/`.rar` extraction; `tools/7-Zip/BUNDLED.txt` + `License.txt` record it |
-| retoc (`retoc.exe` + the `oo2core_9_win64.dll` it ships with) | 0.1.5 | https://github.com/trumank/retoc release asset | IoStore container listing for conflict detection |
-| ZCSDK Runtime (`ZCSDKRuntime.zip`, `zcsdk-runtime.json`) | per `latest.json` | https://github.com/EnvianMods/ZCSDK-Runtime-Release | offline copy of the UE4SS-based runtime for SDK content mods |
-| `elevate.exe` | — | electron-builder's portable stub | added by the packager, not by this project |
+| Component | Version | Source | License | Purpose |
+|---|---|---|---|---|
+| 7-Zip command-line build (`7z.exe`, `7z.dll`) | 25.01 x64 | https://www.7-zip.org (official MSI, unpacked) | GNU LGPL + unRAR restriction, BSD parts | `.7z`/`.rar` extraction; `tools/7-Zip/BUNDLED.txt` + `License.txt` record it |
+| retoc (`retoc.exe`) | 0.1.5 | https://github.com/trumank/retoc release asset | MIT | IoStore container listing for conflict detection |
+| ZCSDK Runtime (`ZCSDKRuntime.zip`, `zcsdk-runtime.json`) | per `latest.json` | https://github.com/EnvianMods/ZCSDK-Runtime-Release | this project's author; no separate license file | offline copy of the UE4SS-based runtime for SDK content mods |
+| `elevate.exe` | — | electron-builder's portable stub | — | added by the packager, not by this project |
+
+The full license texts ship in `tools/licenses/` (tracked here, and packaged as
+`resources\tools\licenses` inside the app): `7-Zip-License.txt`,
+`retoc-LICENSE.txt` and `ZCSDK-Runtime.txt`. `build/fetch-tools.js` refreshes
+them on every run (retoc's `LICENSE` comes out of its release zip, 7-Zip's is
+copied from `tools/7-Zip/License.txt`). The Oodle compression library
+(`oo2core`) is not bundled.
 
 To verify a shipped build against the source: unzip the release, run
 `npx @electron/asar extract resources/app.asar out` on the unpacked app and

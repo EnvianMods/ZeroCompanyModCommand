@@ -70,7 +70,8 @@ const configs = require('./lib/configs');
 const { getPromotedAuthors } = require('./lib/featured');
 const github = require('./lib/github');
 const ea = require('./lib/ea');
-const { checkLauncherUpdate, cachedInfo: cachedLauncherInfo } = require('./lib/launcher-update');
+const { checkLauncherUpdate, cachedInfo: cachedLauncherInfo, parseSdkBlock } = require('./lib/launcher-update');
+const { isAllowedExternalUrl } = require('./lib/external-url');
 const { log, logText } = require('./lib/log');
 const report = require('./lib/report');
 // SDK LINK: Mod Command hosts the Zero Company Mod SDK's OWN UI when one is
@@ -911,10 +912,11 @@ function getAssetLinks() {
     const live = cachedLauncherInfo();
     if (live && live.sdk) return { sdk: live.sdk, source: 'asset-file' };
   } catch (_) { /* fall through to the saved copy */ }
+  // The saved copy goes through the same parse as a fresh one, so a link an
+  // older build persisted is held to today's rules too.
   const saved = store.settings.sdkAssetLinks;
-  if (saved && saved.sdk && (saved.sdk.url || saved.sdk.updateUrl)) {
-    return { sdk: { url: saved.sdk.url || null, updateUrl: saved.sdk.updateUrl || null }, source: 'cache' };
-  }
+  const sdk = saved ? parseSdkBlock(saved.sdk) : null;
+  if (sdk) return { sdk, source: 'cache' };
   return { sdk: null, source: 'none' };
 }
 
@@ -1489,7 +1491,7 @@ const handlers = {
   },
 
   'open-external': async (_e, { url }) => {
-    if (!/^https:\/\/(www\.|next\.)?(nexusmods\.com|github\.com|discord\.gg)\//.test(url)) throw new Error('Blocked URL.');
+    if (!isAllowedExternalUrl(url)) throw new Error('Blocked URL.');
     await shell.openExternal(url);
     return true;
   },

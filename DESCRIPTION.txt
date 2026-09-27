@@ -93,8 +93,12 @@ Quality of life
   Input.ini, UE4SS-settings.ini and mod config files, with a structured
   key/value view that preserves comments and formatting, plus automatic
   first-save backups
-- UE4SS one-click install — downloads and installs the latest
-  experimental UE4SS runtime for Lua/DLL mod support
+- UE4SS one-click install, kept up to date — installs "UE4SS for Star
+  Wars Zero Company" from Nexus Mods (the UE4SS build made for this game),
+  never the stock GitHub build; spots a stock or unknown UE4SS and switches
+  it with one click, keeping your UE4SS mods, mods.txt and settings; checks
+  for a newer file hourly and updates it automatically while the game is
+  closed (can be turned off)
 - Diagnostics — full health scan: game detection, Steam build,
   deployed-file audit, tool availability, conflict report
 - Launch via Steam (overlay + cloud saves) or directly
@@ -143,7 +147,9 @@ CREDITS
 
 - Bundles retoc by trumank for IoStore container inspection
   (https://github.com/trumank/retoc)
-- UE4SS by the UE4SS team (https://github.com/UE4SS-RE/RE-UE4SS)
+- UE4SS by the UE4SS team (https://github.com/UE4SS-RE/RE-UE4SS),
+  installed as "UE4SS for Star Wars Zero Company" by Vercadi
+  (https://www.nexusmods.com/starwarszerocompany/mods/9)
 - Built with Electron
 
 =====================================================================

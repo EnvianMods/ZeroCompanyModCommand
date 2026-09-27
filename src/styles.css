@@ -1050,3 +1050,14 @@ body.reduced-motion * { transition: none !important; animation: none !important;
 .pitch-row > span:first-child { color: var(--holo); }
 .pitch-row.pitch-head > span:first-child { color: var(--holo-dim); }
 .pitch-row em { color: var(--amber); font-style: normal; }
+
+/* ---------- UE4SS: stock / unknown build notice + diagnostics fix button ---------- */
+.diag-row > div { flex: 1; min-width: 0; }
+.diag-row .diag-fix { flex-shrink: 0; align-self: center; white-space: nowrap; }
+.ue4ss-origin-notice {
+  display: flex; gap: 12px; align-items: center; justify-content: space-between;
+  margin: 8px 0 2px; padding: 8px 12px;
+  border: 1px solid var(--amber); background: rgba(255, 176, 32, 0.08);
+  font-size: 12px; color: var(--amber);
+}
+.ue4ss-origin-notice.hidden { display: none; }

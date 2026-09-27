@@ -27,7 +27,7 @@
         <!-- ALWAYS here. Dimmed with no SDK linked, where it opens the
              "Get the SDK" pitch instead of the panel. -->
         <button class="nav-item dim" data-view="forge" id="nav-forge"><span class="nav-glyph">◆</span> Forge <span id="nav-forge-badge" class="nav-badge warn" title="A newer Zero Company Mod SDK has been published"></span></button>
-        <button class="nav-item" data-view="settings"><span class="nav-glyph">⚙</span> Settings</button>
+        <button class="nav-item" data-view="settings"><span class="nav-glyph">⚙</span> Settings <span id="nav-ue4ss-badge" class="nav-badge warn"></span></button>
       </nav>
 
       <div class="sidebar-footer">
@@ -356,10 +356,23 @@
                 <span id="ue4ss-settings-status" class="setting-value">—</span>
               </div>
               <div class="setting-actions">
-                <button class="btn ghost" id="btn-ue4ss-versions" title="Pick any UE4SS release — for example an older build that matches a frozen game version">⧗ Versions</button>
+                <button class="btn ghost" id="btn-ue4ss-check" title="Re-read “UE4SS for Star Wars Zero Company” on Nexus now">Check now</button>
+                <button class="btn ghost" id="btn-ue4ss-versions" title="Every file of “UE4SS for Star Wars Zero Company” on Nexus, and the builds kept on this PC — for example an older one that matches a frozen game version">⧗ Versions</button>
                 <button class="btn" id="btn-install-ue4ss">Download &amp; install</button>
               </div>
             </div>
+            <div id="ue4ss-origin-notice" class="ue4ss-origin-notice hidden">
+              <span id="ue4ss-origin-text"></span>
+              <button class="btn tiny primary" id="btn-ue4ss-switch" title="Replaces UE4SS’s own files with “UE4SS for Star Wars Zero Company” from Nexus Mods — your ue4ss\Mods, mods.txt and settings are kept">Switch to the Nexus build</button>
+            </div>
+            <label class="setting-row toggle-row">
+              <div class="setting-info">
+                <span class="setting-name">Keep UE4SS up to date automatically</span>
+                <span class="setting-value dim">Checked hourly against Nexus. Installed while the game is closed (premium accounts); while it runs — or on a free account — you are told instead.</span>
+              </div>
+              <input type="checkbox" id="chk-ue4ss-auto" class="switch" />
+            </label>
+            <p class="dim settings-note">UE4SS comes from one place: <strong>UE4SS for Star Wars Zero Company</strong> on Nexus Mods — UE4SS plus this game’s signatures, loader settings and helpers. Installs, updates and the switch from a stock build replace only UE4SS’s own files; your UE4SS mods, mods.txt and settings are kept, and the replaced build stays in ⧗ Versions.</p>
           </div>
         </div>
 

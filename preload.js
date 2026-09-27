@@ -51,8 +51,10 @@ contextBridge.exposeInMainWorld('zc', {
   nexusQuota: () => invoke('nexus-quota'),
   registerNxm: () => invoke('register-nxm'),
   unregisterNxm: () => invoke('unregister-nxm'),
-  // installUe4ss('experimental-latest') | installUe4ss({ nexusFileId: 743 }) | installUe4ss()
-  installUe4ss: (opt) => invoke('install-ue4ss', typeof opt === 'string' ? { tag: opt } : (opt || undefined)),
+  // UE4SS for Star Wars Zero Company (Nexus mod 9) only:
+  // installUe4ss() = its current main file | installUe4ss({ nexusFileId: 852 })
+  installUe4ss: (opt) => invoke('install-ue4ss', opt && opt.nexusFileId ? { nexusFileId: opt.nexusFileId } : undefined),
+  ue4ssCheck: () => invoke('ue4ss-check'),
   ue4ssVersions: () => invoke('ue4ss-versions'),
   checkRetoc: () => invoke('check-retoc'),
   installRetoc: () => invoke('install-retoc'),

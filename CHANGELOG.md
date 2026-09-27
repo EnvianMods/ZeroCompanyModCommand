@@ -1,5 +1,48 @@
 # Zero Company Mod Command — Changelog
 
+## v1.9.15 (2026-09-27)
+
+Proposed public 1.0.10.
+
+**UE4SS comes from one place now — and stays up to date**
+- Mod Command installs, updates and repairs exactly one UE4SS: **"UE4SS for
+  Star Wars Zero Company"** on Nexus Mods — UE4SS plus this game's signatures,
+  loader settings and helpers. The general-purpose build from GitHub is gone
+  from the app: no GitHub section in ⧗ Versions, no "install the GitHub build
+  instead?" prompt when you are signed out, and no silent fallback to it when
+  Nexus cannot be reached (the install says so and you try again later).
+- Signed out, **Download & install** offers to sign you in to Nexus Mods and
+  then installs; say no and it shows you the page instead. Premium accounts
+  get it straight away; free accounts get the file list in the download panel,
+  where **Mod Manager Download** hands it to Mod Command.
+- **Already have a UE4SS?** Mod Command now tells you which one. If it is the
+  stock build (no Zero Company signatures, or installed from GitHub by an
+  older Mod Command) or one it cannot identify, Settings → UE4SS, the
+  dashboard and Diagnostics say *"UE4SS installed is the stock build — switch
+  to the Star Wars Zero Company UE4SS (Nexus)"*, with a one-click **Switch to
+  the Nexus build**. The Settings item in the rail shows **!** until you do.
+- **Your UE4SS setup survives every install, update and switch.** Only UE4SS's
+  own files are replaced: your UE4SS mods are untouched, a built-in you
+  switched off stays off, `mods.txt` keeps every line you had (including the
+  start order Mod Command manages) and only gains entries the new build adds,
+  and the settings you changed in `UE4SS-settings.ini` — the console, the GUI
+  console, anything you edited — are carried into the new build's file. Files
+  the old build had and the new one does not are cleared away. The build that
+  was there before is always kept in ⧗ Versions, one click to put back.
+- **Kept up to date.** Mod Command checks the Nexus page at startup and every
+  hour, like mod updates (or press **Check now**). When a newer file is up,
+  Settings shows **Update to …** and the rail shows **⬆**. With the new
+  **Keep UE4SS up to date automatically** setting (on by default) and a
+  premium account, the update just happens — but never under a running game:
+  while Zero Company is open, Mod Command tells you and installs it a few
+  minutes after you close the game. Turn the setting off, or use a free
+  account, and you get one heads-up per new file and the one-click Update.
+- ⧗ Versions now lists every file on that Nexus page — the current main file
+  first, then older uploads — for anyone keeping the game on an older build.
+- A UE4SS copied over the Nexus build by hand is noticed (Diagnostics offers
+  the switch back), and installing or restoring UE4SS while the game is
+  running now stops with a clear "close the game first".
+
 ## v1.9.14 (2026-09-23)
 
 Ships together with v1.9.13 below as public 1.0.9.

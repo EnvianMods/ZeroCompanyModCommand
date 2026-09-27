@@ -52,7 +52,8 @@ automatically for IoStore package inspection; a different copy can be selected i
     own `paks/` folder travels with it into `ue4ss/Mods/<Name>/paks/`, unrenamed
     — the mod mounts those containers itself at startup, so they are never moved
     into `~mods`.
-  - UE4SS runtime archives (dwmapi.dll + ue4ss folder) → installed into `Binaries/Win64`.
+  - UE4SS runtime archives (dwmapi.dll + ue4ss folder) → installed into `Binaries/Win64`,
+    replacing only UE4SS's own files (your `ue4ss/Mods`, `mods.txt` and settings are kept).
   - `gamefolder` (GAMEFILES) — archives laid out against the game root
     (`SWZeroCompany/...`, `Engine/...`, e.g. replacement movies) deploy over the
     game's own files. The original of every replaced file is backed up to
@@ -221,33 +222,61 @@ automatically for IoStore package inspection; a different copy can be selected i
   `Retry-After` on a 429, keeps at most two requests in flight, and background
   work (the hourly update check, the file-name index) leaves a reserve for your
   own clicks and reschedules itself rather than spending it.
-- **UE4SS one-click install** — Settings → UE4SS → Download & install fetches
-  **the Zero Company package**: Nexus mod 9 "UE4SS for Star Wars Zero Company"
-  (stock UE4SS plus this game's signatures, loader settings and helpers; its page
-  states the game build it was tested on). That is the default for every one-click
-  path — the Settings card, the ZCSDK-runtime prompt and `install-ue4ss` with no
-  payload. Premium accounts download it directly; free accounts get the embedded
-  Nexus page, whose "Mod Manager Download" comes back as nxm:// into `handleNxm`,
-  which recognises the runtime; signed-out users are offered the sign-in or, on
-  confirmation, the stock upstream build. The page is read anonymously via
-  GraphQL (`refreshNexusLatest()`), and the tested build is recorded with the
-  install (`settings.ue4ssInstalled.testedBuild`) and compared with the installed
-  game's build id in the card and in Diagnostics ("matches yours" / "yours is N").
-  The **stock upstream build** from GitHub (UE4SS-RE/RE-UE4SS) stays available as
-  a fallback — `{ source:'github' }` or `{ tag }` from ⧗ Versions, and
-  automatically, with a warning toast, when the Nexus page cannot be read. It has
-  no Zero Company signatures and is labelled that way everywhere. Every runtime
-  install snapshots the build it replaces (dwmapi.dll + ue4ss\* minus Mods/logs)
-  into `versions/ue4ss-runtime/` (5 kept); ⧗ Versions restores any kept build (the
-  current one is kept first) and lists both sources — Nexus marked *recommended*,
-  the GitHub section carrying the stock-build warning (only the rolling
-  experimental builds use the ue4ss\ layout this manager deploys — stable 3.0.x
-  zips are flat and shown as not installable). Because the experimental channel is
-  rolling (same tag, new zip every CI build), a GitHub install's recorded build id
-  (from the zip name, e.g. `g2bfa839f`) is compared with the current asset at
-  startup / in the update check; a Nexus install compares file ids. Update
-  detection follows the installed source (`settings.ue4ssInstalled.source`), with
-  "Update to …" on the card and a once-per-build toast.
+- **UE4SS: one source, kept current** — Mod Command installs, updates and
+  switches to exactly one UE4SS: Nexus mod 9 **"UE4SS for Star Wars Zero
+  Company"** (UE4SS plus this game's signatures, loader settings and helpers;
+  its page states the game build it was tested on). The stock upstream build
+  from GitHub (UE4SS-RE/RE-UE4SS) is never downloaded — there is no fallback to
+  it anywhere (install, ⧗ Versions, the ZCSDK-runtime prompt, Diagnostics).
+  `install-ue4ss` with no payload installs mod 9's primary MAIN file,
+  `{ nexusFileId }` one specific file of that page. Premium accounts download
+  directly; free accounts get the embedded Nexus page, whose "Mod Manager
+  Download" comes back as nxm:// into `handleNxm`, which recognises the runtime;
+  signed-out users get `{ needsSignIn }` — the card offers the sign-in (then
+  installs) or shows the page. If the page cannot be read, the install says so
+  and stops. The page is read anonymously via GraphQL (`refreshNexusLatest()`,
+  cached for the hourly cadence; the small "UE4SS Diagnostic Tool" on the same
+  page is never an install candidate).
+  - **Which UE4SS is installed** (`lib/ue4ss.js classifyInstall`, shown on the
+    Settings card, the dashboard, a Settings nav badge and in Diagnostics):
+    *nexus* — installed by Mod Command from mod 9 (`settings.ue4ssInstalled`,
+    which records the file id, version, tested game build and UE4SS.dll's MD5),
+    or recognised by a UE4SS.dll MD5 this app installed from Nexus before;
+    *stock* — recorded as a GitHub install by an older Mod Command, the old flat
+    layout, or no `ue4ss\UE4SS_Signatures\*.lua` (the stock release zip has
+    none); *unknown* — anything else, including a UE4SS.dll that no longer
+    matches the recorded Nexus build. UE4SS.dll's version resource
+    (VS_FIXEDFILEINFO) is reported alongside. Stock/unknown show *"UE4SS
+    installed is the stock build — switch to the Star Wars Zero Company UE4SS
+    (Nexus)"* with a one-click **Switch to the Nexus build** (card notice and a
+    Diagnostics fix button), plus one toast per build on disk.
+  - **Install / update / switch keep what is yours**
+    (`_installUe4ssRuntime`): only UE4SS's own files are replaced. Folders in
+    `ue4ss\Mods` the package does not ship are untouched, a managed UE4SS mod's
+    folder is never overwritten, a built-in you disabled stays disabled;
+    `mods.txt` keeps every line (values, comments, the managed start-order
+    block) and only gains entries the package adds (before Keybinds);
+    `UE4SS-settings.ini` takes the package's file and carries over each value
+    you changed from what the previous package shipped (kept as
+    `<data>\ue4ss-shipped-settings.ini`; without one — a switch from a build
+    placed by hand — the [Debug] values that differ from the stock defaults).
+    A complete package retires runtime files the old build had and it lacks.
+    Every replacement first snapshots the old runtime (dwmapi.dll + ue4ss\*
+    minus Mods/logs) into `versions/ue4ss-runtime/` (5 kept); ⧗ Versions lists
+    every runtime file on the Nexus page (main first, older uploads for a game
+    kept on an older build) and restores any kept build — restoring never
+    downloads anything.
+  - **Staying up to date** — at startup and hourly (`maybeCheckUe4ss`, the same
+    cadence as the mod update check; **Check now** on the card runs it on
+    demand) the installed file id is compared with the page's main file (Nexus
+    file ids only grow). With **Keep UE4SS up to date automatically** (Settings,
+    `settings.ue4ssAutoUpdate`, default on) and a premium account, the new file
+    is installed while the game is closed; while `SWZeroCompany.exe` /
+    `SWZeroCompany-Win64-Shipping.exe` runs from this install (`steam.isGameRunning`,
+    tasklist + image paths) it is held back, you are told once, and it is
+    retried every five minutes. With it off, on a free account, or signed out,
+    you get one toast per new file and **Update to …** on the card (and in
+    Diagnostics). A manual install/restore also refuses while the game runs.
 - **retoc update check** — Settings → retoc compares the installed
   `retoc --version` with the newest GitHub release (trumank/retoc, Windows zip
   asset) and installs it into `<dataDir>/tools/retoc.exe` (+ the bundled Oodle
@@ -319,6 +348,7 @@ preload.js         contextBridge API (window.zc)
 lib/steam.js       Steam library scan + appmanifest parsing (AppID 2075800)
 lib/store.js       portable JSON store  → data/manager-data.json
 lib/mods.js        mod engine: classify/install/deploy/order/conflicts/UE4SS
+lib/ue4ss.js       UE4SS for Star Wars Zero Company (Nexus mod 9): page reads, install origin, updates
 lib/archive.js     zip (bsdtar / extract-zip) + 7z/rar (7-Zip CLI — tools/7-Zip on Windows, system copy on Linux)
 src/               UI (index.html / styles.css / app.js) — holo-terminal theme
 data/              settings when running from source (shipped builds use %APPDATA%\ZeroCompanyModCommand)

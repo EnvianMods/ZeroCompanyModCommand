@@ -38,11 +38,15 @@
 //   /keep-archive    leave the mod archive in place
 // Test-only overrides (any of them = TEST MODE: no Steam discovery, and every
 // location that was NOT overridden is left out of the plan, so a test can
-// never reach the real machine):
+// never reach the real machine - that includes the gamePath and storageDir a
+// settings file names, which test mode ignores in favour of /game: and
+// /storage:):
 //   /appdata:<dir>   stands in for %APPDATA%   (the folder that CONTAINS ZeroCompanyModCommand)
 //   /temp:<dir>      stands in for %TEMP%      (the folder that CONTAINS ZeroCompanyModCommand)
 //   /game:<dir>      the game folder
-//   /regroot:<key>   HKCU subkey under which Software\Classes\nxm is looked up
+//   /storage:<dir>   a custom archive folder (settings.storageDir)
+//   /regroot:<key>   HKCU subkey under which Software\Classes\nxm is looked up;
+//                    it must name a key (empty is refused, never the real nxm)
 //   /screenshot:<png> render the dialog to a PNG and exit (no changes)
 
 using System;
@@ -86,14 +90,15 @@ namespace EnvianMods.ZeroCompanyModCommand.Uninstall
         public const string GameExeRel = @"SWZeroCompany\Binaries\Win64\SWZeroCompany.exe";
         public static readonly string[] ProcessNames = { "ZeroCompanyModCommand", "Zero Company Mod Command" };
         public const string NotTouched = @"NOT touched: your mods in SWZeroCompany\Content\Paks\~mods, LogicMods, Binaries\Win64\ue4ss, SWZeroCompany\Mods and any replaced game files.";
+        public const string KeptSelf = "The uninstaller was kept because " + AppExe + " is still there; run it again once that is fixed.";
         public const string ArchiveNote = "Your installed mods stay in the game folder and keep working. Without the archive, Mod Command cannot restore originals of game files it replaced; verify game files in Steam if you ever need that.";
     }
 
     internal sealed class Options
     {
         public bool Silent, DryRun, KeepArchive;
-        public string AppData, Temp, Game, RegRoot, Screenshot;
-        public bool TestMode { get { return AppData != null || Temp != null || Game != null || RegRoot != null; } }
+        public string AppData, Temp, Game, Storage, RegRoot, Screenshot;
+        public bool TestMode { get { return AppData != null || Temp != null || Game != null || Storage != null || RegRoot != null; } }
 
         public static Options Parse(string[] args)
         {
@@ -114,6 +119,7 @@ namespace EnvianMods.ZeroCompanyModCommand.Uninstall
                     case "appdata": o.AppData = val; break;
                     case "temp": o.Temp = val; break;
                     case "game": o.Game = val; break;
+                    case "storage": o.Storage = val; break;
                     case "regroot": o.RegRoot = val ?? ""; break;
                     case "screenshot": o.Screenshot = val; break;
                 }
@@ -247,7 +253,8 @@ namespace EnvianMods.ZeroCompanyModCommand.Uninstall
                 foreach (var l in res.Failed) Out("FAILED   " + l);
                 if (res.Removed.Count == 0 && res.Failed.Count == 0) Out("Nothing of Zero Company Mod Command was found to remove.");
                 Out(Names.NotTouched);
-                if (plan.Get("exe").Selected) ScheduleSelfDelete(plan.SelfPath);
+                if (AppGone(plan)) ScheduleSelfDelete(plan.SelfPath);
+                else if (plan.Get("exe").Selected) Out(Names.KeptSelf);
                 return res.Failed.Count == 0 ? 0 : 1;
             }
 
@@ -269,11 +276,13 @@ namespace EnvianMods.ZeroCompanyModCommand.Uninstall
                 foreach (var l in result.Failed) sb.AppendLine("  - " + l);
             }
             if (sb.Length == 0) sb.AppendLine("Nothing was selected, so nothing was removed.");
+            bool selfDelete = AppGone(plan);
+            if (!selfDelete && plan.Get("exe").Selected) { sb.AppendLine(); sb.AppendLine(Names.KeptSelf); }
             sb.AppendLine();
             sb.AppendLine(Names.NotTouched);
             MessageBox.Show(sb.ToString(), "Uninstall Zero Company Mod Command",
                 MessageBoxButtons.OK, result.Failed.Count == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
-            if (plan.Get("exe").Selected) ScheduleSelfDelete(plan.SelfPath);
+            if (selfDelete) ScheduleSelfDelete(plan.SelfPath);
             return result.Failed.Count == 0 ? 0 : 1;
         }
 
@@ -288,6 +297,16 @@ namespace EnvianMods.ZeroCompanyModCommand.Uninstall
                 if (any) return true;
             }
             return false;
+        }
+
+        // The uninstaller removes itself only once the app it came with is
+        // really gone. If the exe could not be deleted (in use, refused) it
+        // stays so the user can run it again. When the exe was never next to
+        // it, or its row was unticked, it stays too: nothing on screen said it
+        // would go.
+        static bool AppGone(Plan plan)
+        {
+            return plan.Get("exe").Selected && !File.Exists(plan.AppExePath);
         }
 
         static void ScheduleSelfDelete(string self)
@@ -307,6 +326,8 @@ namespace EnvianMods.ZeroCompanyModCommand.Uninstall
 
         static Plan Detect(Options opt)
         {
+            if (opt.RegRoot != null && opt.RegRoot.Trim().Trim('\\').Length == 0)
+                throw new ArgumentException("/regroot: must name a registry key under HKEY_CURRENT_USER (an empty one would be the real nxm:// handler).");
             var p = new Plan();
             p.Opt = opt;
             p.SelfPath = Path.GetFullPath(Assembly.GetEntryAssembly().Location);
@@ -342,9 +363,10 @@ namespace EnvianMods.ZeroCompanyModCommand.Uninstall
                 catch (Exception) { }
             }
 
-            // (c) game folder + archive
-            string gameSetting = Str(settings, "gamePath");
-            string storageDir = Str(settings, "storageDir");
+            // (c) game folder + archive. Test mode takes neither from the settings
+            // file: a fixture's settings could name any folder on the machine.
+            string gameSetting = opt.TestMode ? null : Str(settings, "gamePath");
+            string storageDir = opt.TestMode ? opt.Storage : Str(settings, "storageDir");
             if (opt.Game != null) { p.GamePath = Full(opt.Game); p.GameSource = "command line"; }
             else if (!string.IsNullOrEmpty(gameSetting) && DirExists(gameSetting)) { p.GamePath = Full(gameSetting); p.GameSource = "Mod Command settings"; }
             else if (!opt.TestMode)
@@ -429,23 +451,27 @@ namespace EnvianMods.ZeroCompanyModCommand.Uninstall
             if (File.Exists(p.AppExePath))
             {
                 p.ExeFiles.Add(p.AppExePath);
-                // The release zip's README.txt + CHANGELOG.md go too - but never
-                // from a source checkout (Build.bat puts the exe there).
-                bool sourceTree = File.Exists(Path.Combine(p.SelfDir, "package.json")) || File.Exists(Path.Combine(p.SelfDir, "main.js"));
-                if (!sourceTree)
+                // The release zip's README.txt + CHANGELOG.md and old data folders
+                // go too - but never from a source checkout (Build.bat puts the
+                // exe there) or electron-builder's release folder (win-unpacked,
+                // builder-effective-config.yaml): those are the developer's.
+                bool devTree = File.Exists(Path.Combine(p.SelfDir, "package.json")) || File.Exists(Path.Combine(p.SelfDir, "main.js"))
+                    || DirExists(Path.Combine(p.SelfDir, "win-unpacked")) || File.Exists(Path.Combine(p.SelfDir, "builder-effective-config.yaml"))
+                    || File.Exists(Path.Combine(p.SelfDir, "builder-debug.yml"));
+                if (!devTree)
                 {
                     AddIfStartsWith(p.ExeFiles, Path.Combine(p.SelfDir, "README.txt"), "ZERO COMPANY MOD COMMAND");
                     AddIfStartsWith(p.ExeFiles, Path.Combine(p.SelfDir, "CHANGELOG.md"), "# Zero Company Mod Command");
-                }
-                try
-                {
-                    foreach (var d in Directory.GetDirectories(p.SelfDir, "ZeroCompanyModCommand-data*"))
+                    try
                     {
-                        var n = Path.GetFileName(d);
-                        if (n == "ZeroCompanyModCommand-data" || n.StartsWith("ZeroCompanyModCommand-data.migrated-")) p.ExeDirs.Add(d);
+                        foreach (var d in Directory.GetDirectories(p.SelfDir, "ZeroCompanyModCommand-data*"))
+                        {
+                            var n = Path.GetFileName(d);
+                            if (n == "ZeroCompanyModCommand-data" || n.StartsWith("ZeroCompanyModCommand-data.migrated-")) p.ExeDirs.Add(d);
+                        }
                     }
+                    catch (Exception) { }
                 }
-                catch (Exception) { }
             }
 
             BuildItems(p);
@@ -541,7 +567,7 @@ namespace EnvianMods.ZeroCompanyModCommand.Uninstall
         {
             var sb = new StringBuilder();
             sb.AppendLine("Zero Company Mod Command Uninstaller 1.0.0 - DRY RUN, nothing is deleted.");
-            if (p.Opt.TestMode) sb.AppendLine("(test mode: only the overridden locations are considered)");
+            if (p.Opt.TestMode) sb.AppendLine("(test mode: only the overridden locations are considered; a settings file's gamePath and storageDir are ignored)");
             sb.AppendLine("Game folder: " + (p.GamePath == null ? "not found" : p.GamePath + "  [" + p.GameSource + "]"));
             foreach (var it in p.Items)
             {
@@ -738,7 +764,13 @@ namespace EnvianMods.ZeroCompanyModCommand.Uninstall
                 if (string.IsNullOrEmpty(g)) continue;
                 if (Same(g, full) || IsInside(g, full)) return "it contains " + g;
             }
-            if (p.GamePath != null && IsInside(full, p.GamePath))
+            // The app's own files next to this uninstaller (ExeFiles/ExeDirs) may
+            // sit in the game folder when the user keeps the portable exe there.
+            // Exactly those entries are allowed - nothing else in the game folder.
+            var parent = Path.GetDirectoryName(full);
+            bool ownAppEntry = parent != null && Same(parent, p.SelfDir)
+                && (p.ExeFiles.Any(f => Same(f, full)) || p.ExeDirs.Any(d => Same(d, full)));
+            if (p.GamePath != null && IsInside(full, p.GamePath) && !ownAppEntry)
             {
                 var rel = full.Substring(Full(p.GamePath).TrimEnd('\\').Length).TrimStart('\\');
                 var first = rel.Split('\\')[0];
@@ -873,6 +905,8 @@ namespace EnvianMods.ZeroCompanyModCommand.Uninstall
         }
 
         // First token of a shell\open\command value: "C:\x\y.exe" "%1" -> C:\x\y.exe
+        // Unquoted, the path runs to the first ".exe" that ends a word, so
+        // C:\x\ZeroCompanyModCommand.exe.bak.exe %1 is that whole .bak.exe file.
         static string ExeFromCommand(string cmd)
         {
             if (string.IsNullOrWhiteSpace(cmd)) return null;
@@ -882,8 +916,8 @@ namespace EnvianMods.ZeroCompanyModCommand.Uninstall
                 int end = cmd.IndexOf('"', 1);
                 return end > 1 ? cmd.Substring(1, end - 1) : null;
             }
-            int exe = cmd.IndexOf(".exe", StringComparison.OrdinalIgnoreCase);
-            if (exe > 0) return cmd.Substring(0, exe + 4);
+            var m = Regex.Match(cmd, @"^(.+?\.exe)(?=\s|$)", RegexOptions.IgnoreCase);
+            if (m.Success) return m.Groups[1].Value;
             int sp = cmd.IndexOf(' ');
             return sp > 0 ? cmd.Substring(0, sp) : cmd;
         }

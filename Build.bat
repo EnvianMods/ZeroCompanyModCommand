@@ -25,9 +25,11 @@ call npm run build-exe
 if errorlevel 1 goto :buildFail
 if not exist "release\ZeroCompanyModCommand.exe" goto :buildFail
 copy /y "release\ZeroCompanyModCommand.exe" "ZeroCompanyModCommand.exe" >nul
+if exist "release\ZeroCompanyModCommand-Uninstall.exe" copy /y "release\ZeroCompanyModCommand-Uninstall.exe" "ZeroCompanyModCommand-Uninstall.exe" >nul
 echo.
 echo  DONE. ZeroCompanyModCommand.exe is now in this folder - run it from here.
 echo  It keeps its data in %%APPDATA%%\ZeroCompanyModCommand, so updates never touch your mods.
+echo  ZeroCompanyModCommand-Uninstall.exe removes Mod Command again later and leaves your mods in place.
 echo.
 if defined ZC_BUILD_QUIET exit /b 0
 start "" explorer.exe "%~dp0"

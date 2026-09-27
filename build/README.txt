@@ -39,6 +39,30 @@ NOTES
 - Diagnostics shows conflicts between your mods, including which game assets
   overlap and which mod wins.
 
+UNINSTALLING
+------------
+Close Mod Command, then run ZeroCompanyModCommand-Uninstall.exe (it comes in
+the same zip as the app). It shows what it found and removes, one checkbox each:
+- the app's settings and caches: %APPDATA%\ZeroCompanyModCommand and
+  %APPDATA%\Zero Company Mod Command (this signs you out of Nexus on this PC;
+  you can also revoke the app's access in your Nexus account settings)
+- the temporary unpack folder %TEMP%\ZeroCompanyModCommand
+- the mod archive, <game folder>\ModCommandArchive: the library copies of your
+  mods, the backups of game files that mods replaced, and archived versions.
+  Untick it to keep it: a later Mod Command install restores everything from it
+- the Steam update freeze on appmanifest_2075800.acf, if you froze updates
+- the nxm:// link registration, only while it still points at Mod Command
+  (another mod manager's registration is left alone)
+- ZeroCompanyModCommand.exe with this README and the changelog next to it; the
+  uninstaller then deletes itself
+WHAT STAYS: every mod you installed. The paks in
+SWZeroCompany\Content\Paks\~mods and LogicMods, UE4SS and its mods in
+SWZeroCompany\Binaries\Win64\ue4ss, plugin mods in SWZeroCompany\Mods and any
+game files a mod replaced are not touched, so the game keeps running with your
+mods. To remove mods too, uninstall them in Mod Command first. The uninstaller
+needs no admin rights. Command line: /silent (no questions), /keep-archive,
+/dry-run (only lists what would be removed).
+
 THIRD-PARTY COMPONENTS SHIPPED WITH THE APP
 --------------------------------------------
 Everything below is downloaded unmodified from its official source by the

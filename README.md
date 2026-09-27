@@ -322,6 +322,7 @@ lib/mods.js        mod engine: classify/install/deploy/order/conflicts/UE4SS
 lib/archive.js     zip (bsdtar / extract-zip) + 7z/rar (7-Zip CLI — tools/7-Zip on Windows, system copy on Linux)
 src/               UI (index.html / styles.css / app.js) — holo-terminal theme
 data/              settings when running from source (shipped builds use %APPDATA%\ZeroCompanyModCommand)
+build/uninstaller/ Uninstall.cs + app.manifest → release/ZeroCompanyModCommand-Uninstall.exe
 ```
 
 Mods keep their canonical files in the **mod archive** — by default
@@ -345,6 +346,40 @@ one; an older version is vaulted as an alternate without touching the install;
 the same version is a reinstall. The ⧗ versions button then offers every
 archived version for rollback or testing.
 
+## Uninstalling
+
+`ZeroCompanyModCommand-Uninstall.exe` ships in the release zip next to the app. It
+removes Mod Command's own files and leaves the user's mods deployed and working:
+`%APPDATA%\ZeroCompanyModCommand` (settings, staging, tools, backups),
+`%APPDATA%\Zero Company Mod Command` (Electron's userData — named after `productName`),
+`%TEMP%\ZeroCompanyModCommand` plus `%TEMP%\zc-retoc*`, the mod archive
+(`<game>\ModCommandArchive`, or only the `library`/`backups`/`versions` + mirror
+inside a custom `settings.storageDir`; the pre-1.9.0 `ZeroCompanyModArchive` too),
+the update freeze on `appmanifest_2075800.acf` (undone exactly like
+`setUpdateFreeze(…, false)`), the `HKCU\Software\Classes\nxm` tree **only** when its
+command points at `ZeroCompanyModCommand.exe`, and the exe (+ the zip's README.txt and
+CHANGELOG.md, never from a source checkout) beside the uninstaller, which then deletes
+itself. It never touches `Content\Paks\~mods`, `LogicMods`, `Binaries\Win64` (UE4SS,
+`ue4ss\Mods`, proxy dlls), `SWZeroCompany\Mods`, replaced game files or
+`%LOCALAPPDATA%\SWZeroCompany`; deletion clears read-only attributes, removes
+junctions/symlinks as links without following them, and refuses any target inside the
+game folder other than the archive. It refuses to run while `ZeroCompanyModCommand.exe`
+or `Zero Company Mod Command.exe` is running. No UAC (`asInvoker`); everything is per-user.
+
+Switches: `/silent` (defaults, exit 0 = done, 1 = something failed, 2 = the app is
+running), `/dry-run` (prints the plan, deletes nothing), `/keep-archive`. Test-only:
+`/appdata:<dir>` and `/temp:<dir>` (stand-ins for `%APPDATA%` / `%TEMP%`),
+`/game:<dir>`, `/regroot:<HKCU subkey>` (where `Software\Classes\nxm` is looked up) and
+`/screenshot:<png>` (renders the dialog and exits). Any override switches on test mode:
+no Steam discovery, and a location that was not overridden is left out entirely.
+
+Build: `npm run build-uninstaller` (also run by `build-exe` and `build`, after
+fetch-tools) compiles `build/uninstaller/Uninstall.cs` with the C# 5 compiler that
+ships with Windows (`%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe`) into
+`release/ZeroCompanyModCommand-Uninstall.exe` — no SDK or download needed. The Linux
+AppImage has no uninstaller: delete `~/.config/ZeroCompanyModCommand` and the game's
+`ModCommandArchive` by hand.
+
 ## Releases
 
 ```
@@ -367,7 +402,7 @@ part of the runtime is missing when it starts.
 Shipping structure (v1.0.0 onward):
 - version lives in `package.json`; per-version notes in `CHANGELOG.md`
 - the Nexus upload is `release/ZeroCompanyModCommand-v<version>.zip`, containing
-  `ZeroCompanyModCommand.exe` + `README.txt` + `CHANGELOG.md`
+  `ZeroCompanyModCommand.exe` + `ZeroCompanyModCommand-Uninstall.exe` + `README.txt` + `CHANGELOG.md`
   (the exe filename stays constant across versions so nxm:// registrations survive updates)
 - mod-page art: `src/assets/nexus-banner.png` (header) and `mod-placeholder@2x.png`
 
@@ -396,8 +431,8 @@ The project is a git repo with `origin` set to
 `github.com/EnvianMods/ZeroCompanyModCommand`. Full release flow:
 
 1. Bump `version` in package.json, add a CHANGELOG entry, commit
-2. `npm run dist`, zip exe + README.txt + CHANGELOG.md as
-   `ZeroCompanyModCommand-v<version>.zip`; snapshot the source (no
+2. `npm run build-uninstaller && npm run dist`, zip exe + `ZeroCompanyModCommand-Uninstall.exe`
+   + README.txt + CHANGELOG.md as `ZeroCompanyModCommand-v<version>.zip`; snapshot the source (no
    node_modules/release/data/.git) as `...-source-v<version>.zip`
 3. Upload the exe zip to Nexus as a new version of the existing main file:
    `upload-nexus-file.js <public> <zip> --name "Zero Company Mod Command" --update

@@ -17,5 +17,5 @@ token.txt
 /ZeroCompanyModCommand-Uninstall.exe
 
 # Internal working notes - lives in the archive repo at docs/HANDOFF.md, never published
-HANDOFF.md
+HANDOFF*.md
 *.lnk

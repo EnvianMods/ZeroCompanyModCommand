@@ -33,10 +33,16 @@ const crypto = require('crypto');
 const DEFAULT_REPO = 'EnvianMods/ZeroCompanyModCommandArchive';
 const DEFAULT_BRANCH = 'main';
 const DEFAULT_REPO_PATH = 'docs/HANDOFF.md';
+// Handoff documents live OUTSIDE the repo (the owner's decision, 2026-09-27):
+// every project's handoff sits flat in G:\Envian Mods and Projects\Project
+// Handoffs\ as "<Project> - HANDOFF.md". The repo root and the old fixed path
+// (plain HANDOFF.md) stay as fallbacks for older checkouts.
 const DEFAULT_HANDOFF_HOMES = [
+  'G:\\Envian Mods and Projects\\Project Handoffs',
   path.join(__dirname, '..', '..'),
   'G:\\SteamLibrary\\steamapps\\common\\Star Wars Zero Company\\ZeroCompanyModManager',
 ];
+const DEFAULT_HANDOFF_NAMES = ['Zero Company Mod Command - HANDOFF.md', 'HANDOFF.md'];
 
 function getToken() {
   for (const f of ['archive-token.txt', 'token.txt']) {
@@ -73,8 +79,10 @@ function parseArgs(argv) {
 function findHandoff(flags) {
   if (flags.file) return path.resolve(flags.file);
   for (const home of DEFAULT_HANDOFF_HOMES) {
-    const p = path.join(home, 'HANDOFF.md');
-    if (fs.existsSync(p)) return p;
+    for (const name of DEFAULT_HANDOFF_NAMES) {
+      const p = path.join(home, name);
+      if (fs.existsSync(p)) return p;
+    }
   }
   return null;
 }

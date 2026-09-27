@@ -1161,7 +1161,7 @@ function renderSettings() {
   if (switchable) {
     $('#ue4ss-origin-text').textContent = ue4ssOrigin.origin === 'stock'
       ? 'UE4SS installed is the stock build — switch to the Star Wars Zero Company UE4SS (Nexus).'
-      : 'UE4SS installed is of unknown origin — switch to the Star Wars Zero Company UE4SS (Nexus) so Mod Command can keep it up to date.';
+      : 'Mod Command cannot tell which UE4SS is installed — switch to the Star Wars Zero Company UE4SS (Nexus) so it can be kept up to date.';
   }
   const ue4ssBtn = $('#btn-install-ue4ss');
   ue4ssBtn.textContent = !state.ue4ss.installed ? 'Download & install (Nexus)'
@@ -1347,7 +1347,7 @@ async function openUe4ssVersionsModal() {
   const o = data.origin || { origin: 'none' };
   const now = o.origin === 'nexus' ? `Installed: UE4SS for Star Wars Zero Company${cur && cur.version ? ` v${cur.version}` : ''}${cur && cur.restored ? ' (restored)' : ''}. `
     : o.origin === 'stock' ? 'Installed: the stock UE4SS build — not the one made for this game. '
-      : o.origin === 'unknown' ? 'Installed: a UE4SS of unknown origin. '
+      : o.origin === 'unknown' ? 'Installed: a UE4SS Mod Command cannot identify (no install record). '
         : 'UE4SS is not installed. ';
   $('#ue4ss-versions-sub').textContent = now +
     'Mod Command installs UE4SS only from “UE4SS for Star Wars Zero Company” on Nexus Mods — UE4SS plus this game’s signatures, loader settings and helpers. Every install keeps the build it replaces here, so you can go back to whichever matched a frozen game version.';
@@ -1525,7 +1525,7 @@ $('#btn-ue4ss-check').addEventListener('click', async () => {
     const out = res.outcome || {};
     const up = state.ue4ss.update || {};
     if (out.action === 'none') toast(up.latest ? `UE4SS for Star Wars Zero Company is up to date (${up.currentBuild || up.latestBuild}).` : (state.ue4ss.installed ? 'UE4SS checked.' : `On Nexus: UE4SS for Star Wars Zero Company ${up.latestBuild || ''}.`));
-    else if (out.action === 'switch-notice') toast(state.ue4ss.origin && state.ue4ss.origin.origin === 'stock' ? 'UE4SS installed is the stock build — press Switch to the Nexus build.' : 'UE4SS installed is of unknown origin — press Switch to the Nexus build.', 'warn', 8000);
+    else if (out.action === 'switch-notice') toast(state.ue4ss.origin && state.ue4ss.origin.origin === 'stock' ? 'UE4SS installed is the stock build — press Switch to the Nexus build.' : 'Mod Command cannot tell which UE4SS is installed — press Switch to the Nexus build.', 'warn', 8000);
     else if (out.action === 'notified' || out.action === 'failed') toast(`UE4SS ${up.latestBuild} is on Nexus (you have ${up.currentBuild}) — press Update.`, 'warn', 8000);
   } finally {
     btn.disabled = false;

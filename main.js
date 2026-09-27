@@ -2125,7 +2125,7 @@ const handlers = {
         version: m.version || null, asset: m.asset || null, publishedAt: m.publishedAt || null,
         testedBuild: m.testedBuild || null, dllMd5: ue4ssFingerprint().dllMd5 || null, installedAt: at, restored: true,
       };
-    } else if (m.source === 'github' || m.tag || m.asset) {
+    } else if (m.source === 'github' || m.source === 'stock' || m.tag || m.asset) {
       store.settings.ue4ssInstalled = { source: 'github', tag: m.tag || null, name: m.name || m.label, asset: m.asset || null, publishedAt: m.publishedAt || null, installedAt: at, restored: true };
     } else {
       store.settings.ue4ssInstalled = null;
@@ -2350,7 +2350,7 @@ async function maybeCheckUe4ss({ force = false } = {}) {
         store.save();
         sendEvent({ type: 'toast', kind: 'warn', message: origin.origin === 'stock'
           ? 'UE4SS installed is the stock build — switch to the Star Wars Zero Company UE4SS (Nexus) in Settings → UE4SS. Your UE4SS mods, mods.txt and settings are kept.'
-          : 'UE4SS installed is of unknown origin — switch to the Star Wars Zero Company UE4SS (Nexus) in Settings → UE4SS so Mod Command can keep it up to date.' });
+          : 'Mod Command cannot tell which UE4SS is installed (it has no record of installing it) — switch to the Star Wars Zero Company UE4SS (Nexus) in Settings → UE4SS so it can be kept up to date. Your UE4SS mods, mods.txt and settings are kept.' });
       }
       sendEvent({ type: 'state', state: fullState() });
       return { action: 'switch-notice', origin: origin.origin };
@@ -2362,6 +2362,11 @@ async function maybeCheckUe4ss({ force = false } = {}) {
       return { action: 'none' };
     }
     const auto = store.settings.ue4ssAutoUpdate !== false;
+    // At startup the check can run before the account is loaded: validate
+    // first, so a premium account is not treated as free on its first check.
+    if (nexusSignedIn() && !nexusUser) {
+      try { mergeNexusUser(await withNexusToken((t) => nexus.validateToken(t))); } catch (err) { log('warn', `UE4SS update check: could not load the Nexus account (${err.message})`); }
+    }
     const premium = nexusSignedIn() && !!(nexusUser && nexusUser.isPremium);
     const noticeOnce = (message, kind = 'warn') => {
       if (store.settings.ue4ssNoticedBuild === u.latest) return;
@@ -2599,7 +2604,7 @@ function diagnostics() {
       add('warning', 'UE4SS runtime', `UE4SS installed is the stock build — switch to the Star Wars Zero Company UE4SS (Nexus). ${o.reason || ''}${keeps}`,
         { action: 'ue4ss-switch', label: 'Switch to the Nexus build' });
     } else if (o.origin === 'unknown') {
-      add('warning', 'UE4SS runtime', `UE4SS installed is of unknown origin — switch to the Star Wars Zero Company UE4SS (Nexus) so Mod Command can keep it up to date. ${o.reason || ''}${keeps}`,
+      add('warning', 'UE4SS runtime', `Mod Command cannot tell which UE4SS is installed — switch to the Star Wars Zero Company UE4SS (Nexus) so it can be kept up to date. ${o.reason || ''}${keeps}`,
         { action: 'ue4ss-switch', label: 'Switch to the Nexus build' });
     } else {
       let tail = ` Installed: ${ue4ssDl.NEXUS_NAME} from Nexus${o.build ? ` v${o.build}` : ''}.`;

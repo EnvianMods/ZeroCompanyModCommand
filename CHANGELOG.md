@@ -43,6 +43,34 @@ Proposed public 1.0.10.
   the switch back), and installing or restoring UE4SS while the game is
   running now stops with a clear "close the game first".
 
+**Fixed before release: UE4SS switches, updates and restores touch UE4SS's own files only**
+- The `ue4ss` folder holds much more than UE4SS: object and header dumps,
+  `.jmap` files of hundreds of MB, logs and crash dumps, the GUI console's
+  layout, the Zero Company Mod SDK's bridge files and the signatures it
+  generates in `UE4SS_Signatures`. A switch, update or restore used to treat
+  all of that as "the runtime" — copying it into ⧗ Versions and deleting it
+  from the game when the new build did not have it. Now UE4SS is a fixed list
+  of its own files (dwmapi.dll, UE4SS.dll/.pdb, the settings file, its
+  license and docs, its signature and layout-template folders) plus exactly
+  what the installed package shipped, which Mod Command now records. Nothing
+  else is ever kept, removed or overwritten, and old kept builds that still
+  hold the whole folder put back only UE4SS's own files.
+- Files the Mod SDK generated in `UE4SS_Signatures` are never removed. If a
+  package ships a signature with the same name, the SDK's file is kept in
+  ⧗ Versions first and comes back when you restore the build before it.
+- Switching from the stock build no longer mistakes stock settings for your
+  own: the stock defaults now match the real stock file (console and GUI
+  console off), so only what you actually changed — e.g. turning the GUI
+  console on — is carried into the Nexus build's settings.
+- Signature files alone no longer count as proof of the Nexus build (the Mod
+  SDK writes them too): a UE4SS Mod Command has no record of installing is
+  shown as one it cannot identify, with the switch offered.
+- The first update check after startup now loads your Nexus account before
+  deciding, so a premium account gets the automatic update rather than the
+  free-account notice.
+- Restoring the oldest kept build no longer removes it from ⧗ Versions before
+  it is put back.
+
 ## v1.9.14 (2026-09-23)
 
 Ships together with v1.9.13 below as public 1.0.9.

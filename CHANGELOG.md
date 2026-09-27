@@ -41,6 +41,9 @@
 **Bundled tools**
 - The Oodle DLL (`oo2core_9_win64.dll`) is no longer bundled with retoc.
   Conflict detection is unaffected: listing a mod's containers does not need it.
+- The license texts of the bundled tools (7-Zip, retoc) and a source note for
+  the ZCSDK Runtime now ship in `resources\tools\licenses`, and the README
+  lists each bundled tool with its version, source and license.
 
 ## v1.9.15 (2026-09-27)
 

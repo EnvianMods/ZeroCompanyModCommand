@@ -468,12 +468,19 @@ dependency `extract-zip` declared in `package.json`. Beside the bundle,
 downloaded unmodified from their official sources by `build/fetch-tools.js` at
 build time (the CI workflow and `npm run build` both run it):
 
-| Component | Version | Source | Purpose |
-|---|---|---|---|
-| 7-Zip command-line build (`7z.exe`, `7z.dll`) | 25.01 x64 | https://www.7-zip.org (official MSI, unpacked) | `.7z`/`.rar` extraction; `tools/7-Zip/BUNDLED.txt` + `License.txt` record it |
-| retoc (`retoc.exe` only; the Oodle dll is not bundled) | 0.1.5 | https://github.com/trumank/retoc release asset | IoStore container listing for conflict detection |
-| ZCSDK Runtime (`ZCSDKRuntime.zip`, `zcsdk-runtime.json`) | per `latest.json` | https://github.com/EnvianMods/ZCSDK-Runtime-Release | offline copy of the UE4SS-based runtime for SDK content mods |
-| `elevate.exe` | — | electron-builder's portable stub | added by the packager, not by this project |
+| Component | Version | Source | License | Purpose |
+|---|---|---|---|---|
+| 7-Zip command-line build (`7z.exe`, `7z.dll`) | 25.01 x64 | https://www.7-zip.org (official MSI, unpacked) | GNU LGPL + unRAR restriction, BSD parts | `.7z`/`.rar` extraction; `tools/7-Zip/BUNDLED.txt` + `License.txt` record it |
+| retoc (`retoc.exe`) | 0.1.5 | https://github.com/trumank/retoc release asset | MIT | IoStore container listing for conflict detection |
+| ZCSDK Runtime (`ZCSDKRuntime.zip`, `zcsdk-runtime.json`) | per `latest.json` | https://github.com/EnvianMods/ZCSDK-Runtime-Release | this project's author; no separate license file | offline copy of the UE4SS-based runtime for SDK content mods |
+| `elevate.exe` | — | electron-builder's portable stub | — | added by the packager, not by this project |
+
+The full license texts ship in `tools/licenses/` (tracked here, and packaged as
+`resources\tools\licenses` inside the app): `7-Zip-License.txt`,
+`retoc-LICENSE.txt` and `ZCSDK-Runtime.txt`. `build/fetch-tools.js` refreshes
+them on every run (retoc's `LICENSE` comes out of its release zip, 7-Zip's is
+copied from `tools/7-Zip/License.txt`). The Oodle compression library
+(`oo2core`) is not bundled.
 
 To verify a shipped build against the source: unzip the release, run
 `npx @electron/asar extract resources/app.asar out` on the unpacked app and

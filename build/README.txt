@@ -46,15 +46,21 @@ the same zip as the app). It shows what it found and removes, one checkbox each:
 - the app's settings and caches: %APPDATA%\ZeroCompanyModCommand and
   %APPDATA%\Zero Company Mod Command (this signs you out of Nexus on this PC;
   you can also revoke the app's access in your Nexus account settings)
-- the temporary unpack folder %TEMP%\ZeroCompanyModCommand
+- the temporary unpack folder %TEMP%\ZeroCompanyModCommand, plus the
+  %TEMP%\zc-retoc and zc-retoc-x-* folders left by retoc updates
 - the mod archive, <game folder>\ModCommandArchive: the library copies of your
-  mods, the backups of game files that mods replaced, and archived versions.
+  mods, the backups of game files that mods replaced, and archived versions
+  (and ZeroCompanyModArchive, its name before v1.9.0, if one is still there).
+  If you moved the archive to a folder of your own in Settings, only Mod
+  Command's library, backups and versions folders and its copy of the settings
+  go from it - anything else of yours in that folder stays.
   Untick it to keep it: a later Mod Command install restores everything from it
 - the Steam update freeze on appmanifest_2075800.acf, if you froze updates
 - the nxm:// link registration, only while it still points at Mod Command
   (another mod manager's registration is left alone)
-- ZeroCompanyModCommand.exe with this README and the changelog next to it; the
-  uninstaller then deletes itself
+- ZeroCompanyModCommand.exe with this README, the changelog and any old
+  ZeroCompanyModCommand-data folders (data from before v1.9.0) next to it; once
+  the exe is gone the uninstaller deletes itself
 WHAT STAYS: every mod you installed. The paks in
 SWZeroCompany\Content\Paks\~mods and LogicMods, UE4SS and its mods in
 SWZeroCompany\Binaries\Win64\ue4ss, plugin mods in SWZeroCompany\Mods and any

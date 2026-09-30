@@ -1,6 +1,8 @@
 # Zero Company Mod Command — Changelog
 
-## v1.9.18 (unreleased)
+## v1.9.18 (2026-09-30)
+
+Ships together with v1.9.17, v1.9.16 and v1.9.15 below as public 1.0.10.
 
 **The ZCSDK Runtime's UE4SS signatures are no longer lost on an update**
 - Without the runtime's signature files UE4SS cannot find what it needs in the
@@ -20,7 +22,7 @@
 
 ## v1.9.17 (2026-09-27)
 
-Ships together with v1.9.16 and v1.9.15 below as public 1.0.10.
+Ships together with v1.9.18 above and v1.9.16 and v1.9.15 below as public 1.0.10.
 
 **UE4SS comes from one place now — and stays up to date**
 - Mod Command installs, updates and repairs exactly one UE4SS: **"UE4SS for
@@ -106,7 +108,7 @@ Ships together with v1.9.16 and v1.9.15 below as public 1.0.10.
 
 ## v1.9.16 (2026-09-27)
 
-Ships together with v1.9.17 above and v1.9.15 below as public 1.0.10.
+Ships together with v1.9.18 and v1.9.17 above and v1.9.15 below as public 1.0.10.
 
 **Uninstaller fixes**
 - **Mod Command kept in the game folder is now removed.** If

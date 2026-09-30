@@ -1,5 +1,23 @@
 # Zero Company Mod Command — Changelog
 
+## v1.9.18 (unreleased)
+
+**The ZCSDK Runtime's UE4SS signatures are no longer lost on an update**
+- Without the runtime's signature files UE4SS cannot find what it needs in the
+  current game build, and no Lua mod runs. Installing or updating the ZCSDK
+  Runtime from a package that ships no signature files (an older runtime, or
+  one with an empty signatures folder) now keeps the ones already in
+  `ue4ss\UE4SS_Signatures` instead of removing them. A package that does ship
+  signatures works as before: it replaces them, and a file it no longer ships
+  is removed only if you have not changed it.
+- The runtime's signature files are found wherever the package keeps them:
+  `UE4SS_Signatures\` at the top, `ue4ss\UE4SS_Signatures\`, or either of
+  those inside a single folder that wraps the whole package. If there are
+  several, the top-level folder wins.
+- Removing the ZCSDK Runtime still removes the signature files it placed,
+  as long as you have not changed them. The same goes for a runtime install
+  that fails and leaves no runtime part behind.
+
 ## v1.9.17 (2026-09-27)
 
 Ships together with v1.9.16 and v1.9.15 below as public 1.0.10.

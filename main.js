@@ -167,7 +167,7 @@ async function autoRestoreFromArchive() {
   const manifest = path.join(store.storageRoot, 'manager-data.json');
   if (path.resolve(store.storageRoot) === path.resolve(store.dataDir) || !fs.existsSync(manifest)) return null;
   try {
-    const results = await engine.restoreFromData(store.storageRoot, { pruneImported: true });
+    const results = await engine.restoreFromData(store.storageRoot, { pruneImported: true, keepGameFiles: true });
     if (results.imported.length || results.profiles || results.vault) {
       log('info', `auto-restored from archive: ${results.imported.length} mod(s), ${results.profiles} profile(s), ${results.vault} vault entr(y/ies)`);
       return results;
@@ -833,6 +833,9 @@ app.whenReady().then(() => {
         type: 'toast',
         message: `Restored from the mod archive: ${results.imported.length} mod(s), ${results.profiles} profile(s), ${results.vault} archived version(s).`,
       });
+      if (results.kept && results.kept.length) {
+        sendEvent({ type: 'toast', kind: 'warn', message: `Left disabled: ${results.kept.join(', ')} — the game already holds different files for them (e.g. a newer build), so they were not overwritten.` });
+      }
     }
     // One-time automatic existing-mods scan after the first game connection —
     // the review dialog opens by itself when there is anything to adopt.
@@ -865,15 +868,19 @@ app.whenReady().then(() => {
       }
     } catch (_) {}
   });
-  // Startup recovery: redeploy enabled mods whose deployed files went missing.
+  // Startup recovery: redeploy enabled mods whose deployed files went missing,
+  // unless the files left in the game were changed outside Mod Command.
   win.webContents.once('did-finish-load', () => {
     if (!store.settings.gamePath) return;
     try {
-      const repaired = engine.repairDeployments();
+      const { repaired, skipped } = engine.repairDeployments();
       if (repaired.length) {
         log('warn', `startup recovery redeployed: ${repaired.join(', ')}`);
         sendEvent({ type: 'state', state: fullState() });
         sendEvent({ type: 'toast', kind: 'warn', message: `Recovered missing deployed files for: ${repaired.join(', ')}.` });
+      }
+      if (skipped.length) {
+        sendEvent({ type: 'toast', kind: 'warn', message: `Not restored: ${skipped.join(', ')} — the files in the game were changed outside Mod Command (e.g. a newer build), so they were left as they are. To bring the mod up to date in Mod Command, install that build with Hangar Bay → ⊕ Install archive.` });
       }
     } catch (_) {}
   });
@@ -2644,6 +2651,10 @@ function diagnostics() {
     add('warning', 'Deployed files', `${missing.length} deployed file(s) are missing: ${missing.map((m) => m.file).join(', ')}`);
   } else {
     add('good', 'Deployed files', 'All enabled mods are fully deployed.');
+  }
+  const drifted = store.settings.gamePath ? engine.auditChangedDeployments() : [];
+  if (drifted.length) {
+    add('warning', 'Deployed files', `Deployed files changed outside Mod Command (e.g. a newer build) for: ${drifted.map((d) => d.modName).join(', ')}. Startup recovery leaves them as they are; to bring a mod up to date in Mod Command, install that build with Hangar Bay → ⊕ Install archive.`);
   }
   const duplicates = store.settings.gamePath ? engine.scanDuplicateMods() : [];
   if (duplicates.length) {

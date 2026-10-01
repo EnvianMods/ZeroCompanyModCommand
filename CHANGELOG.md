@@ -1,5 +1,27 @@
 # Zero Company Mod Command — Changelog
 
+## v1.9.19 (unreleased)
+
+**A newer build in the game is no longer replaced by an older library copy**
+- At startup Mod Command puts back the files of an enabled mod that went
+  missing from the game. It used to do that whenever a single file was
+  missing, so a mod whose folder had been replaced outside Mod Command by a
+  newer build (for example a Mod SDK project deploying straight into
+  `SWZeroCompany\Mods\<Name>\` with a different set of files) was wiped and
+  replaced by the older copy in the library.
+- Now the files still in the game are checked against the library copy first.
+  If any of them is different, or the mod's plugin folder holds files Mod
+  Command did not put there, the mod is left exactly as it is and a notice
+  says so. Mods whose files are all gone, or that only lost some of their
+  files, are restored as before.
+- Diagnostics lists enabled mods whose deployed files were changed outside
+  Mod Command.
+- Restoring a fresh setup from the mod archive at startup no longer overwrites
+  files in the game that differ from a mod's archived copy; such a mod is
+  restored disabled, with a notice.
+- Hashing deployed files reads them in chunks, so multi-GB containers are
+  checked without loading them into memory whole.
+
 ## v1.9.18 (2026-09-30)
 
 Ships together with v1.9.17, v1.9.16 and v1.9.15 below as public 1.0.10.

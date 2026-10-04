@@ -90,6 +90,17 @@
 - A runtime install or update that fails part way puts the previous runtime
   back as it was.
 
+**Import no longer pre-ticks anything**
+- Hangar Bay → Import used to tick every orphaned mod-archive entry for you,
+  and adopting one could silently replace an installed mod (an old copy of
+  the ZCSDK Runtime in the archive replaced, and could remove, the installed
+  runtime). Now nothing is ticked, and each entry says what adopting it does:
+  "installs as a new mod", "older than your installed … — added to its
+  ⧗ Versions only", or "REPLACES your installed …". A replacement asks once
+  more before it happens.
+- An old ZCSDK Runtime copy in the archive shows as "Old ZCSDK Runtime copy —
+  safe to clean up" with its own **Clean up** button; it can't be adopted.
+
 ## v1.9.19 (2026-10-01)
 
 Ships together with v1.9.18, v1.9.17, v1.9.16 and v1.9.15 below as public 1.0.10.

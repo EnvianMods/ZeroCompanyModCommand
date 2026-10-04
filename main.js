@@ -1933,7 +1933,9 @@ const handlers = {
     gameRunning: gameIsRunningOrUnknown(),
   }),
 
-  'adopt-mods': async (_e, { ids }) => {
+  // allowReplace: orphan ids the user ticked knowing they replace an
+  // installed mod (the dialog says so and asks again).
+  'adopt-mods': async (_e, { ids, allowReplace }) => {
     // Adopting can replace installed mods (a newer copy of one) and claims
     // files in the game: never under a running game.
     const gameState = gameRunningNow();
@@ -1942,11 +1944,12 @@ const handlers = {
       throw new Error('Close Star Wars Zero Company first — adopting mods can replace installed ones, whose files the running game has loaded. Nothing was changed.');
     }
     const results = [];
+    const replaceOk = new Set(Array.isArray(allowReplace) ? allowReplace : []);
     // Orphaned entries in our own library (lost store) re-import directly.
     for (const oid of ids.filter((i) => i.startsWith('orphan:'))) {
       const dirName = oid.slice('orphan:'.length);
       try {
-        const mod = await engine.adoptOrphan(dirName);
+        const mod = await engine.adoptOrphan(dirName, { allowReplace: replaceOk.has(oid) });
         const identified = await identifyOnNexus(mod.id);
         results.push({ ok: true, name: store.getMod(mod.id).name, identified: identified ? identified.modName : null });
       } catch (err) {
@@ -1964,6 +1967,13 @@ const handlers = {
       }
     }
     return { results, state: fullState() };
+  },
+
+  // Import dialog: delete an orphaned archive entry that is an old copy of a
+  // ZCSDK Runtime part (never adoptable). Explicit, one entry at a time.
+  'clean-runtime-copy': async (_e, { dirName }) => {
+    const r = engine.cleanRuntimeCopy(String(dirName || ''));
+    return { state: fullState(), name: r.name, version: r.version };
   },
 
   'choose-storage-dir': async () => {

@@ -2772,21 +2772,61 @@ async function openImportModal(opts = {}) {
   if (runNote) runNote.classList.toggle('hidden', !running);
   $('#btn-import-adopt').disabled = running;
   $('#btn-import-adopt').title = running ? 'Close Star Wars Zero Company first — adopting can replace installed mods whose files the game has loaded.' : '';
+  // Orphaned archive entries are never pre-ticked: each says what adopting it
+  // does, and one that would replace an installed mod says so in plain words
+  // (and the Adopt button asks again). Old copies of the ZCSDK Runtime are
+  // not adoptable at all — they get a separate, explicit clean-up button.
+  const vLabel = (v) => (v ? `v${v}` : 'an unversioned copy');
   for (const o of orphans) {
-    const row = document.createElement('label');
-    row.className = 'import-row';
-    const check = document.createElement('input');
-    check.type = 'checkbox';
-    check.checked = true;
-    check.dataset.candidateId = o.id;
     const info = document.createElement('div');
     info.className = 'import-info';
     const name = document.createElement('div');
     name.className = 'import-name';
-    name.textContent = o.name;
+    name.textContent = o.version ? `${o.name} v${o.version}` : o.name;
     const meta = document.createElement('div');
     meta.className = 'import-meta';
-    meta.textContent = `${TYPE_LABEL[o.modType] || o.modType} · ${o.fileCount} file(s) · orphaned archive entry (no mod record)`;
+    if (o.runtimeCopy) {
+      const row = document.createElement('div');
+      row.className = 'import-row';
+      meta.textContent = `Old ZCSDK Runtime copy · ${o.fileCount} file(s) · orphaned archive entry — not adoptable (the runtime is installed from Settings → ZCSDK Runtime); safe to clean up`;
+      info.append(name, meta);
+      const btn = document.createElement('button');
+      btn.className = 'btn tiny ghost';
+      btn.textContent = '🗑 Clean up';
+      btn.title = 'Deletes this stray copy from the mod archive. Your installed ZCSDK Runtime and the game are not touched.';
+      btn.addEventListener('click', async () => {
+        if (!window.confirm(`Delete the old ZCSDK Runtime copy “${name.textContent}” from the mod archive?\n\nYour installed ZCSDK Runtime and the game are not touched.`)) return;
+        btn.disabled = true;
+        const res = await call('cleanRuntimeCopy', o.dirName);
+        if (!res) { btn.disabled = false; return; }
+        state = res.state;
+        render();
+        row.remove();
+        toast(`Removed the old ZCSDK Runtime copy (${res.name}${res.version ? ` v${res.version}` : ''}) from the mod archive.`);
+      });
+      row.append(info, btn);
+      mgrList.appendChild(row);
+      continue;
+    }
+    const row = document.createElement('label');
+    row.className = 'import-row';
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.checked = false;
+    check.dataset.candidateId = o.id;
+    const e = o.effect || { action: 'new' };
+    let what;
+    if (e.action === 'replace' || e.action === 'reinstall') {
+      what = `REPLACES your installed ${e.installedName} ${vLabel(e.installedVersion)} with ${vLabel(e.incoming)}`
+        + `${e.installedEnabled ? '' : ' (kept off)'}`;
+      check.dataset.replaces = `${o.name}: replaces your installed ${e.installedName} ${vLabel(e.installedVersion)} with ${vLabel(e.incoming)}`;
+      meta.classList.add('warn');
+    } else if (e.action === 'archive') {
+      what = `older than your installed ${e.installedName} ${vLabel(e.installedVersion)} — added to its ⧗ Versions only`;
+    } else {
+      what = 'installs as a new mod';
+    }
+    meta.textContent = `${TYPE_LABEL[o.modType] || o.modType} · ${o.fileCount} file(s) · orphaned archive entry (no mod record) · ${what}`;
     info.append(name, meta);
     row.append(check, info);
     mgrList.appendChild(row);
@@ -3087,12 +3127,23 @@ async function runManagerImport(dirPath) {
 $('#btn-import-folder').addEventListener('click', () => runManagerImport(undefined));
 
 $('#btn-import-adopt').addEventListener('click', async () => {
-  const ids = $$('#import-list input:checked, #import-manager-list input:checked').map((c) => c.dataset.candidateId);
+  const checked = $$('#import-list input:checked, #import-manager-list input:checked');
+  const ids = checked.map((c) => c.dataset.candidateId);
   if (!ids.length) { toast('Select at least one mod to adopt.', 'warn'); return; }
+  // Ticked archive entries that replace an installed mod: say exactly what
+  // happens and ask once more.
+  const replacing = checked.filter((c) => c.dataset.replaces);
+  if (replacing.length) {
+    const go = window.confirm(`Adopting ${replacing.length === 1 ? 'this entry replaces an installed mod' : `these ${replacing.length} entries replace installed mods`}:\n\n`
+      + replacing.map((c) => `• ${c.dataset.replaces}`).join('\n')
+      + '\n\nThe installed version is kept in ⧗ Versions. Continue?');
+    if (!go) return;
+  }
+  const allowReplace = replacing.map((c) => c.dataset.candidateId);
   const btn = $('#btn-import-adopt');
   btn.disabled = true;
   try {
-    const res = await call('adoptMods', ids);
+    const res = await call('adoptMods', ids, allowReplace);
     if (!res) return;
     state = res.state;
     render();

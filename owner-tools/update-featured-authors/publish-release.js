@@ -11,11 +11,20 @@
 // only if the distribution strategy changes.
 //
 // Usage (run after building and zipping):
-//   node publish-release.js [--repo Owner/Name] <version> <path-to-zip> [--notes "..."]
+//   node publish-release.js [--repo Owner/Name] <version> <path-to-zip> [--notes "..." | --notes-file notes.md]
 //   node publish-release.js [--repo Owner/Name] --show
 //   node publish-release.js --check-only <path-to-zip>   (guard only, no GitHub)
 //
 // --repo targets any project's source repo (default: the launcher's).
+// --notes-file takes multi-line Markdown notes (a --notes "..." string cannot
+// carry line breaks through a .bat).
+//
+// A pushed v* tag starts the Linux CI job (.github/workflows/build-linux.yml),
+// which usually finishes first and creates the release with a placeholder
+// title and body. This tool then takes that release over: it sets the real
+// title, replaces the placeholder body (or applies --notes / --notes-file),
+// and adds the zip — also when CI creates the release between this tool's
+// lookup and its own create (a 422).
 // Auth: release-token.txt (preferred) or token.txt next to this script, or
 // GITHUB_TOKEN — needs Contents read/write on the target repo.
 //
@@ -140,12 +149,15 @@ async function main() {
   }
 
   const notesIdx = args.indexOf('--notes');
-  const notes = notesIdx !== -1 ? args[notesIdx + 1] || '' : '';
-  const skipIdx = new Set([notesIdx + 1, args.indexOf('--repo') + 1].filter((i) => i > 0));
+  const notesFileIdx = args.indexOf('--notes-file');
+  const notesFile = notesFileIdx !== -1 ? args[notesFileIdx + 1] : null;
+  if (notesFileIdx !== -1 && (!notesFile || !fs.existsSync(notesFile))) { console.error('--notes-file: file not found:', notesFile || '(none)'); process.exit(1); }
+  const notes = notesFile ? fs.readFileSync(notesFile, 'utf8').trim() : (notesIdx !== -1 ? args[notesIdx + 1] || '' : '');
+  const skipIdx = new Set([notesIdx + 1, notesFileIdx + 1, args.indexOf('--repo') + 1].filter((i) => i > 0));
   const positional = args.filter((a, i) => !a.startsWith('--') && !skipIdx.has(i));
   const [version, zipPath] = positional;
   if (!version || !/^\d+\.\d+\.\d+$/.test(version) || !zipPath || !fs.existsSync(zipPath)) {
-    console.error('Usage: node publish-release.js [--repo Owner/Name] <version like 1.2.0> <path-to-zip> [--notes "..."]');
+    console.error('Usage: node publish-release.js [--repo Owner/Name] <version like 1.2.0> <path-to-zip> [--notes "..." | --notes-file notes.md]');
     process.exit(1);
   }
 
@@ -159,27 +171,47 @@ async function main() {
   }
 
   // 1. create the release (or reuse it, so re-runs can refresh assets)
+  const releaseName = `${REPO_FULL === DEFAULT_REPO ? 'Zero Company Mod Command' : REPO_FULL.split('/')[1].replace(/([a-z])([A-Z])/g, '$1 $2')} v${version}`;
+  const defaultBody = `Release v${version}. See CHANGELOG.md for details.`;
   let release;
-  const existingRes = await gh(`${API}/releases/tags/v${version}`);
-  if (existingRes.status === 200) {
-    release = await existingRes.json();
-    console.log(`Release v${version} already exists on ${REPO_FULL} — adding assets to it.`);
-  } else {
+  let existingRes = await gh(`${API}/releases/tags/v${version}`);
+  if (existingRes.status !== 200) {
     console.log(`Creating release v${version} on ${REPO_FULL}…`);
     const createRes = await gh(`${API}/releases`, {
       method: 'POST',
-      body: JSON.stringify({
-        tag_name: `v${version}`,
-        name: `${REPO_FULL === DEFAULT_REPO ? 'Zero Company Mod Command' : REPO_FULL.split('/')[1].replace(/([a-z])([A-Z])/g, '$1 $2')} v${version}`,
-        body: notes || `Release v${version}. See CHANGELOG.md for details.`,
-      }),
+      body: JSON.stringify({ tag_name: `v${version}`, name: releaseName, body: notes || defaultBody }),
     });
-    if (!createRes.ok) {
+    if (createRes.ok) {
+      release = await createRes.json();
+    } else if (createRes.status === 422) {
+      // The tag's Linux CI job (.github/workflows/build-linux.yml) created the
+      // release between the lookup and the POST — reuse it below.
+      existingRes = await gh(`${API}/releases/tags/v${version}`);
+    }
+    if (!release && existingRes.status !== 200) {
       console.error(`Release creation failed (${createRes.status}):`, (await createRes.text()).slice(0, 400));
       console.error(`Is the repo created (github.com/${REPO_FULL}) and the token scoped to it?`);
       process.exit(1);
     }
-    release = await createRes.json();
+  }
+  if (!release) {
+    release = await existingRes.json();
+    console.log(`Release v${version} already exists on ${REPO_FULL} — adding assets to it.`);
+    // The Linux CI job creates the release with a placeholder title and body
+    // when it finishes first (a pushed tag): give it the real name and notes.
+    const ciPlaceholder = !release.body || /^Automated Linux AppImage build\./.test(release.body);
+    const patch = {};
+    if (release.name !== releaseName) patch.name = releaseName;
+    if (notes || ciPlaceholder) patch.body = notes || defaultBody;
+    if (Object.keys(patch).length) {
+      const patchRes = await gh(`${API}/releases/${release.id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+      if (!patchRes.ok) {
+        console.error(`Updating the release title/notes failed (${patchRes.status}):`, (await patchRes.text()).slice(0, 400));
+        process.exit(1);
+      }
+      release = await patchRes.json();
+      console.log(`Release v${version}: ${Object.keys(patch).join(' and ')} updated.`);
+    }
   }
   if ((release.assets || []).some((a) => a.name === path.basename(zipPath))) {
     console.log(`skip ${path.basename(zipPath)} (already uploaded)`);
@@ -207,14 +239,14 @@ async function main() {
     const announce = spawnSync(process.execPath, [
       path.join(__dirname, 'update-launcher-version.js'),
       version, release.html_url,
-      ...(notes ? ['--notes', notes] : []),
+      ...(notes && !notesFile ? ['--notes', notes] : []),
     ], { stdio: 'inherit' });
     process.exit(announce.status || 0);
   }
 
   if (REPO_FULL === DEFAULT_REPO) {
     console.log('\nPOLICY: announce the NEXUS page so update downloads count there. Next step:');
-    console.log(`  node update-launcher-version.js ${version} "https://www.nexusmods.com/starwarszerocompany/mods/<your-mod-id>?tab=files"${notes ? ` --notes "${notes}"` : ''}`);
+    console.log(`  node update-launcher-version.js ${version} "https://www.nexusmods.com/starwarszerocompany/mods/<your-mod-id>?tab=files"${notes && !notesFile ? ` --notes "${notes}"` : ''}`);
   }
 }
 

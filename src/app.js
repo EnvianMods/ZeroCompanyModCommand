@@ -48,10 +48,47 @@ function zcPrompt(title, initial = '') {
 async function call(fn, ...args) {
   const res = await window.zc[fn](...args);
   if (!res.ok) {
+    if (isGameUnknownError(res.error)) return gameUnknownRetry(res.error, () => call(fn, ...args));
     toast(res.error, 'error', 6000);
     return null;
   }
   return res.data;
+}
+
+// A change was refused because Mod Command could not confirm the game is
+// closed (the game-running check did not finish). The toast offers "Check
+// again": a fresh check, and when the game is closed the same action runs
+// again (its caller gets that result). Dismissed or expired = nothing done.
+function isGameUnknownError(msg) {
+  return typeof msg === 'string' && /confirm Star Wars Zero Company is closed/.test(msg);
+}
+function gameUnknownRetry(msg, retry) {
+  return new Promise((resolve) => {
+    const el = document.createElement('div');
+    el.className = 'toast error toast-action';
+    const text = document.createElement('div');
+    text.textContent = msg;
+    const btn = document.createElement('button');
+    btn.className = 'btn tiny';
+    btn.textContent = 'Check again';
+    el.append(text, btn);
+    $('#toast-stack').appendChild(el);
+    let settled = false;
+    const close = () => { if (settled) return false; settled = true; clearTimeout(timer); el.remove(); return true; };
+    const timer = setTimeout(() => { if (close()) resolve(null); }, 30000);
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      btn.textContent = 'Checking…';
+      let st = 'unknown';
+      try { const r = await window.zc.checkGameRunning(); if (r && r.ok && r.data) st = r.data.state; } catch (_) {}
+      if (settled) return;
+      if (st === 'not-running') { close(); resolve(await retry()); return; }
+      if (st === 'running') { close(); resolve(null); toast('Star Wars Zero Company is running — close it first. Nothing was changed.', 'warn', 6000); return; }
+      btn.disabled = false;
+      btn.textContent = 'Check again';
+      toast('Still couldn’t confirm the game is closed — close it and press Check again.', 'warn', 5000);
+    });
+  });
 }
 
 // Wraps calls that can hit the SHA-256 ownership check (disable/uninstall).
@@ -69,10 +106,104 @@ async function verifiedCall(fn, args, actionLabel) {
     res = await window.zc[fn](...args, true); // force
   }
   if (!res.ok) {
+    if (isGameUnknownError(res.error)) return gameUnknownRetry(res.error, () => verifiedCall(fn, args, actionLabel));
     toast(res.error, 'error', 6000);
     return null;
   }
   return res.data;
+}
+
+// ------------------------------------------------------------------ download progress
+// The bottom progress strip (and the Nexus panel's strip) follow every
+// download separately: main.js gives each one an id and a phase (progress,
+// retrying, restarted, done, failed — see downloadToFile in lib/nexus.js).
+// One download shows its name; several show one total ("Downloading 2 files"),
+// by bytes when every size is known. Each download only moves forward unless
+// it really started over, which the label says. Label and bar are written
+// together from the same number, once per frame. Progress without an id
+// (indexing, matching) is tracked by its label.
+const downloads = new Map(); // id -> { key, label, received, total, phase, finished, at, restartedAt }
+const DOWNLOAD_STALE_MS = 60000;
+let downloadsFrame = 0;
+let downloadsClear = null;
+function noteDownload(p) {
+  const id = p.id || `op:${p.label}`;
+  let d = downloads.get(id);
+  // A counter without an id that starts again is a new run of that job.
+  if (d && !p.id && (d.finished || p.received < d.received)) d = null;
+  if (!d) {
+    d = { key: p.key || null, label: p.label || '', received: 0, total: 0, phase: 'progress', finished: false, restartedAt: 0 };
+    downloads.set(id, d);
+  }
+  d.at = Date.now();
+  if (p.total) d.total = p.total;
+  const phase = p.phase || (p.total && p.received >= p.total ? 'done' : 'progress');
+  if (phase === 'failed') downloads.delete(id);
+  else if (phase === 'restarted') { d.received = p.received; d.phase = 'progress'; d.restartedAt = d.at; }
+  else if (phase === 'retrying') d.phase = 'retrying';
+  else if (p.received >= d.received) {
+    if (p.received > d.received || phase === 'done') d.phase = phase;
+    d.received = p.received;
+    if (phase === 'done') d.finished = true;
+  }
+  if (!downloadsFrame) downloadsFrame = requestAnimationFrame(renderDownloads);
+  return d;
+}
+function downloadPct(d) {
+  if (d.finished) return 100;
+  return d.total ? Math.min(100, Math.floor((d.received / d.total) * 100)) : null;
+}
+// { text, pct } for a set of downloads; pct is null when no size is known.
+function downloadsView(list) {
+  const mb = (n) => `${(n / 1048576).toFixed(1)} MB`;
+  if (list.length === 1) {
+    const d = list[0];
+    const pct = downloadPct(d);
+    const name = d.label.length > 60 ? `${d.label.slice(0, 59)}…` : d.label;
+    let verb = `Downloading ${name}`;
+    if (d.finished) verb = `Downloaded ${name}`;
+    else if (d.phase === 'retrying') verb = `Connection lost — retrying ${name}`;
+    else if (Date.now() - d.restartedAt < 4000) verb = `Retrying ${name} from the start`;
+    return { text: `${verb} — ${pct !== null ? `${pct}%` : mb(d.received)}`, pct };
+  }
+  let pct = null;
+  if (list.every((d) => d.total)) {
+    pct = Math.floor((list.reduce((sum, d) => sum + (d.finished ? d.total : Math.min(d.received, d.total)), 0)
+      / list.reduce((sum, d) => sum + d.total, 0)) * 100);
+  } else {
+    const known = list.map(downloadPct).filter((v) => v !== null);
+    if (known.length) pct = Math.floor(known.reduce((sum, v) => sum + v, 0) / known.length);
+  }
+  const retrying = list.filter((d) => !d.finished && d.phase === 'retrying').length;
+  const amount = pct !== null ? `${pct}%` : mb(list.reduce((sum, d) => sum + d.received, 0));
+  return { text: `Downloading ${list.length} files — ${amount}${retrying ? ` (${retrying} retrying)` : ''}`, pct };
+}
+function renderDownloads() {
+  downloadsFrame = 0;
+  const now = Date.now();
+  for (const [id, d] of downloads) if (!d.finished && now - d.at > DOWNLOAD_STALE_MS) downloads.delete(id);
+  const list = [...downloads.values()];
+  const box = $('#progress-toast');
+  if (!list.length) { box.classList.add('hidden'); return; }
+  // Finished downloads stay in the total until the whole batch is done, so
+  // the total never drops when one of them completes.
+  const allDone = list.every((d) => d.finished);
+  clearTimeout(downloadsClear);
+  if (allDone) downloadsClear = setTimeout(() => { downloads.clear(); renderDownloads(); }, 1200);
+  const v = downloadsView(list);
+  box.classList.remove('hidden');
+  $('#progress-label').textContent = v.text;
+  $('#progress-fill').style.width = `${v.pct ?? 100}%`;
+  // The Nexus panel follows only downloads of its own mod.
+  const panelMod = Number((/\/mods\/(\d+)/.exec(nexusDl.target || '') || [])[1]) || null;
+  const mine = list.filter((d) => panelMod && d.key && (d.key === `nexus:${panelMod}` || d.key.startsWith(`nexus:${panelMod}:`)));
+  if (mine.length) nexusDlProgress(downloadsView(mine));
+}
+// A call that showed progress has ended: counters without an id stop here
+// (their job is over); downloads end with their own done/failed phase.
+function progressToastIdle() {
+  for (const [id] of downloads) if (id.startsWith('op:')) downloads.delete(id);
+  renderDownloads();
 }
 
 // ------------------------------------------------------------------ nav
@@ -330,11 +461,27 @@ function renderMods() {
       if (!rtOk) zcChip.addEventListener('click', () => installZcsdkRuntime());
     }
 
+    // ZCSDK Runtime part: a protected dependency while SDK mods need it.
+    const rtLocked = !!(mod.runtimePart && mod.requiredBy > 0);
+    const rtWhy = rtLocked
+      ? `Part of the ZCSDK Runtime — required by ${mod.requiredBy} installed SDK mod${mod.requiredBy === 1 ? '' : 's'}`
+        + `${mod.requiredByNames && mod.requiredByNames.length ? ` (${mod.requiredByNames.join(', ')}${mod.requiredBy > mod.requiredByNames.length ? ', …' : ''})` : ''}. `
+        + 'It stays on and installed while they are; to take the runtime out, use Settings → ZCSDK Runtime → Remove.'
+      : '';
+    let rtChip = null;
+    if (mod.runtimePart) {
+      rtChip = document.createElement('span');
+      rtChip.className = `mod-badge zc-chip ${rtLocked ? 'zc-ok' : 'zc-note'}`;
+      rtChip.textContent = rtLocked ? `◆ Required by ${mod.requiredBy} SDK mod${mod.requiredBy === 1 ? '' : 's'}` : '◆ ZCSDK Runtime';
+      rtChip.title = rtLocked ? rtWhy : 'Part of the ZCSDK Runtime (Settings → ZCSDK Runtime). No installed mod needs it right now.';
+    }
+
     const toggle = document.createElement('input');
     toggle.type = 'checkbox';
     toggle.className = 'switch';
     toggle.checked = mod.enabled;
     toggle.title = mod.enabled ? 'Disable (undeploy)' : 'Enable (deploy)';
+    if (rtLocked && mod.enabled) { toggle.disabled = true; toggle.title = rtWhy; }
     toggle.addEventListener('change', async () => {
       if (toggle.checked && onEA && compat && compat.status === 'incompatible') {
         const go = window.confirm(
@@ -361,6 +508,7 @@ function renderMods() {
     versionsBtn.textContent = mod.version ? `⧗ v${mod.version}` : '⧗ versions';
     versionsBtn.title = 'Version vault — roll back to an archived version';
     versionsBtn.addEventListener('click', () => openVersionsModal(mod));
+    if (rtLocked) { versionsBtn.disabled = true; versionsBtn.title = rtWhy; }
     actions.appendChild(versionsBtn);
     const renameBtn = document.createElement('button');
     renameBtn.className = 'btn ghost tiny';
@@ -371,9 +519,11 @@ function renderMods() {
       const data = await call('renameMod', mod.id, name2);
       if (data) { state = data; render(); toast(`Renamed to “${name2}”`); }
     });
+    if (mod.runtimePart) { renameBtn.disabled = true; renameBtn.title = 'A ZCSDK Runtime part keeps its name — it is its folder in ue4ss\\Mods.'; }
     const delBtn = document.createElement('button');
     delBtn.className = 'btn danger tiny';
     delBtn.textContent = 'Uninstall';
+    if (rtLocked) { delBtn.disabled = true; delBtn.title = rtWhy; }
     delBtn.addEventListener('click', async () => {
       const note = mod.modType === 'gamefolder'
         ? ' Replaced game files are restored from backup.'
@@ -415,7 +565,7 @@ function renderMods() {
           }
         } finally {
           updateEl.disabled = false;
-          $('#progress-toast').classList.add('hidden');
+          progressToastIdle();
         }
       });
     }
@@ -423,6 +573,7 @@ function renderMods() {
     row.append(badge, srcBadge, main, flag);
     if (eaChip) row.appendChild(eaChip);
     if (zcChip) row.appendChild(zcChip);
+    if (rtChip) row.appendChild(rtChip);
     if (buildChip) row.appendChild(buildChip);
     if (updateEl) row.appendChild(updateEl);
     row.append(toggle, actions);
@@ -453,6 +604,9 @@ $('#btn-disable-all').addEventListener('click', async () => {
   state = res.state;
   render();
   toast(`Disabled ${res.result.changed} mod(s).`);
+  if (res.result.kept && res.result.kept.length) {
+    toast(`Kept the ZCSDK Runtime on (${res.result.kept.join(', ')}) — installed SDK mods need it. Settings → ZCSDK Runtime → Remove takes it out.`, 'info', 9000);
+  }
   for (const e of res.result.errors.slice(0, 3)) toast(e, 'error', 7000);
 });
 
@@ -545,7 +699,7 @@ $('#btn-update-all').addEventListener('click', async () => {
     if (res && res.updated) { state = res.state; toast(`“${mod.name}” updated.`); }
     else if (res && res.state) state = res.state;
   }
-  $('#progress-toast').classList.add('hidden');
+  progressToastIdle();
   render();
 });
 
@@ -840,7 +994,7 @@ async function runDiagnostics() {
         fix.disabled = true;
         try { await DIAG_FIXES[item.fix.action](); } finally {
           fix.disabled = false;
-          $('#progress-toast').classList.add('hidden');
+          progressToastIdle();
           runDiagnostics();
         }
       });
@@ -1150,7 +1304,8 @@ function renderSettings() {
   renderProfiles();
   // Nexus
   const nx = state.nexus || {};
-  const atRest = nx.tokensEncrypted ? ' · tokens encrypted at rest' : '';
+  const atRest = nx.tokensEncrypted ? ' · tokens encrypted at rest'
+    : (nx.tokensSessionOnly ? ' · signed in for this session only (no secure key store on this system — tokens are not saved)' : '');
   $('#nexus-status').textContent = nx.signedIn
     ? (nx.user
       ? `Signed in as ${nx.user.name} · ${nx.user.isPremium ? 'Premium' : 'Free'} member${atRest}`
@@ -1223,6 +1378,9 @@ function renderSettings() {
   zcBtn.disabled = !zcPkg;
   zcBtn.textContent = !zcPkg ? 'Unavailable'
     : (zc.installed ? (zc.updateAvailable ? `Update to ${zcPkg.version}` : 'Reinstall') : `Install ${zcPkg.version || ''}`.trim());
+  const zcRemove = $('#btn-remove-zcsdk');
+  zcRemove.classList.toggle('hidden', !state.mods.some((m) => m.runtimePart));
+  zcRemove.title = 'Removes both parts of the ZCSDK Runtime (ZCSDKBridge and ZCSDKLoader) together';
   zcBtn.title = !zcPkg ? 'GitHub is unreachable and this build has no bundled runtime copy.'
     : (zcPkg.source === 'github'
       ? `Downloads ZCSDK Runtime ${zcPkg.version} from the EnvianMods/ZCSDK-Runtime-Release GitHub repo`
@@ -1326,7 +1484,7 @@ $('#btn-update-retoc').addEventListener('click', async () => {
     state = res.state;
     render();
     toast(`retoc ${res.version} installed from GitHub — used for pak inspection from now on.`);
-  } finally { btn.disabled = false; $('#progress-toast').classList.add('hidden'); }
+  } finally { btn.disabled = false; progressToastIdle(); }
 });
 $('#btn-browse-retoc').addEventListener('click', async () => {
   const data = await call('browseToolPath', { key: 'retocPath', title: 'Locate retoc.exe', filterName: 'retoc' });
@@ -1429,7 +1587,7 @@ async function openUe4ssVersionsModal() {
     else {
       act.addEventListener('click', async () => {
         act.disabled = true;
-        try { await onClick(); } finally { act.disabled = false; $('#progress-toast').classList.add('hidden'); }
+        try { await onClick(); } finally { act.disabled = false; progressToastIdle(); }
       });
     }
     r.append(info, act);
@@ -1553,7 +1711,7 @@ async function ue4ssInstallFrom(btn) {
     if (res) ue4ssInstalledToast(res);
   } finally {
     btn.disabled = false;
-    $('#progress-toast').classList.add('hidden');
+    progressToastIdle();
   }
 }
 $('#chk-ue4ss-auto').addEventListener('change', (e) => saveSetting({ ue4ssAutoUpdate: e.target.checked }));
@@ -1572,7 +1730,7 @@ $('#btn-ue4ss-check').addEventListener('click', async () => {
     else if (out.action === 'notified' || out.action === 'failed') toast(`UE4SS ${up.latestBuild} is on Nexus (you have ${up.currentBuild}) — press Update.`, 'warn', 8000);
   } finally {
     btn.disabled = false;
-    $('#progress-toast').classList.add('hidden');
+    progressToastIdle();
   }
 });
 $('#btn-install-zcsdk').addEventListener('click', async () => {
@@ -1580,7 +1738,31 @@ $('#btn-install-zcsdk').addEventListener('click', async () => {
   btn.disabled = true;
   try { await installZcsdkRuntime(); } finally {
     btn.disabled = false;
-    $('#progress-toast').classList.add('hidden');
+    progressToastIdle();
+  }
+});
+
+// Settings → ZCSDK Runtime → Remove: both parts together, after saying which
+// installed SDK mods stop working without it.
+$('#btn-remove-zcsdk').addEventListener('click', async () => {
+  const deps = ((state.zcsdk && state.zcsdk.neededBy) || []).map((m) => m.name);
+  const msg = deps.length
+    ? `Remove the ZCSDK Runtime (ZCSDKBridge + ZCSDKLoader)?\n\n${deps.length} installed mod${deps.length === 1 ? '' : 's'} built with the Zero Company Mod SDK need${deps.length === 1 ? 's' : ''} it and will not work until you install it again:\n\n`
+      + deps.map((n) => `• ${n}`).join('\n')
+      + '\n\nMod Command will not put it back by itself until you install it again from here.'
+    : 'Remove the ZCSDK Runtime (ZCSDKBridge + ZCSDKLoader)? No installed mod needs it right now.';
+  if (!window.confirm(msg)) return;
+  const btn = $('#btn-remove-zcsdk');
+  btn.disabled = true;
+  try {
+    const res = await call('removeZcsdkRuntime');
+    if (!res) return;
+    state = res.state;
+    render();
+    toast(`ZCSDK Runtime removed${res.removed && res.removed.length ? ` (${res.removed.join(', ')})` : ''}.`
+      + `${res.leftover && res.leftover.length ? ` ${res.leftover.join(' and ')} ${res.leftover.length === 1 ? 'is' : 'are'} still in ue4ss\\Mods — not installed by Mod Command, so left alone.` : ''}`, 'info', 9000);
+  } finally {
+    btn.disabled = false;
   }
 });
 
@@ -1911,7 +2093,7 @@ function buildBrowseCard(m) {
         else if (res && res.opened === 'website') toast('Files page opened — press “Mod Manager Download” and the update installs in place.', 'info', 8000);
       } finally {
         installBtn.disabled = false;
-        $('#progress-toast').classList.add('hidden');
+        progressToastIdle();
       }
     });
     const pageBtn0 = document.createElement('button');
@@ -2037,7 +2219,7 @@ async function openNexusVersionsModal(m) {
           }
         } finally {
           act.disabled = false;
-          $('#progress-toast').classList.add('hidden');
+          progressToastIdle();
         }
       });
     } else {
@@ -2247,7 +2429,7 @@ function buildForgeCard(m) {
         if (res && res.updated) { state = res.state; render(); toast(`“${forgeUpdate.name}” updated.`); }
       } finally {
         installBtn.disabled = false;
-        $('#progress-toast').classList.add('hidden');
+        progressToastIdle();
       }
     });
   } else if (inHangar.length) {
@@ -2274,7 +2456,7 @@ function buildForgeCard(m) {
         }
       } finally {
         installBtn.disabled = false;
-        $('#progress-toast').classList.add('hidden');
+        progressToastIdle();
       }
     });
   } else {
@@ -2609,14 +2791,12 @@ function closeNexusDownload() {
 }
 
 // Progress + completion for the panel, driven by the shared install events.
-function nexusDlProgress(pct, received) {
+function nexusDlProgress(view) {
   if (!nexusDl.open || nexusDl.done) return;
   nexusDl.sawProgress = true;
   $('#nexus-dl-progress').classList.remove('hidden');
-  $('#nexus-dl-progress-label').textContent = pct !== null
-    ? `Downloading — ${pct}%`
-    : `Downloading — ${(received / 1048576).toFixed(1)} MB`;
-  $('#nexus-dl-progress-bar').style.width = `${pct ?? 100}%`;
+  $('#nexus-dl-progress-label').textContent = view.text;
+  $('#nexus-dl-progress-bar').style.width = `${view.pct ?? 100}%`;
   setNexusPill('Downloading…', 'busy');
 }
 function nexusDlMaybeComplete() {
@@ -2634,29 +2814,86 @@ function nexusDlError() {
   $('#nexus-dl-progress').classList.add('hidden');
 }
 
-// Best-effort: detect whether the embedded Nexus session is signed in (and the
-// account name) by inspecting the loaded page — robust across cookie changes.
+// Is the page in the embedded Nexus panel signed in? Runs INSIDE the guest
+// page (serialised with Function.prototype.toString, so it must stay
+// self-contained) and reads it once: { state: 'in' | 'out' | 'unknown',
+// signal, name }. Measured on the live site: the header of an ANONYMOUS page
+// already carries a profile menu — a guest avatar avatars.nexusmods.com/0/100,
+// the name "guest" and a <form action=".../auth/sign_out"> — so none of those
+// may count as signed in. A signed-in page's avatar is
+// avatars.nexusmods.com/<member id>/… (the old "/avatars/" path never matches
+// it) and its logout is a button in that form, not a link. Strongest of all
+// is the page's own server-rendered flag (isLoggedIn: true|false).
+function nexusPageState() {
+  const visible = (el) => {
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) return false;
+    const cs = getComputedStyle(el);
+    return cs.visibility !== 'hidden' && cs.display !== 'none' && Number(cs.opacity) > 0.05;
+  };
+  const q = (sels) => { const out = []; for (const sel of sels) { try { out.push(...document.querySelectorAll(sel)); } catch (_) {} } return out; };
+  // 1. The page's own flag (server-rendered, so it cannot be "late").
+  let flag = null;
+  for (const sc of document.querySelectorAll('script:not([src])')) {
+    const m = /\bisLoggedIn["']?\s*:\s*(true|false)\b/.exec(sc.textContent || '');
+    if (m) { flag = m[1] === 'true'; break; }
+  }
+  // 2. Header account markers.
+  let avatar = null; // 'member' | 'guest' | null
+  for (const img of q(['header img.profile-pic', 'header img[alt="Profile image" i]', 'header img[src*="avatars.nexusmods.com"]', 'header img[src*="/avatars/"]', '.user-profile-menu img'])) {
+    const m = /(?:avatars\.nexusmods\.com|\/avatars)\/(?:u\/)?(\d+)(?:\/|$)/i.exec(img.getAttribute('src') || '');
+    if (!m) continue;
+    if (m[1] !== '0') { avatar = 'member'; break; }
+    avatar = 'guest';
+  }
+  let name = '';
+  let guest = false;
+  for (const el of q(['.user-profile-menu-username', 'header [data-e2eid="user-name"]', 'header a[href*="/users/"][title]'])) {
+    const t = (el.getAttribute('title') || el.textContent || '').trim();
+    if (!t) continue;
+    if (/^\s*guest\s*$/i.test(t)) { guest = true; continue; }
+    name = t.slice(0, 60); break;
+  }
+  const logout = [...document.querySelectorAll('a[href], button, input[type="submit"]')].some((el) => {
+    if (!visible(el)) return false;
+    if (el.tagName === 'A' && /(?:sign|log)[-_ ]?out/i.test(el.getAttribute('href') || '')) return true;
+    return /^\s*(?:log|sign)\s*-?\s*out\s*$/i.test((el.innerText || el.value || '').trim());
+  });
+  const login = q(['a#login', '.nav-games-unauthenticated a', 'header a[href*="/auth/sign_in"]'])
+    .some((el) => visible(el) && /^\s*(?:log|sign)\s*in\s*$/i.test((el.innerText || el.textContent || '').trim()));
+  let state = 'unknown';
+  let signal = null;
+  if (flag === true) { state = 'in'; signal = 'page flag isLoggedIn'; }
+  else if (flag === false) { state = 'out'; signal = 'page flag isLoggedIn=false'; }
+  else if (avatar === 'member') { state = 'in'; signal = 'account avatar'; }
+  else if (name) { state = 'in'; signal = 'account name in header'; }
+  else if (guest || avatar === 'guest') { state = 'out'; signal = 'guest profile'; }
+  else if (logout) { state = 'in'; signal = 'logout link'; }
+  else if (login) { state = 'out'; signal = 'Log in button'; }
+  if (state !== 'in') name = '';
+  return { state, signal, name };
+}
+
+// The sign-in page, with a way back to the exact file the panel has open (the
+// way Nexus's own "Log in" buttons do it).
+function nexusSignInUrl() {
+  const back = nexusDl.target && /^https:\/\/(?:www\.)?nexusmods\.com\//i.test(nexusDl.target) ? nexusDl.target : '';
+  return back ? `${NEXUS_LOGIN_URL}?redirect_url=${encodeURIComponent(back)}` : NEXUS_LOGIN_URL;
+}
+
+// Detect whether the embedded Nexus session is signed in (and the account
+// name) by reading the loaded page with nexusPageState. Only a POSITIVE
+// marker counts as signed in; anything else offers the sign-in.
 async function refreshNexusAccount() {
   const view = $('#nexus-dl-view');
   const chip = $('#nexus-dl-account');
   if (!view || !chip) return;
   let res = null;
   try {
-    // Conservative: only claim "signed in" on a POSITIVE marker (a logout link
-    // or account avatar). Never infer it from the mere absence of a login link —
-    // Nexus renders its header late, which would falsely read as signed in.
-    res = await view.executeJavaScript(`(() => {
-      const logout = [...document.querySelectorAll('a')].some(a => {
-        const h = (a.getAttribute('href') || ''), t = (a.textContent || '');
-        return /sign[-_ ]?out|log[-_ ]?out/i.test(h) || /^\\s*(log ?out|sign ?out)\\s*$/i.test(t);
-      });
-      const avatar = !!document.querySelector('header img[src*="/avatars/"], img.avatar, .avatar img');
-      const acct = document.querySelector('header a[href*="/users/"]');
-      const name = acct ? (acct.getAttribute('title') || acct.textContent || '').trim() : '';
-      return { loggedIn: !!(logout || avatar), name };
-    })()`, true);
+    res = await view.executeJavaScript(`(${nexusPageState.toString()})()`, true);
   } catch (_) { return; }
   if (!res) return;
+  res.loggedIn = res.state === 'in';
   if (res.loggedIn) {
     chip.textContent = res.name ? `◈ ${res.name}` : '◈ Signed in';
     chip.classList.add('in');
@@ -2699,7 +2936,8 @@ async function refreshNexusAccount() {
   const acct = $('#nexus-dl-account');
   if (acct) acct.addEventListener('click', () => {
     if (acct.classList.contains('in')) return;
-    try { view.loadURL(NEXUS_LOGIN_URL); } catch (_) { view.src = NEXUS_LOGIN_URL; }
+    const url = nexusSignInUrl();
+    try { view.loadURL(url); } catch (_) { view.src = url; }
   });
   // The shared [data-close-modal] handler hides the panel; also blank the guest.
   const closeBtn = document.querySelector('[data-close-modal="nexus-dl-modal"]');
@@ -2721,21 +2959,67 @@ async function openImportModal(opts = {}) {
   const mgrList = $('#import-manager-list');
   mgrList.innerHTML = '';
   mgrSection.classList.toggle('hidden', !(orphans.length || sources.length));
+  // Adopting can replace installed mods: never under a running game.
+  const running = !!(managerSources && managerSources.gameRunning);
+  const runNote = $('#import-game-running');
+  if (runNote) runNote.classList.toggle('hidden', !running);
+  $('#btn-import-adopt').disabled = running;
+  $('#btn-import-adopt').title = running ? 'Close Star Wars Zero Company first — adopting can replace installed mods whose files the game has loaded.' : '';
+  // Orphaned archive entries are never pre-ticked: each says what adopting it
+  // does, and one that would replace an installed mod says so in plain words
+  // (and the Adopt button asks again). Old copies of the ZCSDK Runtime are
+  // not adoptable at all — they get a separate, explicit clean-up button.
+  const vLabel = (v) => (v ? `v${v}` : 'an unversioned copy');
   for (const o of orphans) {
-    const row = document.createElement('label');
-    row.className = 'import-row';
-    const check = document.createElement('input');
-    check.type = 'checkbox';
-    check.checked = true;
-    check.dataset.candidateId = o.id;
     const info = document.createElement('div');
     info.className = 'import-info';
     const name = document.createElement('div');
     name.className = 'import-name';
-    name.textContent = o.name;
+    name.textContent = o.version ? `${o.name} v${o.version}` : o.name;
     const meta = document.createElement('div');
     meta.className = 'import-meta';
-    meta.textContent = `${TYPE_LABEL[o.modType] || o.modType} · ${o.fileCount} file(s) · orphaned archive entry (no mod record)`;
+    if (o.runtimeCopy) {
+      const row = document.createElement('div');
+      row.className = 'import-row';
+      meta.textContent = `Old ZCSDK Runtime copy · ${o.fileCount} file(s) · orphaned archive entry — not adoptable (the runtime is installed from Settings → ZCSDK Runtime); safe to clean up`;
+      info.append(name, meta);
+      const btn = document.createElement('button');
+      btn.className = 'btn tiny ghost';
+      btn.textContent = '🗑 Clean up';
+      btn.title = 'Deletes this stray copy from the mod archive. Your installed ZCSDK Runtime and the game are not touched.';
+      btn.addEventListener('click', async () => {
+        if (!window.confirm(`Delete the old ZCSDK Runtime copy “${name.textContent}” from the mod archive?\n\nYour installed ZCSDK Runtime and the game are not touched.`)) return;
+        btn.disabled = true;
+        const res = await call('cleanRuntimeCopy', o.dirName);
+        if (!res) { btn.disabled = false; return; }
+        state = res.state;
+        render();
+        row.remove();
+        toast(`Removed the old ZCSDK Runtime copy (${res.name}${res.version ? ` v${res.version}` : ''}) from the mod archive.`);
+      });
+      row.append(info, btn);
+      mgrList.appendChild(row);
+      continue;
+    }
+    const row = document.createElement('label');
+    row.className = 'import-row';
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.checked = false;
+    check.dataset.candidateId = o.id;
+    const e = o.effect || { action: 'new' };
+    let what;
+    if (e.action === 'replace' || e.action === 'reinstall') {
+      what = `REPLACES your installed ${e.installedName} ${vLabel(e.installedVersion)} with ${vLabel(e.incoming)}`
+        + `${e.installedEnabled ? '' : ' (kept off)'}`;
+      check.dataset.replaces = `${o.name}: replaces your installed ${e.installedName} ${vLabel(e.installedVersion)} with ${vLabel(e.incoming)}`;
+      meta.classList.add('warn');
+    } else if (e.action === 'archive') {
+      what = `older than your installed ${e.installedName} ${vLabel(e.installedVersion)} — added to its ⧗ Versions only`;
+    } else {
+      what = 'installs as a new mod';
+    }
+    meta.textContent = `${TYPE_LABEL[o.modType] || o.modType} · ${o.fileCount} file(s) · orphaned archive entry (no mod record) · ${what}`;
     info.append(name, meta);
     row.append(check, info);
     mgrList.appendChild(row);
@@ -2821,7 +3105,7 @@ $('#btn-link-mods').addEventListener('click', async () => {
   } finally {
     btn.disabled = false;
     btn.textContent = label;
-    $('#progress-toast').classList.add('hidden');
+    progressToastIdle();
   }
 });
 
@@ -3036,12 +3320,23 @@ async function runManagerImport(dirPath) {
 $('#btn-import-folder').addEventListener('click', () => runManagerImport(undefined));
 
 $('#btn-import-adopt').addEventListener('click', async () => {
-  const ids = $$('#import-list input:checked, #import-manager-list input:checked').map((c) => c.dataset.candidateId);
+  const checked = $$('#import-list input:checked, #import-manager-list input:checked');
+  const ids = checked.map((c) => c.dataset.candidateId);
   if (!ids.length) { toast('Select at least one mod to adopt.', 'warn'); return; }
+  // Ticked archive entries that replace an installed mod: say exactly what
+  // happens and ask once more.
+  const replacing = checked.filter((c) => c.dataset.replaces);
+  if (replacing.length) {
+    const go = window.confirm(`Adopting ${replacing.length === 1 ? 'this entry replaces an installed mod' : `these ${replacing.length} entries replace installed mods`}:\n\n`
+      + replacing.map((c) => `• ${c.dataset.replaces}`).join('\n')
+      + '\n\nThe installed version is kept in ⧗ Versions. Continue?');
+    if (!go) return;
+  }
+  const allowReplace = replacing.map((c) => c.dataset.candidateId);
   const btn = $('#btn-import-adopt');
   btn.disabled = true;
   try {
-    const res = await call('adoptMods', ids);
+    const res = await call('adoptMods', ids, allowReplace);
     if (!res) return;
     state = res.state;
     render();
@@ -3627,6 +3922,20 @@ window.zc.onEvent((payload) => {
     if ($('#setup-modal').classList.contains('hidden')) maybeRunFirstScan();
     return;
   }
+  if (payload.type === 'zcsdk-heal-ask') {
+    // Self-heal found the runtime the installed SDK mods need missing or
+    // incomplete, and putting it back means a download: ask first.
+    const n = payload.dependents || 0;
+    const what = payload.sigsMissing ? 'missing its UE4SS signature files'
+      : (/incomplete/i.test(payload.reason || '') ? 'incomplete' : 'missing or switched off');
+    const go = window.confirm(
+      `The ZCSDK Runtime is ${what}, `
+      + `and ${n} installed SDK mod${n === 1 ? '' : 's'} need${n === 1 ? 's' : ''} it.\n\n`
+      + `Download and install ZCSDK Runtime ${payload.version || ''} from GitHub now?`);
+    if (go) installZcsdkRuntime().finally(() => progressToastIdle());
+    else toast('The ZCSDK Runtime is not in place — install it from Settings → ZCSDK Runtime.', 'warn', 9000);
+    return;
+  }
   if (payload.type === 'toast') {
     toast(payload.message, payload.kind || 'info', 7000);
     if (payload.kind === 'error') nexusDlError();
@@ -3638,17 +3947,8 @@ window.zc.onEvent((payload) => {
     // A state refresh after download progress means the embedded install finished.
     nexusDlMaybeComplete();
   } else if (payload.type === 'progress') {
-    const box = $('#progress-toast');
-    box.classList.remove('hidden');
-    const pct = payload.total ? Math.round((payload.received / payload.total) * 100) : null;
-    $('#progress-label').textContent = pct !== null
-      ? `Downloading ${payload.label} — ${pct}%`
-      : `Downloading ${payload.label} — ${(payload.received / 1048576).toFixed(1)} MB`;
-    $('#progress-fill').style.width = `${pct ?? 100}%`;
-    if (payload.total && payload.received >= payload.total) {
-      setTimeout(() => box.classList.add('hidden'), 1200);
-    }
-    nexusDlProgress(pct, payload.received); // mirror into the download panel
+    // The strips repaint on the next frame (renderDownloads).
+    noteDownload(payload);
   }
 });
 

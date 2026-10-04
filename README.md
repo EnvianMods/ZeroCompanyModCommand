@@ -233,8 +233,10 @@ automatically for IoStore package inspection; a different copy can be selected i
   app opens nexusmods.com in your own browser (OAuth 2.0 authorization code +
   PKCE, per Nexus's app guidelines), you approve Mod Command there, and it never
   sees your password. Only the access tokens Nexus issues are kept, encrypted
-  with your OS user credentials (Windows DPAPI via Electron safeStorage), never
-  shown to the UI, and only ever sent to nexusmods.com; revoke access any time
+  with your OS user credentials (Windows DPAPI via Electron safeStorage) — never
+  in plain text: without a secure OS key store they are kept for the session
+  only — never in the game-folder archive, never shown to the UI, masked in
+  the log and support report, and only ever sent to nexusmods.com; revoke access any time
   from your Nexus account page. Register the `nxm://` handler and "Mod Manager
   Download" buttons on nexusmods.com install straight into the manager, with
   download progress, auto naming/version from Nexus mod info. Non-premium
@@ -351,6 +353,22 @@ automatically for IoStore package inspection; a different copy can be selected i
   stays bundled as the offline fallback. Existing copies are vaulted and replaced
   by name; installing an SDK-built mod without a working runtime offers the install
   immediately, and UE4SS is fetched first when it is missing.
+  While installed mods need it, the runtime is a protected dependency: its two
+  parts can't be switched off, removed, rolled back or renamed from the Hangar,
+  Disable all and profiles leave it on, an old copy can never be adopted or
+  installed over it (Import lists one as "Old ZCSDK Runtime copy — safe to clean
+  up"), and Settings → ZCSDK Runtime → **Remove** takes both parts out together.
+  If it goes missing or gets switched off, Mod Command puts it back (from the
+  bundled copy, or after asking when that needs a download) — unless you removed
+  it, or its files were changed outside Mod Command. A failed install or update
+  puts the previous runtime back.
+- **Safe mod changes** — nothing is switched, removed, updated, rolled back,
+  renamed or reordered while Star Wars Zero Company runs from the game folder (the
+  check looks at whether the game's own exe files are in use; when it cannot be
+  sure, the change waits with a **Check again** button). Undeploying removes only
+  the files Mod Command deployed and keeps anything else in a mod's folder; a
+  file held open stops the undeploy cleanly; a failed update, adoption or
+  rollback puts the previous version back exactly as it was.
 - **Incompatibility check** — pairwise conflict detection between enabled mods:
   **CONFIRMED** pairs modify the same game assets (asset paths extracted from each mod's
   `.utoc` via `retoc list --path`); **SUSPECTED** pairs ship identically named files.

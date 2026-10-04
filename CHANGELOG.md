@@ -55,6 +55,164 @@
   there and its `mods.txt` line; refused while the game runs) or **Keep as
   is**. Diagnostics reports a UE4SS mod whose files are outside its folder.
 
+**No console windows flashing up from Mod Command's helpers**
+- The small Windows tools Mod Command runs in the background — the registry
+  lookups for Steam and the EA App, `tar` and 7-Zip when unpacking a mod,
+  retoc when listing a mod's IoStore packages, and the `nxm://` link
+  registration — now run hidden. Before, each could flash a black console
+  window, most noticeably at startup and while installing. The game itself is
+  started exactly as before.
+
+**Startup: no "MaxListenersExceededWarning"**
+- The startup work that waits for the window to load (update checks, startup
+  recovery, the archive restore, the update-freeze check and more) now runs
+  from one queue instead of ten separate listeners, which made Node print a
+  MaxListenersExceededWarning at every start. If one of those tasks fails, it
+  is logged and the rest still run.
+
+**Fixed: UE4SS could be replaced while the game was running**
+- Before Mod Command installs, updates, switches or restores UE4SS it checks
+  that Star Wars Zero Company is closed. On some PCs that check took so long
+  that it gave up — and then counted the game as closed, so UE4SS was
+  replaced under a running game.
+- The check now looks at whether the game's own files are in use, which
+  takes a few milliseconds, and only asks Windows for the running programs
+  when that can't tell.
+- If it still can't be sure, nothing is changed: you see "Couldn't confirm
+  Star Wars Zero Company is closed — close it and try again" with a
+  **Check again** button, which repeats what you were doing once the game is
+  confirmed closed. The automatic UE4SS update waits instead.
+
+**Safer mod changes**
+- No mod changes while Star Wars Zero Company is running: switching mods on
+  or off (ZC Unlocked add-ons included), removing, updating, rolling back,
+  renaming, moving a UE4SS mod to its own folder name, reordering, squad
+  profiles, installing the ZCSDK Runtime and Hangar Bay → Import wait for you
+  to close the game, with a clear "Nothing was changed" message (and the
+  **Check again** button when Mod Command can't confirm the game is closed).
+  Startup recovery waits for the game to close, too.
+- Switching off or removing a mod removes only the files Mod Command put
+  there. A settings file the mod wrote, or a file you added to its folder, is
+  kept (and the log says so); the folder goes only once it is empty.
+- If a file can't be removed because something holds it open, the mod is not
+  left half-removed: it stays on with all its files, and you are told why.
+- If an update, adoption, rollback or update-from-Nexus fails part way, the
+  version you had is put back exactly as it was.
+- A mod that was off stays off through an update, rollback or restore — it is
+  no longer deployed and then taken out again — and keeps its name and its
+  load-order or start-order slot.
+- Adopting a UE4SS mod folder that is switched off no longer deletes it from
+  the game.
+
+**The ZCSDK Runtime's UE4SS signatures are safe from UE4SS updates and other mods**
+- A UE4SS update that stops shipping a signature file of the same name as one
+  the ZCSDK Runtime placed no longer removes the runtime's copy.
+- UE4SS version snapshots (⧗ Versions) no longer include the runtime's
+  signature files, so restoring an older UE4SS build leaves them in place.
+- Switching off or removing another mod that once deployed a file of the same
+  name never deletes a signature file the runtime owns.
+
+**Startup recovery: two false alarms fixed**
+- A UE4SS mod whose `enabled.txt` was rewritten (by UE4SS, another tool or
+  you) no longer counts as "changed outside Mod Command": its missing files
+  are put back as usual, and Diagnostics no longer flags it.
+- Restoring from the mod archive on a fresh setup now deploys game-folder
+  mods again. They replace game files by design (the originals go into their
+  backups), so the "different files already in the game" rule left every one
+  of them disabled.
+
+**The ZCSDK Runtime is protected while SDK mods need it**
+- The ZCSDK Runtime (ZCSDKBridge + ZCSDKLoader) is now installed, updated and
+  removed only from Settings → ZCSDK Runtime. While mods built with the Zero
+  Company Mod SDK are installed, its Hangar rows say "◆ Required by N SDK
+  mods" and can't be switched off, uninstalled, rolled back or renamed;
+  Disable all and squad profiles leave it on (and say so).
+- An old or stray copy of ZCSDKBridge or ZCSDKLoader — from the mod archive,
+  another manager, or a dropped folder — can no longer be installed as a
+  regular mod or replace the runtime; the "existing mods" scan no longer
+  offers the runtime's folders for adoption.
+- Applying the UE4SS start order keeps the runtime's `enabled.txt` switches.
+- New: Settings → ZCSDK Runtime → **Remove** takes both parts out together
+  (with their UE4SS signature files), after listing the SDK mods that will
+  stop working.
+- Self-heal: if SDK mods are installed and the runtime is missing, incomplete
+  or switched off, Mod Command switches it back on or reinstalls the bundled
+  copy and tells you (it asks first when that needs a download, and waits
+  until the game is closed). A runtime whose files in the game were changed
+  outside Mod Command (for example a newer build) is left alone, with a note.
+  If you removed the runtime yourself, it stays removed.
+- A runtime install or update that fails part way puts the previous runtime
+  back as it was.
+
+**Import no longer pre-ticks anything**
+- Hangar Bay → Import used to tick every orphaned mod-archive entry for you,
+  and adopting one could silently replace an installed mod (an old copy of
+  the ZCSDK Runtime in the archive replaced, and could remove, the installed
+  runtime). Now nothing is ticked, and each entry says what adopting it does:
+  "installs as a new mod", "older than your installed … — added to its
+  ⧗ Versions only", or "REPLACES your installed …". A replacement asks once
+  more before it happens.
+- An old ZCSDK Runtime copy in the archive shows as "Old ZCSDK Runtime copy —
+  safe to clean up" with its own **Clean up** button; it can't be adopted.
+
+**The built-in Nexus panel gets no camera, microphone, location or device access**
+- Electron grants web pages every permission they ask for unless told
+  otherwise, so the Nexus download panel — and the ad frames inside it — could
+  use the camera, microphone, location, notifications, MIDI, USB/serial/HID
+  devices, clipboard reading, screen capture or open other programs through
+  their link handlers. Now everything is refused except what the pages
+  really use: copying to the clipboard on nexusmods.com and fullscreen video
+  on nexusmods.com and YouTube. Mod Command's own window may only copy to the
+  clipboard (Copy support report).
+- An `nxm://` link from inside the panel always goes straight to Mod
+  Command's installer; other external links (`ms-settings:`, `steam:`, …)
+  from the panel are refused.
+- Refusals are noted once per site in the session log (site only, never the
+  full address).
+
+**Nexus sign-in: no tokens in plain text, and no account name in reports**
+- Your Nexus sign-in is never written to disk in plain text any more. With
+  the operating system's key store (Windows' own encryption, the macOS
+  Keychain, a Linux keyring) it is stored encrypted as before; without one,
+  you stay signed in for this session only and Settings says so. Plain-text
+  sign-in data an older version wrote is removed at startup (encrypted, or
+  kept for the session only). On Linux, Mod Command asks for the desktop
+  keyring instead of the obfuscation-only fallback.
+- The mod archive in the game folder (`ModCommandArchive\manager-data.json`)
+  no longer carries your sign-in at all, not even encrypted; an existing copy
+  is cleaned at startup.
+- The session log, the support report and error messages run through one
+  scrubber: sign-in tokens, authorization headers, `nxm://` link keys and the
+  query strings of signed download links are masked, and your Nexus account
+  name appears as its first two letters followed by `***` (the report's
+  footer promised that already). An unusable `nxm://` link in an error no
+  longer shows its key.
+
+**Download progress no longer jumps around**
+- The bottom progress strip and the Nexus download panel now follow each
+  download on its own: one download shows its name, several show
+  "Downloading 2 files" with one total. The label and the bar always show the
+  same number, and the total never goes backwards. The Nexus panel only shows
+  the download of the mod it has open.
+- The same file handed over twice by Nexus (a second click on the download
+  button) now downloads once — the second link is ignored with a note,
+  instead of a second download writing into the same file and the install
+  then failing.
+- A dropped connection no longer fails the download: it resumes where it
+  stopped when the server allows it (Nexus does), otherwise starts again
+  from the beginning, and the strip says so.
+
+**Nexus download panel: signing in is recognised again**
+- After signing in to Nexus in the built-in download panel, Mod Command kept
+  showing "◈ Sign in to Nexus": Nexus changed how its pages show that you are
+  signed in, so the panel no longer recognised it. It now reads the page's own
+  signed-in flag, your account picture and name in the header, or a visible
+  log-out button — and never mistakes the guest profile Nexus shows to
+  signed-out visitors for an account.
+- "◈ Sign in to Nexus" now opens Nexus's sign-in page with a link back to
+  the file you were on, the way Nexus's own "Log in" buttons do, so you land
+  on the file right after signing in.
+
 ## v1.9.19 (2026-10-01)
 
 Ships together with v1.9.18, v1.9.17, v1.9.16 and v1.9.15 below as public 1.0.10.

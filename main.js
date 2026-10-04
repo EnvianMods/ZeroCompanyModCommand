@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -56,9 +56,9 @@ function checkRuntimeFiles() {
 }
 checkRuntimeFiles();
 
-const { Store } = require('./lib/store');
+const { Store, SECRET_SETTINGS } = require('./lib/store');
 const steam = require('./lib/steam');
-const { ModEngine, compareVersions, MODS_REL, LOGIC_MODS_REL, WIN64_REL, UE4SS_MODS_REL, GAME_MODS_REL } = require('./lib/mods');
+const { ModEngine, GAME_UNKNOWN_MESSAGE, isZcsdkRuntimeRecord, compareVersions, MODS_REL, LOGIC_MODS_REL, WIN64_REL, UE4SS_MODS_REL, GAME_MODS_REL } = require('./lib/mods');
 const { findSevenZip, bundledSevenZip } = require('./lib/archive');
 const nexus = require('./lib/nexus');
 const nexusHttp = require('./lib/nexus-http');
@@ -73,11 +73,13 @@ const ea = require('./lib/ea');
 const { checkLauncherUpdate, cachedInfo: cachedLauncherInfo, parseSdkBlock } = require('./lib/launcher-update');
 const { isAllowedExternalUrl } = require('./lib/external-url');
 const { log, logText } = require('./lib/log');
+const { redactSecrets, registerSecret, registerAccountName } = require('./lib/redact');
 const report = require('./lib/report');
 // SDK LINK: Mod Command hosts the Zero Company Mod SDK's OWN UI when one is
 // installed. It carries no copy of that UI — see lib/sdk-link.js and
 // docs/SDK_LINK.md.
 const sdkLink = require('./lib/sdk-link');
+const { configureWebPermissions, lockWebContentsDevices } = require('./lib/web-permissions');
 
 // App data (settings, staging, indexes) lives in the OS per-user app-data
 // folder — %APPDATA%\ZeroCompanyModCommand on Windows — never beside the exe.
@@ -107,6 +109,28 @@ const engine = new ModEngine(store);
 // records an archive restore brings back later.
 try { engine.migrateUe4ssFolders(); } catch (e) { log('warn', `UE4SS folder migration: ${e.message}`); }
 let win = null;
+
+// Is Star Wars Zero Company running from the configured game folder? Asked
+// before every change that takes files out of the game or puts them back.
+// Answers 'running' | 'not-running' | 'unknown' (lib/steam.js
+// gameRunningState, cached there for a few seconds); 'unknown' — the check
+// could not finish — is treated as running by every change (refused with
+// "Couldn't confirm … is closed") and makes background work wait, exactly
+// like a running game. No game folder = nothing to guard.
+steam._setGameRunningLog((level, msg) => log(level, msg));
+function gameRunningNow(opts) {
+  const gp = store.settings.gamePath;
+  if (!gp) return 'not-running';
+  return steam.gameRunningState(gp, opts).state;
+}
+function gameIsRunningOrUnknown(opts) { return gameRunningNow(opts) !== 'not-running'; }
+engine.gameRunning = gameRunningNow;
+// UE4SS installs, switches and restores: the running game has UE4SS loaded.
+function assertGameClosedForUe4ss() {
+  const st = gameRunningNow();
+  if (st === 'unknown') throw new Error(`${GAME_UNKNOWN_MESSAGE} (The running game would have UE4SS loaded.) Nothing was changed.`);
+  if (st !== 'not-running') throw new Error(GAME_RUNNING_UE4SS);
+}
 
 // ---------------------------------------------------------- mod archive location
 // The archive (library/backups/versions + a mirrored manifest) lives in the
@@ -187,47 +211,137 @@ async function autoRestoreFromArchive() {
 // credentials, so the app signs the user in with OAuth 2.0 (Authorization Code
 // + PKCE, see lib/nexus-oauth.js) and keeps only the tokens Nexus issues. They are
 // encrypted with the OS user's credentials (DPAPI on Windows) via Electron
-// safeStorage; plaintext is the fallback when the OS store is unavailable.
-// Tokens never reach the renderer and are never written to the log.
+// safeStorage. They are NEVER written to disk in plain text: without a secure
+// OS key store (safeStorage unavailable, or Linux's obfuscation-only
+// basic_text backend) they are kept in memory for this session only and the
+// user signs in again next time. A plaintext copy an older build wrote is
+// migrated on startup and deleted. Tokens never reach the renderer, and the
+// redactor (lib/redact.js) masks them anywhere they might appear in the log,
+// the support report or an error.
 
 const SIGN_IN_REQUIRED = 'Sign in to Nexus Mods in Settings first.';
 const SIGN_IN_EXPIRED = 'Your Nexus Mods sign-in expired or was revoked. Sign in again in Settings.';
 const REFRESH_MARGIN_MS = 60 * 1000; // refresh this long before the token lapses
 
 let nexusTokens = null; // { access_token, refresh_token, expires_at, obtained_at }
+// Tokens with no secure home on this system live here, for this session only.
+let sessionOnlyTokens = null;
+
+// Linux: ask Chromium for a real keyring instead of letting it fall back to
+// `basic_text` on a desktop it does not recognise (tiling WMs, gamescope…).
+// KDE is auto-detected to kwallet already; an explicit --password-store wins.
+if (process.platform === 'linux' && !app.commandLine.hasSwitch('password-store')) {
+  const desktop = String(process.env.XDG_CURRENT_DESKTOP || '').toLowerCase();
+  if (!/kde|plasma/.test(desktop)) app.commandLine.appendSwitch('password-store', 'gnome-libsecret');
+}
+
+// Is there a SECURE place to keep the tokens? isEncryptionAvailable() alone is
+// not enough on Linux, where it is also true for the obfuscation-only
+// basic_text backend. ZC_TEST_NO_SECURE_STORE=1 simulates "no store" in dev
+// runs only (ignored when packaged).
+function secureTokenStore() {
+  if (!app.isPackaged && process.env.ZC_TEST_NO_SECURE_STORE === '1') return { available: false, backend: 'test-disabled' };
+  let available = false;
+  let backend = null;
+  try { available = safeStorage.isEncryptionAvailable(); } catch (_) {}
+  if (process.platform === 'linux') {
+    try { backend = safeStorage.getSelectedStorageBackend(); } catch (_) {}
+    if (!backend || backend === 'basic_text' || backend === 'unknown') available = false;
+  }
+  return { available, backend };
+}
+
+function registerTokenSecrets(t) {
+  if (!t) return;
+  registerSecret(t.access_token);
+  registerSecret(t.refresh_token);
+}
 let nexusRefreshInFlight = null;
 let nexusSignInFlow = null;
 let legacyCredentialsDropped = false;
 
 function loadNexusTokens() {
   const s = store.settings;
-  let raw = null;
-  if (s.nexusOAuthEncrypted) {
-    try {
-      if (safeStorage.isEncryptionAvailable()) {
-        raw = safeStorage.decryptString(Buffer.from(s.nexusOAuthEncrypted, 'base64'));
+  // Plaintext tokens an older build wrote when the OS store was unavailable:
+  // encrypted now, or kept for this session only — and gone from disk.
+  if (s.nexusOAuth) {
+    let plain = null;
+    try { plain = typeof s.nexusOAuth === 'string' ? JSON.parse(s.nexusOAuth) : s.nexusOAuth; } catch (_) {}
+    s.nexusOAuth = null;
+    if (plain && plain.access_token) {
+      registerTokenSecrets(plain);
+      if (!s.nexusOAuthEncrypted) {
+        saveNexusTokens(plain);
+        log('info', `nexus sign-in: plaintext tokens removed from settings — ${sessionOnlyTokens ? 'no secure OS key store, kept for this session only' : 'now encrypted with the OS key store'}`);
+      } else {
+        store.save();
+        log('info', 'nexus sign-in: removed leftover plaintext tokens (encrypted ones are stored)');
       }
-    } catch (_) { /* wrong OS user / corrupted blob — treat as signed out */ }
-    if (!raw) return null;
-  } else if (s.nexusOAuth) {
-    raw = s.nexusOAuth;
+    } else {
+      store.save();
+    }
   }
-  if (!raw) return null;
+  if (sessionOnlyTokens) return sessionOnlyTokens;
+  if (!s.nexusOAuthEncrypted) return null;
+  let raw = null;
   try {
-    const t = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    return t && t.access_token ? t : null;
-  } catch (_) { return null; }
+    if (secureTokenStore().available) raw = safeStorage.decryptString(Buffer.from(s.nexusOAuthEncrypted, 'base64'));
+  } catch (_) { /* wrong OS user / corrupted blob / keyring locked — treat as signed out */ }
+  if (!raw) {
+    log('warn', 'nexus sign-in: the stored tokens could not be decrypted on this system — signed out');
+    return null;
+  }
+  try {
+    const t = JSON.parse(raw);
+    if (t && t.access_token) { registerTokenSecrets(t); return t; }
+  } catch (_) {}
+  return null;
 }
 
+// Never plaintext on disk: encrypted with the OS key store, else in memory for
+// this session only.
 function saveNexusTokens(tokens) {
-  if (tokens && safeStorage.isEncryptionAvailable()) {
-    store.settings.nexusOAuthEncrypted = safeStorage.encryptString(JSON.stringify(tokens)).toString('base64');
-    store.settings.nexusOAuth = null;
-  } else {
+  store.settings.nexusOAuth = null;
+  sessionOnlyTokens = null;
+  if (!tokens) {
     store.settings.nexusOAuthEncrypted = null;
-    store.settings.nexusOAuth = tokens || null;
+  } else if (secureTokenStore().available) {
+    registerTokenSecrets(tokens);
+    store.settings.nexusOAuthEncrypted = safeStorage.encryptString(JSON.stringify(tokens)).toString('base64');
+  } else {
+    registerTokenSecrets(tokens);
+    store.settings.nexusOAuthEncrypted = null;
+    sessionOnlyTokens = tokens;
   }
   store.save();
+}
+
+// Remove credential fields from every settings copy this app itself writes
+// besides its own settings file: a leftover atomic-write .tmp and the
+// manager-data.json mirror in the mod archive (Store.save() writes the
+// mirror without them, but its empty-store guard can skip a rewrite, so an
+// older mirror is cleaned here explicitly). The encrypted blob is kept out of
+// the mirror too: it belongs to this machine's OS account and has no use in
+// a game-folder backup.
+function scrubSecretsFromDisk() {
+  const files = [`${store.file}.tmp`];
+  if (store.storageRoot && path.resolve(store.storageRoot) !== path.resolve(store.dataDir)) {
+    files.push(path.join(store.storageRoot, 'manager-data.json'));
+  }
+  for (const file of files) {
+    try {
+      if (!fs.existsSync(file)) continue;
+      if (file.endsWith('.tmp')) { fs.rmSync(file, { force: true }); continue; }
+      const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+      const st = raw && raw.settings;
+      if (!st || !SECRET_SETTINGS.some((k) => k in st)) continue;
+      for (const k of SECRET_SETTINGS) delete st[k];
+      fs.writeFileSync(file, JSON.stringify(raw, null, 2));
+      log('info', 'removed stored credentials from the archive manifest mirror');
+    } catch (err) {
+      log('error', `could not scrub credentials from a settings copy: ${err.message}`);
+    }
+  }
 }
 
 // A token set fresh from the token endpoint. The access token's RS256 signature
@@ -244,6 +358,7 @@ function applyNexusTokens(fresh) {
   const who = oauth.userFromToken(next.access_token); // throws on a token we cannot verify
   nexusTokens = next;
   saveNexusTokens(next);
+  registerAccountName(who.name);
   nexusUser = {
     name: who.name,
     isPremium: who.isPremium,
@@ -303,6 +418,7 @@ async function refreshNexusPreferences() {
 
 function nexusSignOutLocal() {
   nexusTokens = null;
+  sessionOnlyTokens = null;
   nexusUser = null;
   store.settings.nexusOAuth = null;
   store.settings.nexusOAuthEncrypted = null;
@@ -397,6 +513,7 @@ function initNexusAuth() {
   // refreshes it). A token we cannot verify is refused outright.
   try {
     const who = oauth.userFromToken(nexusTokens.access_token, { ignoreExpiry: true });
+    registerAccountName(who.name);
     // Adult content stays hidden until the account's own preferences answer.
     nexusUser = { name: who.name, isPremium: who.isPremium, adult: false, adultBlurImages: false, ageVerified: false };
     refreshNexusPreferences().catch(() => {});
@@ -483,9 +600,25 @@ const protocolArgs = () => {
   return { exe: process.execPath, args: [app.getAppPath()] };
 };
 
+// Files whose nxm:// is being handled. The site can hand the same file over
+// twice (a second press of the download button, or the link seen by two of
+// the catch paths — will-navigate, will-redirect, a window-open, the OS
+// handler); the second is dropped instead of starting a parallel download of
+// the same file into the same staging file.
+const nxmInFlight = new Set();
+
 async function handleNxm(rawUrl) {
+  let busyKey = null;
   try {
     const link = nexus.parseNxm(rawUrl);
+    busyKey = `${link.modId}:${link.fileId}`;
+    if (nxmInFlight.has(busyKey)) {
+      log('info', `nxm: mod ${link.modId} file ${link.fileId} is already downloading — duplicate link ignored`);
+      sendEvent({ type: 'toast', message: 'That file is already downloading.' });
+      busyKey = null;
+      return;
+    }
+    nxmInFlight.add(busyKey);
     const token = await nexusAccessToken();
     sendEvent({ type: 'toast', message: `Nexus download requested (mod ${link.modId})…` });
     let info = null;
@@ -496,8 +629,8 @@ async function handleNxm(rawUrl) {
     try { fileMeta = await nexus.fileInfo(link.modId, link.fileId, token); } catch (_) {}
     const fileName = (fileMeta && fileMeta.file_name) || null;
     const uri = await nexus.downloadLink(link, token);
-    const dest = await nexus.downloadToFile(uri, store.stagingDir, fileName, (got, total) => {
-      sendEvent({ type: 'progress', label: info ? info.name : `mod ${link.modId}`, received: got, total });
+    const dest = await nexus.downloadToFile(uri, store.stagingDir, fileName, (got, total, dl) => {
+      sendEvent({ type: 'progress', key: `nexus:${link.modId}`, label: info ? info.name : `mod ${link.modId}`, received: got, total, ...dl });
     });
     try {
       // Same Nexus mod already installed? This is an update — replace in place
@@ -509,7 +642,7 @@ async function handleNxm(rawUrl) {
       // first, and record the install so updates can be tracked.
       const isUe4ssPage = link.modId === ue4ssDl.NEXUS_MOD_ID;
       if (isUe4ssPage) {
-        if (steam.isGameRunning(store.settings.gamePath)) throw new Error(GAME_RUNNING_UE4SS);
+        assertGameClosedForUe4ss();
         keepCurrentUe4ss();
       }
       if (existing) {
@@ -546,6 +679,8 @@ async function handleNxm(rawUrl) {
   } catch (err) {
     log('error', `nxm install failed: ${err.message}`);
     sendEvent({ type: 'toast', kind: 'error', message: err.message });
+  } finally {
+    if (busyKey) nxmInFlight.delete(busyKey);
   }
 }
 
@@ -652,6 +787,24 @@ async function checkForUpdates({ background = false } = {}) {
   return results;
 }
 
+// Startup work that waits for the window's first page load runs, in the order
+// it was queued, from ONE did-finish-load listener (createWindow). A once()
+// per task put 10 listeners (11 with an nxm:// launch argument) on the
+// window's webContents next to Electron's own, which tripped Node's
+// MaxListenersExceededWarning at every start. A task that throws or rejects
+// is logged and never stops the ones after it.
+const windowLoadTasks = [];
+function onWindowLoad(fn) { windowLoadTasks.push(fn); }
+function runWindowLoadTasks() {
+  const failed = (err) => log('error', `startup task failed: ${err && err.message ? err.message : err}`);
+  for (const fn of windowLoadTasks.splice(0)) {
+    try {
+      const r = fn();
+      if (r && typeof r.catch === 'function') r.catch(failed);
+    } catch (err) { failed(err); }
+  }
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1280,
@@ -672,6 +825,7 @@ function createWindow() {
       webviewTag: true,
     },
   });
+  win.webContents.once('did-finish-load', runWindowLoadTasks);
   win.loadFile(path.join(__dirname, 'src', 'index.html'));
 
   // The SDK link hosts a WebContentsView inside THIS window, so it can only be
@@ -736,6 +890,8 @@ function createWindow() {
 // lets a non-premium user download without leaving the app — the website mints
 // the signed nxm link from their logged-in session, exactly as in a real browser.
 app.on('web-contents-created', (_e, contents) => {
+  // No page — ours, the SDK's or Nexus's — gets to pick a Bluetooth device.
+  lockWebContentsDevices(contents);
   if (contents.getType() !== 'webview') return;
   const catchNxm = (url) => {
     if (typeof url === 'string' && url.startsWith('nxm://')) {
@@ -758,12 +914,19 @@ app.on('web-contents-created', (_e, contents) => {
 
 app.whenReady().then(() => {
   log('info', `app start v${app.getVersion()} on ${process.platform} ${require('os').release()}`);
+  // Deny-by-default web permissions for the Nexus panel and the app window
+  // (Electron grants everything otherwise). An nxm:// that reaches the OS
+  // handoff instead of will-navigate is routed to handleNxm in-process. See
+  // lib/web-permissions.js.
+  try { configureWebPermissions(session, { log, onNxm: (url) => handleNxm(url) }); } catch (err) { log('error', `web permission setup failed: ${err.message}`); }
   // Load the stored OAuth tokens — and throw away any credential an older
   // build left behind.
   try { initNexusAuth(); } catch (err) { log('error', `Nexus sign-in state could not be read: ${err.message}`); }
   // Archive lives in the game folder (or the custom location) — migrate any
   // app-side content there, then restore from it when this store is fresh.
   try { ensureStorage(); } catch (err) { log('error', `archive setup failed: ${err.message}`); }
+  // No credential in a settings copy outside the app's own settings file.
+  try { scrubSecretsFromDisk(); } catch (_) {}
   try { eaAppDetected = ea.eaAppPresent(); } catch (_) {}
   // EA-compat community list: fetch now and refresh every 30 minutes; a state
   // push follows so freshly flagged mods surface without a restart.
@@ -782,7 +945,7 @@ app.whenReady().then(() => {
   // One-time explanation for anyone upgrading from a build that stored a
   // credential of its own.
   if (legacyCredentialsDropped) {
-    win.webContents.once('did-finish-load', () => sendEvent({
+    onWindowLoad(() => sendEvent({
       type: 'toast',
       kind: 'warn',
       message: 'Nexus Mods sign-in has changed. Sign in with your Nexus account in Settings to restore downloads and update checks.',
@@ -790,19 +953,19 @@ app.whenReady().then(() => {
   }
   // Handle an nxm:// link this instance was launched with.
   const url = nxmFromArgv(process.argv);
-  if (url) win.webContents.once('did-finish-load', () => handleNxm(url));
+  if (url) onWindowLoad(() => handleNxm(url));
   // Launcher self-update banner — and, from the same file, where to GET the
   // Mod SDK (refreshLauncherUpdate persists the `sdk` block and pushes it to
   // the renderer). Re-run hourly, the same cadence as every other check, so a
   // link the operator flips lands without a restart.
-  win.webContents.once('did-finish-load', () => refreshLauncherUpdate({ banner: true }).catch(() => {}));
+  onWindowLoad(() => refreshLauncherUpdate({ banner: true }).catch(() => {}));
   setInterval(() => {
     if (win && !win.isDestroyed()) refreshLauncherUpdate({ force: true, banner: true }).catch(() => {});
   }, UPDATE_CHECK_MS);
   // ZCSDK Runtime: learn the newest GitHub release (the Settings card and the
   // install path use it); nudge once per version when an installed runtime is
   // behind it.
-  win.webContents.once('did-finish-load', async () => {
+  onWindowLoad(async () => {
     const remote = await zcsdkRt.latestRuntime();
     if (!remote) return;
     const st = engine.zcsdkStatus();
@@ -817,7 +980,7 @@ app.whenReady().then(() => {
   // UE4SS for Star Wars Zero Company (Nexus mod 9): at startup and hourly,
   // the same cadence as every other check. Updates itself when that is on and
   // possible, otherwise says so; a stock/unknown UE4SS gets the switch notice.
-  win.webContents.once('did-finish-load', async () => {
+  onWindowLoad(async () => {
     maybeCheckUe4ss().catch(() => {});
     await retocDl.refreshLatest();
     const ru = retocDl.updateInfo(engine.retocStatus().version);
@@ -829,7 +992,7 @@ app.whenReady().then(() => {
   });
   setInterval(() => { if (win && !win.isDestroyed()) maybeCheckUe4ss().catch(() => {}); }, UPDATE_CHECK_MS);
   // Fresh store + existing archive → restore mods/profiles/vault from it.
-  win.webContents.once('did-finish-load', async () => {
+  onWindowLoad(async () => {
     const results = await autoRestoreFromArchive();
     if (results) {
       sendEvent({ type: 'state', state: fullState() });
@@ -861,7 +1024,7 @@ app.whenReady().then(() => {
   });
   // Re-assert an update freeze the user turned on (Steam may have rewritten
   // the manifest while it was briefly writable, e.g. during a verify).
-  win.webContents.once('did-finish-load', () => {
+  onWindowLoad(() => {
     if (!store.settings.updateFreeze || !store.settings.gamePath) return;
     try {
       const status = steam.updateFreezeStatus(store.settings.gamePath);
@@ -874,36 +1037,179 @@ app.whenReady().then(() => {
   });
   // Startup recovery: redeploy enabled mods whose deployed files went missing,
   // unless the files left in the game were changed outside Mod Command.
-  win.webContents.once('did-finish-load', () => {
-    if (!store.settings.gamePath) return;
-    try {
-      const { repaired, skipped, addonsDeployed } = engine.repairDeployments();
-      if (addonsDeployed && addonsDeployed.length) {
-        sendEvent({ type: 'state', state: fullState() });
-        sendEvent({ type: 'toast', kind: 'info', message: `ZC Unlocked found — deployed the add-on${addonsDeployed.length === 1 ? '' : 's'} waiting for it: ${addonsDeployed.join(', ')}.` });
-      }
-      if (repaired.length) {
-        log('warn', `startup recovery redeployed: ${repaired.join(', ')}`);
-        sendEvent({ type: 'state', state: fullState() });
-        sendEvent({ type: 'toast', kind: 'warn', message: `Recovered missing deployed files for: ${repaired.join(', ')}.` });
-      }
-      if (skipped.length) {
-        sendEvent({ type: 'toast', kind: 'warn', message: `Not restored: ${skipped.join(', ')} — the files in the game were changed outside Mod Command (e.g. a newer build), so they were left as they are. To bring the mod up to date in Mod Command, install that build with Hangar Bay → ⊕ Install archive.` });
-      }
-    } catch (_) {}
-  });
+  onWindowLoad(() => startupRecovery());
   // Background mod update check: at startup when the last one is over an
   // hour old, then every hour while the app stays open (one Nexus files call
   // per linked mod, one GitHub call per GitHub-linked mod). The Hangar's
   // "Check updates" button runs the same check on demand.
-  win.webContents.once('did-finish-load', () => maybeCheckUpdates());
+  onWindowLoad(() => maybeCheckUpdates());
   setInterval(() => { if (win && !win.isDestroyed()) maybeCheckUpdates(); }, UPDATE_CHECK_MS);
   // The linked SDK's own update check, on the SAME hourly cadence and with
   // the same 60-minute cache. One small JSON fetch, only when an SDK is
   // linked, and a failure is a state ('unknown'), never a toast.
-  win.webContents.once('did-finish-load', () => maybeCheckSdkUpdate());
+  onWindowLoad(() => maybeCheckSdkUpdate());
   setInterval(() => { if (win && !win.isDestroyed()) maybeCheckSdkUpdate(); }, UPDATE_CHECK_MS);
 });
+
+// Redeploy enabled mods whose deployed files went missing. Under a running
+// game (or one that can't be confirmed closed) nothing is touched: it runs
+// again once the game has closed.
+let startupRecoveryTimer = null;
+function startupRecovery() {
+  if (!store.settings.gamePath) return;
+  if (gameIsRunningOrUnknown()) {
+    if (!startupRecoveryTimer) {
+      log('info', 'startup recovery waits for the game to close (or until it can be confirmed closed)');
+      startupRecoveryTimer = setInterval(() => {
+        if (gameIsRunningOrUnknown({ force: true })) return;
+        clearInterval(startupRecoveryTimer);
+        startupRecoveryTimer = null;
+        startupRecovery();
+      }, 30000);
+      if (startupRecoveryTimer.unref) startupRecoveryTimer.unref();
+    }
+    healZcsdkRuntime('startup').catch(() => {}); // notifies and waits itself
+    return;
+  }
+  try {
+    // Files changed outside Mod Command (e.g. a newer build) are never
+    // replaced by the stored copy: those mods come back in `skipped`.
+    const { repaired, skipped, addonsDeployed } = engine.repairDeployments();
+    // Add-ons installed before ZC Unlocked was in the game, now that it is.
+    if (addonsDeployed && addonsDeployed.length) {
+      sendEvent({ type: 'state', state: fullState() });
+      sendEvent({ type: 'toast', kind: 'info', message: `ZC Unlocked found — deployed the add-on${addonsDeployed.length === 1 ? '' : 's'} waiting for it: ${addonsDeployed.join(', ')}.` });
+    }
+    if (repaired.length) {
+      log('warn', `startup recovery redeployed: ${repaired.join(', ')}`);
+      sendEvent({ type: 'state', state: fullState() });
+      sendEvent({ type: 'toast', kind: 'warn', message: `Recovered missing deployed files for: ${repaired.join(', ')}.` });
+    }
+    if (skipped.length) {
+      sendEvent({ type: 'toast', kind: 'warn', message: `Not restored: ${skipped.join(', ')} — the files in the game were changed outside Mod Command (e.g. a newer build), so they were left as they are. To bring the mod up to date in Mod Command, install that build with Hangar Bay → ⊕ Install archive.` });
+    }
+  } catch (_) {}
+  healZcsdkRuntime('startup').catch(() => {});
+}
+
+// ZCSDK Runtime self-heal. The runtime is a protected dependency: while
+// installed mods need it (they ship a *.zcsdk.lua), it must be present and
+// switched on. Runs at startup and after every mod operation; when it finds
+// the runtime missing, incomplete or switched off it
+//   - switches this app's own copy back on / redeploys its missing files
+//     (when that copy is not older than the package available now), or
+//   - reinstalls it: silently from the copy bundled with the app, or, when
+//     that would need a download (the newest release is on GitHub), only
+//     after asking (a 'zcsdk-heal-ask' event; the renderer confirms and runs
+//     the normal install).
+// Only a runtime this app installed (or still holds records of) is healed —
+// a first install stays the user's choice — and never after the user removed
+// it (Settings → ZCSDK Runtime → Remove). Files of the runtime that were
+// changed outside Mod Command (a newer runtime build) are never replaced.
+// With the game running it waits for the game to close, and says so.
+let zcsdkHealBusy = false;
+let zcsdkHealWait = null;
+let zcsdkHealAsked = null;
+let zcsdkHealLeftNoted = null;
+// Self-heal found runtime files changed outside Mod Command and left them
+// alone: say so once per set of parts (it runs after every mod operation).
+function zcsdkHealLeftAlone(names) {
+  const key = [...names].sort().join('|');
+  if (zcsdkHealLeftNoted === key) return;
+  zcsdkHealLeftNoted = key;
+  sendEvent({ type: 'toast', kind: 'warn', message: `ZCSDK Runtime not restored: the files of ${names.join(' and ')} in the game were changed outside Mod Command (e.g. a newer runtime build), so they were left as they are. To have Mod Command manage the runtime again, use Settings → ZCSDK Runtime → Update / Reinstall.` });
+}
+async function healZcsdkRuntime(reason) {
+  if (zcsdkHealBusy || !store.settings.gamePath || store.settings.zcsdkRemovedByUser) return null;
+  zcsdkHealBusy = true;
+  try {
+    let first = engine.zcsdkHealPlan(zcsdkRt.availableRuntime());
+    // The runtime has none (or not all) of its UE4SS signature files: only a
+    // newer release may bring them (the bundled copy can be older) — read
+    // latest.json first (cached for an hour) before deciding there is
+    // nothing to do.
+    const sg = first.action === 'none' && first.reason === 'healthy' ? engine.zcsdkStatus().signatures : null;
+    if (sg && (!sg.files.length || sg.installed < sg.files.length)) {
+      try { await zcsdkRt.latestRuntime(); } catch (_) {}
+      first = engine.zcsdkHealPlan(zcsdkRt.availableRuntime());
+    }
+    if (first.action === 'none') return null;
+    if (!store.settings.zcsdkRuntimeWanted && !store.mods.some((m) => isZcsdkRuntimeRecord(m))) return null;
+    if (gameIsRunningOrUnknown()) {
+      if (!zcsdkHealWait) {
+        log('warn', `ZCSDK Runtime needs restoring (${first.reason}) — waiting for the game to close`);
+        sendEvent({ type: 'toast', kind: 'warn', message: 'The ZCSDK Runtime your SDK mods need is missing or switched off. Mod Command restores it as soon as the game is closed.' });
+        zcsdkHealWait = setInterval(() => {
+          if (gameIsRunningOrUnknown({ force: true })) return;
+          clearInterval(zcsdkHealWait);
+          zcsdkHealWait = null;
+          healZcsdkRuntime('after the game closed').catch(() => {});
+        }, 30000);
+        if (zcsdkHealWait.unref) zcsdkHealWait.unref();
+      }
+      return { deferred: true };
+    }
+    try { await zcsdkRt.latestRuntime(); } catch (_) {} // cached for an hour
+    const pkg = zcsdkRt.availableRuntime();
+    const plan = engine.zcsdkHealPlan(pkg);
+    if (plan.action === 'enable') {
+      const { fixed, skipped } = engine.healZcsdkParts(plan.ids);
+      if (skipped.length) zcsdkHealLeftAlone(skipped);
+      if (!fixed.length) return null;
+      log('warn', `ZCSDK Runtime self-heal (${reason}): switched back on / redeployed ${fixed.join(', ')} — ${plan.reason}`);
+      sendEvent({ type: 'state', state: fullState() });
+      sendEvent({ type: 'toast', kind: 'warn', message: `The ZCSDK Runtime your SDK mods need was switched off or incomplete — restored it (${fixed.join(', ')}).` });
+      return { fixed };
+    }
+    if (plan.action !== 'install') return null;
+    if (!pkg) {
+      log('error', `ZCSDK Runtime self-heal (${reason}): the runtime is missing and no package is available`);
+      sendEvent({ type: 'toast', kind: 'error', message: 'The ZCSDK Runtime your SDK mods need is missing, and no copy is available offline — install it from Settings → ZCSDK Runtime when you are online.' });
+      return null;
+    }
+    // A runtime whose files in the game were changed outside Mod Command (a
+    // newer build deployed by the Mod SDK) is not silently reinstalled over.
+    const changedOutside = engine.zcsdkPartsChangedOutside();
+    if (changedOutside.length) {
+      for (const c of changedOutside) {
+        log('warn', `ZCSDK Runtime self-heal (${reason}) skipped reinstalling: ${c.name}'s files in the game were changed outside Mod Command (${c.files.slice(0, 3).join(', ')}${c.files.length > 3 ? ', …' : ''})`);
+      }
+      zcsdkHealLeftAlone(changedOutside.map((c) => c.name));
+      return null;
+    }
+    if (pkg.source === 'github') {
+      if (zcsdkHealAsked === pkg.version) return null;
+      zcsdkHealAsked = pkg.version;
+      log('warn', `ZCSDK Runtime self-heal (${reason}): ${plan.reason} — asking before downloading ${pkg.version} from GitHub`);
+      sendEvent({ type: 'zcsdk-heal-ask', version: pkg.version, reason: plan.reason, dependents: plan.dependents, sigsMissing: !!plan.sigsMissing });
+      return { asked: true };
+    }
+    const res = await engine.installZcsdkRuntime(pkg.zip, pkg.version);
+    store.settings.zcsdkRuntimeWanted = true;
+    store.save();
+    log('warn', `ZCSDK Runtime self-heal (${reason}): reinstalled the bundled ${pkg.version || 'copy'} (${res.replaced} previous part(s) replaced) — ${plan.reason}`);
+    sendEvent({ type: 'state', state: fullState() });
+    sendEvent({ type: 'toast', kind: 'warn', message: plan.sigsMissing
+      ? `The ZCSDK Runtime's UE4SS signature files were missing (without them UE4SS mods do not run) — reinstalled the runtime (${pkg.version || 'bundled copy'}) to put them back.`
+      : `The ZCSDK Runtime your SDK mods need was missing or incomplete — reinstalled it (${pkg.version || 'bundled copy'}).` });
+    return { installed: pkg.version };
+  } catch (err) {
+    log('error', `ZCSDK Runtime self-heal (${reason}) failed: ${err.message}`);
+    sendEvent({ type: 'toast', kind: 'error', message: `Could not restore the ZCSDK Runtime: ${err.message}` });
+    return null;
+  } finally {
+    zcsdkHealBusy = false;
+  }
+}
+
+// Channels after which the runtime self-heal looks again.
+const HEAL_AFTER = new Set([
+  'set-mod-enabled', 'uninstall-mod', 'set-all-enabled', 'rollback-version', 'apply-profile',
+  'adopt-mods', 'apply-ue4ss-order', 'apply-load-order', 'rollback-load-order', 'rename-mod',
+  'install-mods', 'install-folder', 'install-dropped', 'update-mod', 'import-manager-folder',
+  'nexus-install-file', 'nexus-install-remote', 'github-install', 'fomod-complete',
+  'ue4ss-restore', 'install-ue4ss', 'clean-runtime-copy',
+]);
 
 // WHERE TO GET THE SDK. Mod Command hard-codes no destination: the operator
 // publishes one in the asset repo's launcher-version.json `sdk` block, which
@@ -1036,6 +1342,8 @@ function fullState() {
     nexus: {
       signedIn: nexusSignedIn(),
       tokensEncrypted: !!store.settings.nexusOAuthEncrypted,
+      // Signed in without a secure OS key store: tokens kept in memory only.
+      tokensSessionOnly: !!sessionOnlyTokens,
       user: nexusUser ? {
         name: nexusUser.name,
         isPremium: !!nexusUser.isPremium,
@@ -1075,10 +1383,19 @@ function fullState() {
     ue4ssOrder: store.settings.gamePath ? engine.ue4ssOrderState() : { managed: [], others: [], applied: false },
     // ue4ssFolderNotice: { deployedAs, own } — a UE4SS mod deployed under a
     // folder other than its own folder name (the row offers to move it back).
+    // runtimePart / requiredBy: a ZCSDK Runtime part and how many installed
+    // SDK mods need it — the row can't be switched off, removed or rolled
+    // back while that is > 0 (Settings → ZCSDK Runtime → Remove instead).
     mods: (() => {
       try { engine.migrateUe4ssFolders(); } catch (_) {}
+      const deps = engine.runtimeDependents().map((m) => m.name);
       return store.mods.map((m) => (m.modType === 'ue4ss-mod'
-        ? { ...m, ue4ssFolder: engine.ue4ssFolderOf(m), ue4ssFolderNotice: engine.ue4ssFolderNotice(m) }
+        ? {
+          ...m,
+          ue4ssFolder: engine.ue4ssFolderOf(m),
+          ue4ssFolderNotice: engine.ue4ssFolderNotice(m),
+          ...(isZcsdkRuntimeRecord(m) ? { runtimePart: true, requiredBy: deps.length, requiredByNames: deps.slice(0, 8) } : {}),
+        }
         : m));
     })(),
     conflicts,
@@ -1357,7 +1674,8 @@ function detectManagerSources() {
 }
 
 function ok(data) { return { ok: true, data }; }
-function fail(err) { return { ok: false, error: err && err.message ? err.message : String(err) }; }
+// Error text crossing to the renderer goes through the secret redactor too.
+function fail(err) { return { ok: false, error: redactSecrets(err && err.message ? err.message : String(err)) }; }
 
 const handlers = {
   'get-state': async () => fullState(),
@@ -1437,11 +1755,8 @@ const handlers = {
   'rename-mod': async (_e, { id, name }) => { engine.rename(id, name); return fullState(); },
   // UE4SS mod deployed under a folder other than its own folder name: move it
   // back ("Use original name"), or keep it as it is and hide the notice.
+  // The engine refuses it while the game runs (or can't be confirmed closed).
   'use-own-ue4ss-folder': async (_e, { id, force }) => {
-    const m = store.getMod(id);
-    if (m && m.enabled && steam.isGameRunning(store.settings.gamePath)) {
-      throw new Error('Close Star Wars Zero Company first — the running game has this UE4SS mod loaded, so its folder cannot be moved until the game exits.');
-    }
     engine.useOwnUe4ssFolder(id, force);
     return fullState();
   },
@@ -1607,8 +1922,8 @@ const handlers = {
         'MimeType=x-scheme-handler/nxm;', '',
       ].join('\n');
       fs.writeFileSync(path.join(appsDir, 'zero-company-mod-command.desktop'), desktop);
-      try { execFileSync('xdg-mime', ['default', 'zero-company-mod-command.desktop', 'x-scheme-handler/nxm'], { stdio: 'ignore' }); } catch (_) {}
-      try { execFileSync('update-desktop-database', [appsDir], { stdio: 'ignore' }); } catch (_) {}
+      try { execFileSync('xdg-mime', ['default', 'zero-company-mod-command.desktop', 'x-scheme-handler/nxm'], { stdio: 'ignore', windowsHide: true }); } catch (_) {}
+      try { execFileSync('update-desktop-database', [appsDir], { stdio: 'ignore', windowsHide: true }); } catch (_) {}
       app.setAsDefaultProtocolClient('nxm');
       return fullState();
     }
@@ -1619,7 +1934,7 @@ const handlers = {
     try {
       const { execFileSync } = require('child_process');
       const set = (key, value, data) => execFileSync('reg',
-        ['add', key, ...(value ? ['/v', value] : ['/ve']), '/d', data, '/f'], { stdio: 'ignore' });
+        ['add', key, ...(value ? ['/v', value] : ['/ve']), '/d', data, '/f'], { stdio: 'ignore', windowsHide: true });
       // Browser "Open …?" dialogs pull the name from these (which one varies by
       // browser/version) or from the exe's FileDescription.
       set('HKCU\\Software\\Classes\\nxm', null, 'URL:Mod Command Link');
@@ -1690,8 +2005,8 @@ const handlers = {
     const file = nexus.pickPrimaryFile(files);
     if (!file) throw new Error('That mod has no downloadable main file.');
     const uri = await nexus.downloadLink({ modId, fileId: file.file_id }, token);
-    const dest = await nexus.downloadToFile(uri, store.stagingDir, file.file_name, (got, total) => {
-      sendEvent({ type: 'progress', label: name || `mod ${modId}`, received: got, total });
+    const dest = await nexus.downloadToFile(uri, store.stagingDir, file.file_name, (got, total, dl) => {
+      sendEvent({ type: 'progress', key: `nexus:${modId}`, label: name || `mod ${modId}`, received: got, total, ...dl });
     });
     try {
       const origin = { type: 'nexus', modId, fileId: file.file_id, version: file.version || null };
@@ -1757,18 +2072,37 @@ const handlers = {
 
   'scan-unmanaged': async () => engine.scanUnmanaged(),
 
+  // "Check again" after a change was refused because the game could not be
+  // confirmed closed: a fresh check, skipping the few-second cache.
+  'check-game-running': async () => {
+    if (!store.settings.gamePath) return { state: 'not-running' };
+    const r = steam.gameRunningState(store.settings.gamePath, { force: true });
+    return { state: r.state, method: r.method, ms: r.ms };
+  },
+
   'scan-manager-sources': async () => ({
     orphans: engine.scanOrphanLibraries(),
     sources: detectManagerSources(),
+    gameRunning: gameIsRunningOrUnknown(),
   }),
 
-  'adopt-mods': async (_e, { ids }) => {
+  // allowReplace: orphan ids the user ticked knowing they replace an
+  // installed mod (the dialog says so and asks again).
+  'adopt-mods': async (_e, { ids, allowReplace }) => {
+    // Adopting can replace installed mods (a newer copy of one) and claims
+    // files in the game: never under a running game.
+    const gameState = gameRunningNow();
+    if (gameState === 'unknown') throw new Error(`${GAME_UNKNOWN_MESSAGE} (Adopting mods can replace installed ones, whose files the running game would have loaded.) Nothing was changed.`);
+    if (gameState !== 'not-running') {
+      throw new Error('Close Star Wars Zero Company first — adopting mods can replace installed ones, whose files the running game has loaded. Nothing was changed.');
+    }
     const results = [];
+    const replaceOk = new Set(Array.isArray(allowReplace) ? allowReplace : []);
     // Orphaned entries in our own library (lost store) re-import directly.
     for (const oid of ids.filter((i) => i.startsWith('orphan:'))) {
       const dirName = oid.slice('orphan:'.length);
       try {
-        const mod = await engine.adoptOrphan(dirName);
+        const mod = await engine.adoptOrphan(dirName, { allowReplace: replaceOk.has(oid) });
         const identified = await identifyOnNexus(mod.id);
         results.push({ ok: true, name: store.getMod(mod.id).name, identified: identified ? identified.modName : null });
       } catch (err) {
@@ -1786,6 +2120,13 @@ const handlers = {
       }
     }
     return { results, state: fullState() };
+  },
+
+  // Import dialog: delete an orphaned archive entry that is an old copy of a
+  // ZCSDK Runtime part (never adoptable). Explicit, one entry at a time.
+  'clean-runtime-copy': async (_e, { dirName }) => {
+    const r = engine.cleanRuntimeCopy(String(dirName || ''));
+    return { state: fullState(), name: r.name, version: r.version };
   },
 
   'choose-storage-dir': async () => {
@@ -1873,8 +2214,8 @@ const handlers = {
     const file = files.find((f) => f.file_id === fileId);
     if (!file) throw new Error('That file is no longer listed on the mod page.');
     const uri = await nexus.downloadLink({ modId, fileId }, token);
-    const dest = await nexus.downloadToFile(uri, store.stagingDir, file.file_name, (got, total) => {
-      sendEvent({ type: 'progress', label: `${name || `mod ${modId}`} ${file.version || ''}`, received: got, total });
+    const dest = await nexus.downloadToFile(uri, store.stagingDir, file.file_name, (got, total, dl) => {
+      sendEvent({ type: 'progress', key: `nexus:${modId}`, label: `${name || `mod ${modId}`} ${file.version || ''}`, received: got, total, ...dl });
     });
     try {
       const origin = { type: 'nexus', modId, fileId, version: file.version || null };
@@ -2018,8 +2359,8 @@ const handlers = {
       detail: `From ${fullName} — release ${release.tag}.\n\nGitHub mods aren't moderated. This repo is on the curated list, but install only from authors you trust.`,
     });
     if (choice.response !== 0) return { cancelled: true };
-    const dest = await nexus.downloadToFile(release.assetUrl, store.stagingDir, release.assetName, (got, total) => {
-      sendEvent({ type: 'progress', label: fullName, received: got, total });
+    const dest = await nexus.downloadToFile(release.assetUrl, store.stagingDir, release.assetName, (got, total, dl) => {
+      sendEvent({ type: 'progress', label: fullName, received: got, total, ...dl });
     });
     try {
       const res = await engine.install(dest, {
@@ -2048,8 +2389,8 @@ const handlers = {
     if (origin.type === 'github') {
       const release = await github.latestReleaseFor(origin.repo);
       if (!release) throw new Error('The new release has no installable archive.');
-      const dest = await nexus.downloadToFile(release.assetUrl, store.stagingDir, release.assetName, (got, total) => {
-        sendEvent({ type: 'progress', label: mod.name, received: got, total });
+      const dest = await nexus.downloadToFile(release.assetUrl, store.stagingDir, release.assetName, (got, total, dl) => {
+        sendEvent({ type: 'progress', label: mod.name, received: got, total, ...dl });
       });
       try {
         const res = await engine.replaceOrigin(
@@ -2071,8 +2412,8 @@ const handlers = {
           || nexus.pickPrimaryFile(data.files);
         if (!file) throw new Error('The updated mod has no downloadable main file.');
         const uri = await nexus.downloadLink({ modId: origin.modId, fileId: file.file_id }, token);
-        const dest = await nexus.downloadToFile(uri, store.stagingDir, file.file_name, (got, total) => {
-          sendEvent({ type: 'progress', label: mod.name, received: got, total });
+        const dest = await nexus.downloadToFile(uri, store.stagingDir, file.file_name, (got, total, dl) => {
+          sendEvent({ type: 'progress', label: mod.name, received: got, total, ...dl });
         });
         try {
           const newVersion = file.version || mod.updateInfo.latest;
@@ -2153,7 +2494,7 @@ const handlers = {
   // notice again and a kept Nexus file is tracked for updates again.
   'ue4ss-restore': async (_e, { entryId }) => {
     if (!store.settings.gamePath) throw new Error('Locate the game folder in Settings first.');
-    if (steam.isGameRunning(store.settings.gamePath)) throw new Error(GAME_RUNNING_UE4SS);
+    assertGameClosedForUe4ss();
     const cur = currentUe4ssMeta();
     const m = engine.ue4ssRestore(entryId, ue4ssLabel(cur), cur);
     const at = new Date().toISOString();
@@ -2189,8 +2530,8 @@ const handlers = {
     if (pkg.source === 'github') {
       try {
         sendEvent({ type: 'toast', message: `Downloading ZCSDK Runtime ${pkg.version} from GitHub…` });
-        downloaded = await nexus.downloadToFile(pkg.url, store.stagingDir, pkg.asset, (got, total) => {
-          sendEvent({ type: 'progress', label: 'ZCSDK Runtime', received: got, total });
+        downloaded = await nexus.downloadToFile(pkg.url, store.stagingDir, pkg.asset, (got, total, dl) => {
+          sendEvent({ type: 'progress', label: 'ZCSDK Runtime', received: got, total, ...dl });
         });
         zipPath = downloaded;
       } catch (e) {
@@ -2210,10 +2551,27 @@ const handlers = {
       if (downloaded) fs.rmSync(downloaded, { force: true });
     }
     store.settings.zcsdkNoticedVersion = version || null;
+    // Wanted from now on: self-heal keeps it in place while SDK mods need it.
+    store.settings.zcsdkRuntimeWanted = true;
+    store.settings.zcsdkRemovedByUser = false;
     store.save();
     const sigs = (res.signatures || []).length;
     log('info', `ZCSDK Runtime ${version || ''} installed from ${source} (${res.replaced} previous cop${res.replaced === 1 ? 'y' : 'ies'} replaced${sigs ? `; ${sigs} UE4SS signature file${sigs === 1 ? '' : 's'} in ue4ss\\UE4SS_Signatures` : ''})`);
     return { state: fullState(), version, source, replaced: res.replaced, signatures: sigs };
+  },
+
+  // Settings → ZCSDK Runtime → Remove: both parts together, after the
+  // renderer's confirmation (which lists the SDK mods that stop working).
+  // Self-heal stays off until the runtime is installed again.
+  'remove-zcsdk-runtime': async () => {
+    const res = engine.removeZcsdkRuntime();
+    store.settings.zcsdkRemovedByUser = true;
+    store.save();
+    log('info', `ZCSDK Runtime removed (${res.removed.join(', ') || 'nothing managed'})`
+      + `${res.signaturesRemoved ? `; ${res.signaturesRemoved} UE4SS signature file(s) removed` : ''}`
+      + `${res.leftover.length ? `; left in place (not installed by Mod Command): ${res.leftover.join(', ')}` : ''}`
+      + `${res.dependents.length ? `; ${res.dependents.length} SDK mod(s) now lack it` : ''}`);
+    return { state: fullState(), ...res, status: undefined };
   },
 
   // Settings → retoc: check GitHub now / install the newest release into
@@ -2226,8 +2584,8 @@ const handlers = {
     if (process.platform !== 'win32') throw new Error('retoc updates are Windows-only in this app.');
     const bundledTools = fs.existsSync(path.join(__dirname, 'tools')) ? path.join(__dirname, 'tools')
       : (process.resourcesPath ? path.join(process.resourcesPath, 'tools') : null);
-    const r = await retocDl.installLatest(store.dataDir, bundledTools, nexus.downloadToFile, (got, total) => {
-      sendEvent({ type: 'progress', label: 'retoc', received: got, total });
+    const r = await retocDl.installLatest(store.dataDir, bundledTools, nexus.downloadToFile, (got, total, dl) => {
+      sendEvent({ type: 'progress', label: 'retoc', received: got, total, ...dl });
     });
     store.settings.retocInstalled = { tag: r.tag, version: r.version, asset: r.asset, publishedAt: r.publishedAt, installedAt: new Date().toISOString(), path: r.path };
     store.settings.retocNoticedVersion = r.version;
@@ -2312,15 +2670,15 @@ async function installUe4ssFromNexus(fileId, { auto = false } = {}) {
       hint: 'Press Mod Manager Download on the main file and Mod Command installs it — your UE4SS mods, mods.txt and settings are kept.',
     };
   }
-  if (steam.isGameRunning(store.settings.gamePath)) throw new Error(GAME_RUNNING_UE4SS);
+  assertGameClosedForUe4ss();
   const files = await nexus.filesList(ue4ssDl.NEXUS_MOD_ID, token);
   const file = files.find((f) => f.file_id === fileId);
   if (!file) throw new Error('That file is no longer listed on the Nexus page.');
   const before = ue4ssOrigin();
   keepCurrentUe4ss();
   const uri = await nexus.downloadLink({ modId: ue4ssDl.NEXUS_MOD_ID, fileId }, token);
-  const dest = await nexus.downloadToFile(uri, store.stagingDir, file.file_name, (got, total) => {
-    sendEvent({ type: 'progress', label: `UE4SS (Nexus) ${file.version || ''}`, received: got, total });
+  const dest = await nexus.downloadToFile(uri, store.stagingDir, file.file_name, (got, total, dl) => {
+    sendEvent({ type: 'progress', key: `nexus:${ue4ssDl.NEXUS_MOD_ID}`, label: `UE4SS (Nexus) ${file.version || ''}`, received: got, total, ...dl });
   });
   let result;
   try {
@@ -2416,7 +2774,7 @@ async function maybeCheckUe4ss({ force = false } = {}) {
       sendEvent({ type: 'toast', kind, message });
     };
     if (auto && premium) {
-      if (steam.isGameRunning(store.settings.gamePath)) {
+      if (gameIsRunningOrUnknown()) {
         const first = !ue4ssPending || ue4ssPending.fileId !== nx.fileId;
         ue4ssPending = { fileId: nx.fileId, version: nx.version || null, reason: 'game-running', since: new Date().toISOString() };
         if (first) {
@@ -2765,6 +3123,7 @@ function buildSupportReport() {
     settings: store.settings,
     nexusSignedIn: nexusSignedIn(),
     nexusTokensEncrypted: !!store.settings.nexusOAuthEncrypted,
+    nexusTokensSessionOnly: !!sessionOnlyTokens,
     mods: store.mods,
     modCompat,
     conflicts,
@@ -2873,6 +3232,8 @@ for (const [channel, fn] of Object.entries(handlers)) {
     } catch (err) {
       log('error', `${channel}: ${err && err.message ? err.message : err}`);
       return fail(err);
+    } finally {
+      if (HEAL_AFTER.has(channel)) setImmediate(() => { healZcsdkRuntime(`after ${channel}`).catch(() => {}); });
     }
   });
 }

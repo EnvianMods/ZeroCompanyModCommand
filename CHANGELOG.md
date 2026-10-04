@@ -1,5 +1,60 @@
 # Zero Company Mod Command — Changelog
 
+## v1.9.20 (unreleased)
+
+**ZC Unlocked add-ons install where ZC Unlocked looks for them**
+- An add-on for ZC Unlocked — a folder with an `addon.ini` (`[addon]`
+  section) and, usually, its own `050_ZCA_<Key>_P` paks — used to be installed
+  as a pak mod: its paks were renamed into `~mods` and `addon.ini` was
+  dropped. It is now its own mod type (**ZCU ADD-ON**): the whole folder goes
+  to `ue4ss\Mods\ZCUnlocked\addons\<Folder>\` under its original folder name,
+  which is how ZC Unlocked (and your saved picks) know the add-on. Nothing
+  goes to `~mods`. Add-ons without paks work too.
+- Any archive layout works: `ue4ss\Mods\ZCUnlocked\addons\<Folder>\`,
+  `Binaries\Win64\ue4ss\…`, `ZCUnlocked\addons\<Folder>\`,
+  `addons\<Folder>\` or just `<Folder>\addon.ini`. An archive with several
+  add-ons installs each as its own entry, and archives that mix add-ons with
+  plugin folders or Lua mods keep working.
+- Name and version come from `addon.ini`. An update is matched by the
+  add-on's folder name, so a new display name in `addon.ini` is still the same
+  add-on; renaming it in Mod Command changes only what you see.
+- Disabling an add-on sets `enabled=0` in its `addon.ini` and leaves the
+  folder where it is; enabling sets `enabled=1`. Nothing else in the file
+  changes (line endings, encoding and comments included), and that switch
+  never counts as "changed outside Mod Command" in startup recovery or
+  Diagnostics. Uninstalling removes only the add-on's own files.
+- ZC Unlocked has to be installed. Without it an add-on is kept in the
+  library, not deployed, with the notice *"Needs ZC Unlocked — install it
+  first"*; it is deployed and enabled as soon as ZC Unlocked is in the game
+  (installed through Mod Command, or found at the next start). Diagnostics
+  lists add-ons while ZC Unlocked is missing.
+- A UE4SS mod folder that carries an `addon.ini` (an add-on pack) still
+  installs as a UE4SS mod, as before.
+
+**Updating or removing ZC Unlocked (or any UE4SS mod) keeps what else is in its folder**
+- Disabling, updating, rolling back or uninstalling a UE4SS mod used to
+  delete its whole folder in `ue4ss\Mods` — for ZC Unlocked that took every
+  add-on in `ZCUnlocked\addons\` with it. Now only the files the mod deployed
+  are removed (then any folder left empty); add-ons, settings the mod wrote
+  and anything else you put there stay. Adopting a ZC Unlocked folder you
+  copied in by hand no longer claims its add-ons either.
+
+**UE4SS mods keep their own folder name**
+- A UE4SS mod is deployed to `ue4ss\Mods\<Folder>` using the folder name it
+  ships with, not its display name. A `modinfo.json` title (for example
+  *"ZC Unlocked - UI Expansion Pack I"*) or renaming the mod in Mod Command no
+  longer changes the folder, so `mods.txt`, the mod's own Lua paths and ZC
+  Unlocked's add-on pack detection keep working. Updates, rollbacks,
+  reinstalls, restores and adoptions keep the folder too.
+- Two UE4SS mods cannot share a folder: installing a second one into a folder
+  another mod uses is refused, naming that mod.
+- Mods installed before this version stay exactly where they are — their
+  folder is recorded, nothing moves. If one sits under a folder other than its
+  own folder name, its row says *"Deployed as 'X' — the mod's own folder name
+  is 'Y'"* with **Use original name** (moves its files, what the mod wrote
+  there and its `mods.txt` line; refused while the game runs) or **Keep as
+  is**. Diagnostics reports a UE4SS mod whose files are outside its folder.
+
 ## v1.9.19 (2026-10-01)
 
 Ships together with v1.9.18, v1.9.17, v1.9.16 and v1.9.15 below as public 1.0.10.

@@ -296,10 +296,10 @@ Released as public 1.0.11.
   stopped when the server allows it (Nexus does), otherwise starts again
   from the beginning, and the strip says so.
 
-**Nexus download panel: signing in is recognised again**
+**Nexus download panel: signing in is recognized again**
 - After signing in to Nexus in the built-in download panel, Mod Command kept
   showing "◈ Sign in to Nexus": Nexus changed how its pages show that you are
-  signed in, so the panel no longer recognised it. It now reads the page's own
+  signed in, so the panel no longer recognized it. It now reads the page's own
   signed-in flag, your account picture and name in the header, or a visible
   log-out button — and never mistakes the guest profile Nexus shows to
   signed-out visitors for an account.
@@ -435,7 +435,7 @@ Ships together with v1.9.19 and v1.9.18 above and v1.9.16 and v1.9.15 below as p
   with the Mod SDK is never replaced. Kept builds in ⧗ Versions carry that
   copy with them.
 - The runtime's signature files no longer make a stock UE4SS look like one
-  Mod Command cannot identify — it is still recognised as the stock build.
+  Mod Command cannot identify — it is still recognized as the stock build.
 
 ## v1.9.16 (2026-09-27)
 
@@ -660,7 +660,7 @@ Ships together with v1.9.13 below as public 1.0.9.
   into `~mods`. The result was a mod that half-worked — the files mounted, so
   replacements of existing things could show up, but the game never read the
   plugin's own registry, so everything the mod ADDS (new outfits, new weapons)
-  simply never appeared in the armoury. That is exactly the failure the mod's
+  simply never appeared in the armory. That is exactly the failure the mod's
   own readme warns about, and it was easy to mistake for a broken mod.
 - These now install as their own type, **PLUGIN**. The whole folder goes to
   `SWZeroCompany\Mods\<Name>\` exactly as shipped — nothing renamed, no load
@@ -940,7 +940,7 @@ Ships together with v1.9.13 below as public 1.0.9.
 ## v1.8.1 (2026-09-05)
 
 **Link mods now matches UE4SS mods, and lets you confirm every match**
-- The **Link mods** button (Command Deck toolbar) used to only recognise mods
+- The **Link mods** button (Command Deck toolbar) used to only recognize mods
   Nexus indexes by file hash — in practice loose-pak uploads — so it couldn't
   identify UE4SS mods at all. It now also searches Nexus by name, so mods like
   script and DLL tweaks get candidate sources too.

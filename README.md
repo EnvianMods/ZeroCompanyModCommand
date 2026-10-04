@@ -296,7 +296,7 @@ automatically for IoStore package inspection; a different copy can be selected i
   `install-ue4ss` with no payload installs mod 9's primary MAIN file,
   `{ nexusFileId }` one specific file of that page. Premium accounts download
   directly; free accounts get the embedded Nexus page, whose "Mod Manager
-  Download" comes back as nxm:// into `handleNxm`, which recognises the runtime;
+  Download" comes back as nxm:// into `handleNxm`, which recognizes the runtime;
   signed-out users get `{ needsSignIn }` — the card offers the sign-in (then
   installs) or shows the page. If the page cannot be read, the install says so
   and stops. The page is read anonymously via GraphQL (`refreshNexusLatest()`,
@@ -306,7 +306,7 @@ automatically for IoStore package inspection; a different copy can be selected i
     Settings card, the dashboard, a Settings nav badge and in Diagnostics):
     *nexus* — installed by Mod Command from mod 9 (`settings.ue4ssInstalled`,
     which records the file id, version, tested game build and UE4SS.dll's MD5),
-    or recognised by a UE4SS.dll MD5 this app installed from Nexus before;
+    or recognized by a UE4SS.dll MD5 this app installed from Nexus before;
     *stock* — recorded as a GitHub install by an older Mod Command, the old flat
     layout, or no `ue4ss\UE4SS_Signatures\*.lua` (the stock release zip has
     none); *unknown* — anything else, including a UE4SS.dll that no longer

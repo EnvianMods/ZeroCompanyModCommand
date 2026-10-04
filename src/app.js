@@ -1889,7 +1889,7 @@ $('#btn-launch').addEventListener('click', async () => {
       'To take the update, turn the freeze off in Settings first.\n\n' +
       'Launch through Steam anyway?');
     if (!go) {
-      toast('Launch cancelled — use DIRECT LAUNCH to play on your current build.', 'info', 6000);
+      toast('Launch canceled — use DIRECT LAUNCH to play on your current build.', 'info', 6000);
       return;
     }
   }
@@ -3880,7 +3880,7 @@ $('#btn-fomod-cancel').addEventListener('click', () => {
   $('#fomod-modal').classList.add('hidden');
   fomodWiz = null;
   call('fomodCancel', sessionId);
-  toast('Guided install cancelled — nothing was installed.');
+  toast('Guided install canceled — nothing was installed.');
   processFomodQueue();
 });
 

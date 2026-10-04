@@ -226,7 +226,7 @@ const TYPE_LABEL = {
 
 const TYPE_TITLE = {
   gfp: 'Game Feature plugin — installed as a folder in SWZeroCompany\\Mods',
-  'zcu-addon': 'ZC Unlocked add-on — installed as a folder in ue4ss\\Mods\\ZCUnlocked\\addons (needs ZC Unlocked). Disabling sets enabled=0 in its addon.ini; the folder stays.',
+  'zcu-addon': 'ZC Unlocked add-on — installed as a folder in ue4ss\\Mods\\ZCUnlocked\\addons (needs ZC Unlocked; a pack adopted from ue4ss\\Mods stays there). Disabling sets enabled=0 in its addon.ini; the folder stays.',
 };
 
 // Mods whose files the game records BY LOCATION in the save (a Game Feature
@@ -383,7 +383,8 @@ function renderMods() {
       `${mod.files.length} file${mod.files.length === 1 ? '' : 's'}`,
       mod.loadPriority != null ? `priority ${mod.loadPriority}` : null,
       mod.modType === 'ue4ss-mod' && mod.ue4ssFolder ? `folder ${mod.ue4ssFolder}` : null,
-      mod.modType === 'zcu-addon' && mod.addonFolder ? `add-on folder ${mod.addonFolder}` : null,
+      mod.modType === 'zcu-addon' && mod.addonFolder
+        ? (mod.addonRoot === 'mods' ? `add-on pack ue4ss\\Mods\\${mod.addonFolder}` : `add-on folder ${mod.addonFolder}`) : null,
       mod.sourceArchive || null,
       `installed ${new Date(mod.installedAt).toLocaleDateString()}`,
     ].filter(Boolean);
@@ -530,7 +531,7 @@ function renderMods() {
         : mod.modType === 'gfp'
           ? `\n\n${SAVE_CAVEAT}`
           : mod.modType === 'zcu-addon'
-            ? ' Only the add-on\'s own files in ue4ss\\Mods\\ZCUnlocked\\addons are removed.'
+            ? ` Only the add-on's own files in ${mod.addonRoot === 'mods' ? `ue4ss\\Mods\\${mod.addonFolder}` : 'ue4ss\\Mods\\ZCUnlocked\\addons'} are removed.`
             : '';
       if (!window.confirm(`Uninstall “${mod.name}”? Its files are removed from the game and the library.${note}`)) return;
       const data = await verifiedCall('uninstallMod', [mod.id], 'Uninstall');
@@ -3071,6 +3072,14 @@ async function openImportModal(opts = {}) {
     meta.className = 'import-meta';
     meta.textContent = `${TYPE_LABEL[c.modType] || c.modType} · ${c.files.length} file${c.files.length === 1 ? '' : 's'} · ${c.location}${c.active ? '' : ' · currently inactive'}`;
     info.append(name, meta);
+    // A ZC Unlocked add-on that is also somewhere else ZC Unlocked loads from.
+    if (c.duplicateOf && c.duplicateOf.length) {
+      const dup = document.createElement('div');
+      dup.className = 'import-meta warn';
+      dup.textContent = `⚠ Duplicate — the same add-on is also at ${c.duplicateOf
+        .map((d) => `${d.location}${d.managed ? ` (managed as “${d.name}”)` : ''}${d.active ? '' : ' (off)'}`).join(', ')}. ZC Unlocked loads every copy that is on.`;
+      info.appendChild(dup);
+    }
     row.append(check, info);
     list.appendChild(row);
   }

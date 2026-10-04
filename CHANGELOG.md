@@ -1,5 +1,35 @@
 # Zero Company Mod Command — Changelog
 
+## v1.9.21 (unreleased)
+
+**No more double-loaded ZC Unlocked add-ons**
+- ZC Unlocked also loads add-on packs placed straight in
+  `ue4ss\Mods\<Pack>\` (an `addon.ini` beside the pack's paks). If you had
+  put an add-on there by hand and then installed the same add-on through Mod
+  Command (to `ue4ss\Mods\ZCUnlocked\addons\<Pack>\`), or the other way round,
+  ZC Unlocked loaded both copies and their menu switches clashed.
+- Two copies count as the same add-on when their folder names match the way
+  ZC Unlocked keys add-ons (anything outside `A-Z a-z 0-9 _` read as `_`,
+  case ignored) or when their `addon.ini` has the same `name=`.
+- Installing an add-on while another copy is on now installs it switched off
+  (`enabled=0`) with a warning naming the other copy, e.g. “A copy of Hand
+  Pack is already at ue4ss\Mods\HandPack\ — ZC Unlocked would load both.
+  Remove that copy (or Import it) and then turn this one on.” Switching it on
+  is refused with the same message until that copy is gone or switched off
+  (`enabled=0`). The same applies to an add-on that was waiting for ZC
+  Unlocked, and to updates. Your own copy is never changed or deleted.
+- Hangar Bay → **Import** now also offers bare add-on packs in
+  `ue4ss\Mods\<Pack>\` as ZCU ADD-ON rows (nothing pre-ticked). Adopting one
+  manages it where it is — on/off, updates, rollback and uninstall work
+  through its `addon.ini` in `ue4ss\Mods\<Pack>\`, it never moves. A row that
+  is the same add-on as another copy is marked as a duplicate.
+- Diagnostics lists every duplicate add-on (managed or not) with both paths,
+  and says whether ZC Unlocked loads more than one of them.
+- A bare add-on pack in `ue4ss\Mods` is never treated as a UE4SS mod: it gets
+  no `mods.txt` entry and is left out of the UE4SS duplicate and hook scans.
+  A UE4SS mod can't be installed into the folder of an add-on pack Mod Command
+  manages there.
+
 ## v1.9.20 (2026-10-04)
 
 Released as public 1.0.11.

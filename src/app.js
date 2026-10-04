@@ -90,11 +90,12 @@ $$('.nav-item').forEach((btn) => {
 
 const TYPE_LABEL = {
   pak: 'PAK', iostore: 'IOSTORE', logicmods: 'LOGICMODS', 'ue4ss-mod': 'UE4SS',
-  gamefolder: 'GAMEFILES', gfp: 'PLUGIN',
+  gamefolder: 'GAMEFILES', gfp: 'PLUGIN', 'zcu-addon': 'ZCU ADD-ON',
 };
 
 const TYPE_TITLE = {
   gfp: 'Game Feature plugin — installed as a folder in SWZeroCompany\\Mods',
+  'zcu-addon': 'ZC Unlocked add-on — installed as a folder in ue4ss\\Mods\\ZCUnlocked\\addons (needs ZC Unlocked). Disabling sets enabled=0 in its addon.ini; the folder stays.',
 };
 
 // Mods whose files the game records BY LOCATION in the save (a Game Feature
@@ -170,6 +171,42 @@ function render() {
   refreshBrowseCards();
 }
 
+// A UE4SS mod deployed under a folder other than its own folder name (an
+// older build named the folder after the display name, so a rename moved
+// it): one notice in its row, with a one-click move back. Nothing moves
+// without that click.
+function buildFolderNotice(mod) {
+  const n = mod.ue4ssFolderNotice;
+  if (!n) return null;
+  const box = document.createElement('div');
+  box.className = 'folder-notice';
+  const text = document.createElement('span');
+  text.append('Deployed as ');
+  const a = document.createElement('span'); a.className = 'mono'; a.textContent = `‘${n.deployedAs}’`;
+  const b = document.createElement('span'); b.className = 'mono'; b.textContent = `‘${n.own}’`;
+  text.append(a, ' — the mod’s own folder name is ', b);
+  text.title = 'UE4SS mods can depend on their folder name: an add-on pack is found by it, a Lua mod builds paths from it, '
+    + 'and mods.txt lines written by other tools name it. Renaming a mod in Mod Command no longer moves its folder.';
+  const use = document.createElement('button');
+  use.className = 'btn tiny';
+  use.textContent = 'Use original name';
+  use.title = `Move ue4ss\\Mods\\${n.deployedAs} to ue4ss\\Mods\\${n.own} (files and mods.txt line). Close the game first.`;
+  use.addEventListener('click', async () => {
+    const data = await verifiedCall('useOwnUe4ssFolder', [mod.id], 'Move');
+    if (data) { state = data; render(); toast(`“${mod.name}” now uses its own folder ue4ss\\Mods\\${n.own}.`); }
+  });
+  const keep = document.createElement('button');
+  keep.className = 'btn ghost tiny';
+  keep.textContent = 'Keep as is';
+  keep.title = 'Hide this notice — the mod stays in its current folder.';
+  keep.addEventListener('click', async () => {
+    const data = await call('dismissUe4ssFolderNotice', mod.id);
+    if (data) { state = data; render(); }
+  });
+  box.append(text, use, keep);
+  return box;
+}
+
 function renderMods() {
   const list = $('#mod-list');
   list.innerHTML = '';
@@ -214,11 +251,15 @@ function renderMods() {
     const parts = [
       `${mod.files.length} file${mod.files.length === 1 ? '' : 's'}`,
       mod.loadPriority != null ? `priority ${mod.loadPriority}` : null,
+      mod.modType === 'ue4ss-mod' && mod.ue4ssFolder ? `folder ${mod.ue4ssFolder}` : null,
+      mod.modType === 'zcu-addon' && mod.addonFolder ? `add-on folder ${mod.addonFolder}` : null,
       mod.sourceArchive || null,
       `installed ${new Date(mod.installedAt).toLocaleDateString()}`,
     ].filter(Boolean);
     meta.textContent = parts.join('  ·  ');
     main.append(name, meta);
+    const folderNotice = buildFolderNotice(mod);
+    if (folderNotice) main.appendChild(folderNotice);
 
     const myConflicts = state.conflicts.filter((c) => c.memberIds.includes(mod.id));
     const flag = document.createElement('button');
@@ -338,7 +379,9 @@ function renderMods() {
         ? ' Replaced game files are restored from backup.'
         : mod.modType === 'gfp'
           ? `\n\n${SAVE_CAVEAT}`
-          : '';
+          : mod.modType === 'zcu-addon'
+            ? ' Only the add-on\'s own files in ue4ss\\Mods\\ZCUnlocked\\addons are removed.'
+            : '';
       if (!window.confirm(`Uninstall “${mod.name}”? Its files are removed from the game and the library.${note}`)) return;
       const data = await verifiedCall('uninstallMod', [mod.id], 'Uninstall');
       if (data) { state = data; render(); toast(`“${mod.name}” uninstalled`); }

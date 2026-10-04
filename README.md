@@ -46,12 +46,39 @@ automatically for IoStore package inspection; a different copy can be selected i
     `FriendlyName`; version/author fall back to `VersionName`/`CreatedBy`.
   - `logicmods` → `SWZeroCompany/Content/Paks/LogicMods`.
   - UE4SS Lua/DLL mods (folders with `Scripts/main.lua` or `dlls/main.dll`) →
-    `SWZeroCompany/Binaries/Win64/ue4ss/Mods/<Name>` with `enabled.txt`. The
-    display name defaults to the folder name; a `modinfo.json` in the mod folder
-    can override it with a friendly title (see **Mod metadata** below). A mod's
-    own `paks/` folder travels with it into `ue4ss/Mods/<Name>/paks/`, unrenamed
+    `SWZeroCompany/Binaries/Win64/ue4ss/Mods/<Folder>` with `enabled.txt`, where
+    `<Folder>` is the mod's own folder name from its archive (recorded as
+    `ue4ssFolder`; only an archive whose root IS the mod falls back to the
+    display name). The display name defaults to the folder name; a
+    `modinfo.json` in the mod folder can override it with a friendly title (see
+    **Mod metadata** below) — the title and a rename change the display name
+    only, never the folder, so `mods.txt`, the mod's own Lua paths and add-on
+    pack detection keep working. Two UE4SS mods cannot share a folder. Entries
+    from before v1.9.20 (folder named after the display name) are recorded where
+    they are, nothing moves; when their own folder name is known and differs, the
+    row offers **Use original name** (moves the files, anything the mod wrote
+    there and its `mods.txt` line) or **Keep as is**. A mod's
+    own `paks/` folder travels with it into `ue4ss/Mods/<Folder>/paks/`, unrenamed
     — the mod mounts those containers itself at startup, so they are never moved
-    into `~mods`.
+    into `~mods`. Disabling or removing a UE4SS mod deletes only the files it
+    deployed (then the folders left empty); anything else in its folder —
+    configs it wrote, ZC Unlocked's `addons\` — stays.
+  - ZC Unlocked add-ons (ZCU ADD-ON) — a folder holding an `addon.ini` with an
+    `[addon]` section that is not itself a UE4SS mod folder (archive roots like
+    `ue4ss/Mods/ZCUnlocked/addons/<Folder>/`, `ZCUnlocked/addons/<Folder>/`,
+    `addons/<Folder>/` or just `<Folder>/addon.ini`) → the whole folder, its
+    `050_ZCA_<Key>_P` paks included, goes to
+    `ue4ss/Mods/ZCUnlocked/addons/<Folder>/` under its original name (ZC
+    Unlocked keys add-ons by that name and mounts their paks itself; nothing
+    goes to `~mods`). Name and version come from `addon.ini`; updates match by
+    folder name. Disable/enable flips `enabled=0/1` in the deployed `addon.ini`
+    (everything else in the file stays byte for byte) and the folder never moves;
+    that line is Mod Command's, so it never counts as "changed outside Mod
+    Command". Needs ZC Unlocked (`ue4ss/Mods/ZCUnlocked`): without it the add-on
+    is kept in the library, not deployed, with a warning, and deployed once ZC
+    Unlocked is there. Uninstall removes only the add-on's own files. A UE4SS mod
+    folder that carries an `addon.ini` (an add-on pack) still installs as that
+    UE4SS mod.
   - UE4SS runtime archives (dwmapi.dll + ue4ss folder) → installed into `Binaries/Win64`,
     replacing only UE4SS's own files (your `ue4ss/Mods`, `mods.txt` and settings are kept).
   - `gamefolder` (GAMEFILES) — archives laid out against the game root

@@ -102,6 +102,10 @@ function resolveDataDir() {
 
 const store = new Store(resolveDataDir());
 const engine = new ModEngine(store);
+// Records written before v1.9.20 get their UE4SS deploy folder recorded (the
+// folder they are in now — nothing moves). fullState() repeats it for
+// records an archive restore brings back later.
+try { engine.migrateUe4ssFolders(); } catch (e) { log('warn', `UE4SS folder migration: ${e.message}`); }
 let win = null;
 
 // ---------------------------------------------------------- mod archive location
@@ -873,7 +877,11 @@ app.whenReady().then(() => {
   win.webContents.once('did-finish-load', () => {
     if (!store.settings.gamePath) return;
     try {
-      const { repaired, skipped } = engine.repairDeployments();
+      const { repaired, skipped, addonsDeployed } = engine.repairDeployments();
+      if (addonsDeployed && addonsDeployed.length) {
+        sendEvent({ type: 'state', state: fullState() });
+        sendEvent({ type: 'toast', kind: 'info', message: `ZC Unlocked found — deployed the add-on${addonsDeployed.length === 1 ? '' : 's'} waiting for it: ${addonsDeployed.join(', ')}.` });
+      }
       if (repaired.length) {
         log('warn', `startup recovery redeployed: ${repaired.join(', ')}`);
         sendEvent({ type: 'state', state: fullState() });
@@ -1065,7 +1073,14 @@ function fullState() {
     },
     modCompat,
     ue4ssOrder: store.settings.gamePath ? engine.ue4ssOrderState() : { managed: [], others: [], applied: false },
-    mods: store.mods,
+    // ue4ssFolderNotice: { deployedAs, own } — a UE4SS mod deployed under a
+    // folder other than its own folder name (the row offers to move it back).
+    mods: (() => {
+      try { engine.migrateUe4ssFolders(); } catch (_) {}
+      return store.mods.map((m) => (m.modType === 'ue4ss-mod'
+        ? { ...m, ue4ssFolder: engine.ue4ssFolderOf(m), ue4ssFolderNotice: engine.ue4ssFolderNotice(m) }
+        : m));
+    })(),
     conflicts,
     ue4ssHooks,
     // release = what this app last installed (null for a copy placed by hand);
@@ -1102,7 +1117,7 @@ async function md5Match(mod) {
   // Game Feature plugin mods are skipped for the same reason as UE4SS mods:
   // their files (.uplugin, AssetRegistry.bin, the paks inside Content/Paks) are
   // only ever uploaded inside an archive, so they never hash-match a Nexus file.
-  if (!mod || !nexusSignedIn() || mod.modType === 'ue4ss-mod' || mod.modType === 'gfp') return null;
+  if (!mod || !nexusSignedIn() || mod.modType === 'ue4ss-mod' || mod.modType === 'gfp' || mod.modType === 'zcu-addon') return null;
   for (const f of mod.files.slice(0, 4)) {
     try {
       const hit = await withNexusToken((t) => nexus.md5Lookup(path.join(store.modLibraryDir(mod.id), f.libraryRelative), t));
@@ -1420,6 +1435,20 @@ const handlers = {
     return fullState();
   },
   'rename-mod': async (_e, { id, name }) => { engine.rename(id, name); return fullState(); },
+  // UE4SS mod deployed under a folder other than its own folder name: move it
+  // back ("Use original name"), or keep it as it is and hide the notice.
+  'use-own-ue4ss-folder': async (_e, { id, force }) => {
+    const m = store.getMod(id);
+    if (m && m.enabled && steam.isGameRunning(store.settings.gamePath)) {
+      throw new Error('Close Star Wars Zero Company first — the running game has this UE4SS mod loaded, so its folder cannot be moved until the game exits.');
+    }
+    engine.useOwnUe4ssFolder(id, force);
+    return fullState();
+  },
+  'dismiss-ue4ss-folder-notice': async (_e, { id }) => {
+    engine.dismissUe4ssFolderNotice(id);
+    return fullState();
+  },
   'apply-load-order': async (_e, { orderedIds }) => {
     engine.applyLoadOrder(orderedIds);
     log('info', `pak load order applied (${orderedIds.length} mod(s))`);
@@ -2455,6 +2484,13 @@ async function installPaths(paths) {
           log('info', `version-aware install: ${message}`);
           results.push({ source: path.basename(p), ok: true, note: true, name: mod.name, modType: mod.modType, message });
         }
+        // A ZC Unlocked add-on with no ZC Unlocked in the game: kept, not deployed.
+        if (mod.modType === 'zcu-addon' && mod.needsZcu) {
+          results.push({
+            source: path.basename(p), ok: true, note: true, name: mod.name, modType: mod.modType,
+            message: `“${mod.name}” is a ZC Unlocked add-on and needs ZC Unlocked — install it first. The add-on is kept in the library and is deployed once ZC Unlocked is in the game.`,
+          });
+        }
         // SDK-built content needs the ZCSDK Runtime to be discovered by the game.
         if (mod.zcsdk) {
           const rt = engine.zcsdkStatus();
@@ -2634,6 +2670,18 @@ function diagnostics() {
     const needed = zc.neededBy.some((n) => n.enabled);
     add(zc.healthy ? (zc.updateAvailable ? 'info' : 'good') : (needed ? 'warning' : 'info'), 'ZCSDK Runtime', zc.message);
   }
+  // ZC Unlocked add-ons need ZC Unlocked (ue4ss\Mods\ZCUnlocked) to load.
+  {
+    const zcu = engine.zcuStatus();
+    if (zcu.addons) {
+      if (!zcu.present) {
+        add('warning', 'ZC Unlocked add-ons', `${zcu.addons} add-on${zcu.addons === 1 ? ' is' : 's are'} installed, but ZC Unlocked is not in the game (ue4ss\\Mods\\ZCUnlocked) — install ZC Unlocked first.` +
+          (zcu.waiting.length ? ` Waiting to be deployed: ${zcu.waiting.map((w) => w.name).join(', ')}.` : ''));
+      } else {
+        add('good', 'ZC Unlocked add-ons', `${zcu.addons} add-on${zcu.addons === 1 ? '' : 's'} managed in ue4ss\\Mods\\ZCUnlocked\\addons (disabled ones stay in place with enabled=0).`);
+      }
+    }
+  }
   const retoc = engine.retocStatus();
   {
     const ru = retocDl.updateInfo(retoc.version);
@@ -2647,9 +2695,16 @@ function diagnostics() {
       sz ? `Available for .7z/.rar archives (${sz === bundledSevenZip() ? 'bundled with Mod Command' : sz})` : 'Not found — only .zip archives can be installed.');
   }
   const missing = store.settings.gamePath ? engine.auditDeployedFiles() : [];
+  // UE4SS mods with files outside their recorded folder.
+  const misnamed = store.settings.gamePath ? engine.auditDeployedNames() : [];
   if (missing.length) {
     add('warning', 'Deployed files', `${missing.length} deployed file(s) are missing: ${missing.map((m) => m.file).join(', ')}`);
-  } else {
+  }
+  if (misnamed.length) {
+    add('warning', 'Deployed files', `${misnamed.length} UE4SS mod(s) are not deployed in their folder: `
+      + `${misnamed.map((m) => `${m.modName} — expected ${m.expected}${m.found.length ? `, found ${m.found.join(', ')}` : ''}`).join('; ')}. Disable and re-enable them to redeploy.`);
+  }
+  if (!missing.length && !misnamed.length) {
     add('good', 'Deployed files', 'All enabled mods are fully deployed.');
   }
   const drifted = store.settings.gamePath ? engine.auditChangedDeployments() : [];

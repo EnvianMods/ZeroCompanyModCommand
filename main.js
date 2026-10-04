@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -78,6 +78,7 @@ const report = require('./lib/report');
 // installed. It carries no copy of that UI — see lib/sdk-link.js and
 // docs/SDK_LINK.md.
 const sdkLink = require('./lib/sdk-link');
+const { configureWebPermissions, lockWebContentsDevices } = require('./lib/web-permissions');
 
 // App data (settings, staging, indexes) lives in the OS per-user app-data
 // folder — %APPDATA%\ZeroCompanyModCommand on Windows — never beside the exe.
@@ -773,6 +774,8 @@ function createWindow() {
 // lets a non-premium user download without leaving the app — the website mints
 // the signed nxm link from their logged-in session, exactly as in a real browser.
 app.on('web-contents-created', (_e, contents) => {
+  // No page — ours, the SDK's or Nexus's — gets to pick a Bluetooth device.
+  lockWebContentsDevices(contents);
   if (contents.getType() !== 'webview') return;
   const catchNxm = (url) => {
     if (typeof url === 'string' && url.startsWith('nxm://')) {
@@ -795,6 +798,11 @@ app.on('web-contents-created', (_e, contents) => {
 
 app.whenReady().then(() => {
   log('info', `app start v${app.getVersion()} on ${process.platform} ${require('os').release()}`);
+  // Deny-by-default web permissions for the Nexus panel and the app window
+  // (Electron grants everything otherwise). An nxm:// that reaches the OS
+  // handoff instead of will-navigate is routed to handleNxm in-process. See
+  // lib/web-permissions.js.
+  try { configureWebPermissions(session, { log, onNxm: (url) => handleNxm(url) }); } catch (err) { log('error', `web permission setup failed: ${err.message}`); }
   // Load the stored OAuth tokens — and throw away any credential an older
   // build left behind.
   try { initNexusAuth(); } catch (err) { log('error', `Nexus sign-in state could not be read: ${err.message}`); }

@@ -101,6 +101,21 @@
 - An old ZCSDK Runtime copy in the archive shows as "Old ZCSDK Runtime copy —
   safe to clean up" with its own **Clean up** button; it can't be adopted.
 
+**The built-in Nexus panel gets no camera, microphone, location or device access**
+- Electron grants web pages every permission they ask for unless told
+  otherwise, so the Nexus download panel — and the ad frames inside it — could
+  use the camera, microphone, location, notifications, MIDI, USB/serial/HID
+  devices, clipboard reading, screen capture or open other programs through
+  their link handlers. Now everything is refused except what the pages
+  really use: copying to the clipboard on nexusmods.com and fullscreen video
+  on nexusmods.com and YouTube. Mod Command's own window may only copy to the
+  clipboard (Copy support report).
+- An `nxm://` link from inside the panel always goes straight to Mod
+  Command's installer; other external links (`ms-settings:`, `steam:`, …)
+  from the panel are refused.
+- Refusals are noted once per site in the session log (site only, never the
+  full address).
+
 ## v1.9.19 (2026-10-01)
 
 Ships together with v1.9.18, v1.9.17, v1.9.16 and v1.9.15 below as public 1.0.10.

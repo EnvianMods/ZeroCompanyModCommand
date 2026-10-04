@@ -1,5 +1,15 @@
 # Zero Company Mod Command — Changelog
 
+## v1.9.20 (unreleased)
+
+**No console windows flashing up from Mod Command's helpers**
+- The small Windows tools Mod Command runs in the background — the registry
+  lookups for Steam and the EA App, `tar` and 7-Zip when unpacking a mod,
+  retoc when listing a mod's IoStore packages, and the `nxm://` link
+  registration — now run hidden. Before, each could flash a black console
+  window, most noticeably at startup and while installing. The game itself is
+  started exactly as before.
+
 ## v1.9.19 (2026-10-01)
 
 Ships together with v1.9.18, v1.9.17, v1.9.16 and v1.9.15 below as public 1.0.10.

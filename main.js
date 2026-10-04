@@ -1578,8 +1578,8 @@ const handlers = {
         'MimeType=x-scheme-handler/nxm;', '',
       ].join('\n');
       fs.writeFileSync(path.join(appsDir, 'zero-company-mod-command.desktop'), desktop);
-      try { execFileSync('xdg-mime', ['default', 'zero-company-mod-command.desktop', 'x-scheme-handler/nxm'], { stdio: 'ignore' }); } catch (_) {}
-      try { execFileSync('update-desktop-database', [appsDir], { stdio: 'ignore' }); } catch (_) {}
+      try { execFileSync('xdg-mime', ['default', 'zero-company-mod-command.desktop', 'x-scheme-handler/nxm'], { stdio: 'ignore', windowsHide: true }); } catch (_) {}
+      try { execFileSync('update-desktop-database', [appsDir], { stdio: 'ignore', windowsHide: true }); } catch (_) {}
       app.setAsDefaultProtocolClient('nxm');
       return fullState();
     }
@@ -1590,7 +1590,7 @@ const handlers = {
     try {
       const { execFileSync } = require('child_process');
       const set = (key, value, data) => execFileSync('reg',
-        ['add', key, ...(value ? ['/v', value] : ['/ve']), '/d', data, '/f'], { stdio: 'ignore' });
+        ['add', key, ...(value ? ['/v', value] : ['/ve']), '/d', data, '/f'], { stdio: 'ignore', windowsHide: true });
       // Browser "Open …?" dialogs pull the name from these (which one varies by
       // browser/version) or from the exe's FileDescription.
       set('HKCU\\Software\\Classes\\nxm', null, 'URL:Mod Command Link');

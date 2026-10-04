@@ -593,11 +593,12 @@ function installedMods(res) {
   return res.multi ? res.mods : [res];
 }
 
-// A ZC Unlocked add-on installed switched off because another copy of it is
-// already in the game (lib/mods.js _activeAddonDuplicate): say so.
-function toastAddonDuplicates(mods) {
+// A ZC Unlocked add-on whose pack folder was already in the game: Mod
+// Command took that copy over and updated it in place instead of adding a
+// second copy (lib/mods.js _installOverAddonCopy) — say so.
+function toastAddonAdopted(mods) {
   for (const m of mods) {
-    if (m && m.addonDuplicate) sendEvent({ type: 'toast', kind: 'warn', message: `“${m.name}” was installed switched off. ${m.addonDuplicate.message}` });
+    if (m && m.addonAdopted) sendEvent({ type: 'toast', kind: 'info', message: m.addonAdopted.message });
   }
 }
 
@@ -660,7 +661,7 @@ async function handleNxm(rawUrl) {
         } else {
           const names = installedMods(res).map((m) => m.name).join('”, “');
           sendEvent({ type: 'toast', message: `Updated “${names}” to ${version ? 'v' + version : 'the latest version'}.` });
-          toastAddonDuplicates(installedMods(res));
+          toastAddonAdopted(installedMods(res));
         }
       } else {
         const res = await engine.install(dest, { origin, version });
@@ -679,7 +680,7 @@ async function handleNxm(rawUrl) {
             ? `Installed “${info && info.name ? info.name : mods[0].name}” from Nexus Mods.`
             : `Installed ${mods.length} mods from “${info && info.name ? info.name : path.basename(dest)}” — each is its own entry.`;
           sendEvent({ type: 'toast', message: label });
-          toastAddonDuplicates(mods);
+          toastAddonAdopted(mods);
         }
       }
     } finally {
@@ -1084,7 +1085,17 @@ function startupRecovery() {
   try {
     // Files changed outside Mod Command (e.g. a newer build) are never
     // replaced by the stored copy: those mods come back in `skipped`.
-    const { repaired, skipped, addonsDeployed } = engine.repairDeployments();
+    const { repaired, skipped, addonsDeployed, addonsTakenOut } = engine.repairDeployments();
+    // v1.9.22: a switched-off add-on copy (enabled=0) Mod Command 1.0.12 put
+    // beside another copy of the same pack folder is taken out — it could hide
+    // the add-on from ZC Unlocked. Happens once: the copy is gone afterwards.
+    if (addonsTakenOut && addonsTakenOut.length) {
+      sendEvent({ type: 'state', state: fullState() });
+      sendEvent({
+        type: 'toast', kind: 'warn',
+        message: `Took Mod Command’s switched-off copy of ${addonsTakenOut.map((a) => `“${a.name}”`).join(', ')} out of the game — another copy of ${addonsTakenOut.length === 1 ? 'that add-on is' : 'those add-ons is'} at ${addonsTakenOut.map((a) => a.other).join(', ')}, and a switched-off copy beside it could hide it from ZC Unlocked. ${addonsTakenOut.length === 1 ? 'The entry stays' : 'The entries stay'} in the library, off; your copy was not touched.`,
+      });
+    }
     // Add-ons installed before ZC Unlocked was in the game, now that it is.
     if (addonsDeployed && addonsDeployed.length) {
       sendEvent({ type: 'state', state: fullState() });
@@ -2238,7 +2249,7 @@ const handlers = {
         return { pendingFomod: true, state: fullState() };
       }
       log('info', `installed version ${file.version || '?'} (file ${fileId}) of nexus mod ${modId}${existing ? ' (replaced installed version — old one vaulted)' : ''}`);
-      toastAddonDuplicates(installedMods(res));
+      toastAddonAdopted(installedMods(res));
       return { installed: true, switched: existing, version: file.version || null, state: fullState() };
     } finally {
       fs.rmSync(dest, { force: true });
@@ -2408,7 +2419,7 @@ const handlers = {
           { type: 'github', repo: origin.repo }, dest,
           { type: 'github', repo: origin.repo, tag: release.tag }, release.tag);
         if (res.pendingFomod) { forwardFomod(res, mod.name); return { pendingFomod: true, state: fullState() }; }
-        toastAddonDuplicates(installedMods(res));
+        toastAddonAdopted(installedMods(res));
       } finally {
         fs.rmSync(dest, { force: true });
       }
@@ -2433,7 +2444,7 @@ const handlers = {
             { type: 'nexus', modId: origin.modId }, dest,
             { type: 'nexus', modId: origin.modId, fileId: file.file_id, version: newVersion }, newVersion);
           if (res.pendingFomod) { forwardFomod(res, mod.name); return { pendingFomod: true, state: fullState() }; }
-          toastAddonDuplicates(installedMods(res));
+          toastAddonAdopted(installedMods(res));
         } finally {
           fs.rmSync(dest, { force: true });
         }
@@ -2862,12 +2873,13 @@ async function installPaths(paths) {
             message: `“${mod.name}” is a ZC Unlocked add-on and needs ZC Unlocked — install it first. The add-on is kept in the library and is deployed once ZC Unlocked is in the game.`,
           });
         }
-        // Another copy of the add-on is already in the game: installed switched
-        // off (enabled=0) so ZC Unlocked does not load it twice.
-        if (mod.modType === 'zcu-addon' && mod.addonDuplicate) {
+        // The add-on's pack folder was already in the game (a copy Mod
+        // Command did not manage): that copy was taken over and updated in
+        // place — no second copy.
+        if (mod.modType === 'zcu-addon' && mod.addonAdopted) {
           results.push({
-            source: path.basename(p), ok: true, note: true, addonDuplicate: true, name: mod.name, modType: mod.modType,
-            message: `“${mod.name}” was installed switched off (enabled=0) — another copy of it is at ${mod.addonDuplicate.location}.`,
+            source: path.basename(p), ok: true, note: true, addonAdopted: true, name: mod.name, modType: mod.modType,
+            message: mod.addonAdopted.message,
           });
         }
         // SDK-built content needs the ZCSDK Runtime to be discovered by the game.
@@ -3060,19 +3072,29 @@ function diagnostics() {
         add('good', 'ZC Unlocked add-ons', `${zcu.addons} add-on${zcu.addons === 1 ? '' : 's'} managed in ue4ss\\Mods\\ZCUnlocked\\addons${zcu.packs ? ` (${zcu.packs} as a pack in ue4ss\\Mods)` : ''} (disabled ones stay in place with enabled=0).`);
       }
     }
-    // The same add-on in more than one folder ZC Unlocked loads from
-    // (ZCUnlocked\addons\<Folder> and ue4ss\Mods\<Pack>), managed or not.
-    const dupAddons = store.settings.gamePath ? engine.addonDuplicateGroups() : [];
-    for (const g of dupAddons) {
-      const list = g.members
-        .map((c) => `${c.location} (${c.managedId ? `managed as “${c.managedName}”` : 'not managed'}, ${c.active ? 'on' : 'off: enabled=0'})`)
-        .join(' and ');
-      const why = g.rules.includes('folder') ? 'same folder name' : 'same name= in addon.ini';
-      add(g.active > 1 ? 'warning' : 'info', 'Duplicate ZC Unlocked add-on',
-        `The same add-on is in ${g.members.length} places (${why}): ${list}. `
-        + (g.active > 1
-          ? 'ZC Unlocked loads every copy that is on — keep one and remove the rest (or switch them off).'
-          : 'Only one copy is on, so ZC Unlocked loads it once; remove the copies you no longer need.'));
+    // The same pack FOLDER in more than one place ZC Unlocked looks
+    // (ZCUnlocked\addons\<Pack>, ue4ss\Mods\<Pack> — bare or a Lua mod —
+    // and ue4ss\Mods\<X>\[addons\]<Pack>), managed or not. ZC Unlocked uses
+    // ONE of them (higher version=, then the newer addon.ini, then the copy
+    // in addons\); name which, and warn when that copy has enabled=0.
+    const copies = store.settings.gamePath ? engine.addonCopies() : [];
+    const KIND = { addon: 'add-on', bare: 'pack', lua: 'Lua-mod pack', nested: 'inside another mod’s folder' };
+    const desc = (c) => `${c.location} (${KIND[c.kind] || c.kind}, ${c.managedId ? `managed as “${c.managedName}”` : 'not managed'}, `
+      + `${c.version ? `version=${c.version}` : 'no version='}, ${c.active ? 'on' : 'off: enabled=0'})`;
+    const WHY = { version: 'the higher version=', time: 'same version, the newer addon.ini', addons: 'same version and file time, the copy in addons\\', tie: 'no difference — the first one ZC Unlocked finds' };
+    for (const g of engine.addonDuplicateGroups(copies)) {
+      add('warning', 'Duplicate ZC Unlocked add-on',
+        `The add-on folder “${g.winner.folder}” is in ${g.members.length} places: ${g.members.map(desc).join(' and ')}. `
+        + `ZC Unlocked uses only one copy of a folder — here ${g.winner.location} (${WHY[g.reason] || g.reason}). `
+        + (g.hidden
+          ? 'That copy has enabled=0, which hides the add-on completely — remove it (or switch it on) and keep one copy.'
+          : 'Keep one copy and remove the rest.'));
+    }
+    // Different folders with the same name= are different add-ons — both load.
+    for (const g of engine.addonSameNameGroups(copies)) {
+      add('info', 'ZC Unlocked add-ons with the same name',
+        `“${g.name}” is the name= of ${g.members.length} different add-on folders: ${g.members.map((c) => c.location).join(' and ')}. `
+        + 'Same display name, different folders — both load (ZC Unlocked tells add-ons apart by folder name).');
     }
   }
   const retoc = engine.retocStatus();

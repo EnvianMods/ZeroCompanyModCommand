@@ -3072,12 +3072,13 @@ async function openImportModal(opts = {}) {
     meta.className = 'import-meta';
     meta.textContent = `${TYPE_LABEL[c.modType] || c.modType} · ${c.files.length} file${c.files.length === 1 ? '' : 's'} · ${c.location}${c.active ? '' : ' · currently inactive'}`;
     info.append(name, meta);
-    // A ZC Unlocked add-on that is also somewhere else ZC Unlocked loads from.
+    // A ZC Unlocked add-on whose pack folder is also somewhere else ZC
+    // Unlocked looks (it uses only one copy of a folder).
     if (c.duplicateOf && c.duplicateOf.length) {
       const dup = document.createElement('div');
       dup.className = 'import-meta warn';
-      dup.textContent = `⚠ Duplicate — the same add-on is also at ${c.duplicateOf
-        .map((d) => `${d.location}${d.managed ? ` (managed as “${d.name}”)` : ''}${d.active ? '' : ' (off)'}`).join(', ')}. ZC Unlocked loads every copy that is on.`;
+      dup.textContent = `⚠ Duplicate — the same add-on folder is also at ${c.duplicateOf
+        .map((d) => `${d.location}${d.managed ? ` (managed as “${d.name}”)` : ''}${d.active ? '' : ' (off)'}`).join(', ')}. ZC Unlocked uses only one copy of a folder (the higher version=, then the newer addon.ini) — keep one.`;
       info.appendChild(dup);
     }
     row.append(check, info);

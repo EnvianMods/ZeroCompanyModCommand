@@ -148,6 +148,17 @@
   stopped when the server allows it (Nexus does), otherwise starts again
   from the beginning, and the strip says so.
 
+**Nexus download panel: signing in is recognised again**
+- After signing in to Nexus in the built-in download panel, Mod Command kept
+  showing "◈ Sign in to Nexus": Nexus changed how its pages show that you are
+  signed in, so the panel no longer recognised it. It now reads the page's own
+  signed-in flag, your account picture and name in the header, or a visible
+  log-out button — and never mistakes the guest profile Nexus shows to
+  signed-out visitors for an account.
+- "◈ Sign in to Nexus" now opens Nexus's sign-in page with a link back to
+  the file you were on, the way Nexus's own "Log in" buttons do, so you land
+  on the file right after signing in.
+
 ## v1.9.19 (2026-10-01)
 
 Ships together with v1.9.18, v1.9.17, v1.9.16 and v1.9.15 below as public 1.0.10.

@@ -2771,29 +2771,86 @@ function nexusDlError() {
   $('#nexus-dl-progress').classList.add('hidden');
 }
 
-// Best-effort: detect whether the embedded Nexus session is signed in (and the
-// account name) by inspecting the loaded page — robust across cookie changes.
+// Is the page in the embedded Nexus panel signed in? Runs INSIDE the guest
+// page (serialised with Function.prototype.toString, so it must stay
+// self-contained) and reads it once: { state: 'in' | 'out' | 'unknown',
+// signal, name }. Measured on the live site: the header of an ANONYMOUS page
+// already carries a profile menu — a guest avatar avatars.nexusmods.com/0/100,
+// the name "guest" and a <form action=".../auth/sign_out"> — so none of those
+// may count as signed in. A signed-in page's avatar is
+// avatars.nexusmods.com/<member id>/… (the old "/avatars/" path never matches
+// it) and its logout is a button in that form, not a link. Strongest of all
+// is the page's own server-rendered flag (isLoggedIn: true|false).
+function nexusPageState() {
+  const visible = (el) => {
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) return false;
+    const cs = getComputedStyle(el);
+    return cs.visibility !== 'hidden' && cs.display !== 'none' && Number(cs.opacity) > 0.05;
+  };
+  const q = (sels) => { const out = []; for (const sel of sels) { try { out.push(...document.querySelectorAll(sel)); } catch (_) {} } return out; };
+  // 1. The page's own flag (server-rendered, so it cannot be "late").
+  let flag = null;
+  for (const sc of document.querySelectorAll('script:not([src])')) {
+    const m = /\bisLoggedIn["']?\s*:\s*(true|false)\b/.exec(sc.textContent || '');
+    if (m) { flag = m[1] === 'true'; break; }
+  }
+  // 2. Header account markers.
+  let avatar = null; // 'member' | 'guest' | null
+  for (const img of q(['header img.profile-pic', 'header img[alt="Profile image" i]', 'header img[src*="avatars.nexusmods.com"]', 'header img[src*="/avatars/"]', '.user-profile-menu img'])) {
+    const m = /(?:avatars\.nexusmods\.com|\/avatars)\/(?:u\/)?(\d+)(?:\/|$)/i.exec(img.getAttribute('src') || '');
+    if (!m) continue;
+    if (m[1] !== '0') { avatar = 'member'; break; }
+    avatar = 'guest';
+  }
+  let name = '';
+  let guest = false;
+  for (const el of q(['.user-profile-menu-username', 'header [data-e2eid="user-name"]', 'header a[href*="/users/"][title]'])) {
+    const t = (el.getAttribute('title') || el.textContent || '').trim();
+    if (!t) continue;
+    if (/^\s*guest\s*$/i.test(t)) { guest = true; continue; }
+    name = t.slice(0, 60); break;
+  }
+  const logout = [...document.querySelectorAll('a[href], button, input[type="submit"]')].some((el) => {
+    if (!visible(el)) return false;
+    if (el.tagName === 'A' && /(?:sign|log)[-_ ]?out/i.test(el.getAttribute('href') || '')) return true;
+    return /^\s*(?:log|sign)\s*-?\s*out\s*$/i.test((el.innerText || el.value || '').trim());
+  });
+  const login = q(['a#login', '.nav-games-unauthenticated a', 'header a[href*="/auth/sign_in"]'])
+    .some((el) => visible(el) && /^\s*(?:log|sign)\s*in\s*$/i.test((el.innerText || el.textContent || '').trim()));
+  let state = 'unknown';
+  let signal = null;
+  if (flag === true) { state = 'in'; signal = 'page flag isLoggedIn'; }
+  else if (flag === false) { state = 'out'; signal = 'page flag isLoggedIn=false'; }
+  else if (avatar === 'member') { state = 'in'; signal = 'account avatar'; }
+  else if (name) { state = 'in'; signal = 'account name in header'; }
+  else if (guest || avatar === 'guest') { state = 'out'; signal = 'guest profile'; }
+  else if (logout) { state = 'in'; signal = 'logout link'; }
+  else if (login) { state = 'out'; signal = 'Log in button'; }
+  if (state !== 'in') name = '';
+  return { state, signal, name };
+}
+
+// The sign-in page, with a way back to the exact file the panel has open (the
+// way Nexus's own "Log in" buttons do it).
+function nexusSignInUrl() {
+  const back = nexusDl.target && /^https:\/\/(?:www\.)?nexusmods\.com\//i.test(nexusDl.target) ? nexusDl.target : '';
+  return back ? `${NEXUS_LOGIN_URL}?redirect_url=${encodeURIComponent(back)}` : NEXUS_LOGIN_URL;
+}
+
+// Detect whether the embedded Nexus session is signed in (and the account
+// name) by reading the loaded page with nexusPageState. Only a POSITIVE
+// marker counts as signed in; anything else offers the sign-in.
 async function refreshNexusAccount() {
   const view = $('#nexus-dl-view');
   const chip = $('#nexus-dl-account');
   if (!view || !chip) return;
   let res = null;
   try {
-    // Conservative: only claim "signed in" on a POSITIVE marker (a logout link
-    // or account avatar). Never infer it from the mere absence of a login link —
-    // Nexus renders its header late, which would falsely read as signed in.
-    res = await view.executeJavaScript(`(() => {
-      const logout = [...document.querySelectorAll('a')].some(a => {
-        const h = (a.getAttribute('href') || ''), t = (a.textContent || '');
-        return /sign[-_ ]?out|log[-_ ]?out/i.test(h) || /^\\s*(log ?out|sign ?out)\\s*$/i.test(t);
-      });
-      const avatar = !!document.querySelector('header img[src*="/avatars/"], img.avatar, .avatar img');
-      const acct = document.querySelector('header a[href*="/users/"]');
-      const name = acct ? (acct.getAttribute('title') || acct.textContent || '').trim() : '';
-      return { loggedIn: !!(logout || avatar), name };
-    })()`, true);
+    res = await view.executeJavaScript(`(${nexusPageState.toString()})()`, true);
   } catch (_) { return; }
   if (!res) return;
+  res.loggedIn = res.state === 'in';
   if (res.loggedIn) {
     chip.textContent = res.name ? `◈ ${res.name}` : '◈ Signed in';
     chip.classList.add('in');
@@ -2836,7 +2893,8 @@ async function refreshNexusAccount() {
   const acct = $('#nexus-dl-account');
   if (acct) acct.addEventListener('click', () => {
     if (acct.classList.contains('in')) return;
-    try { view.loadURL(NEXUS_LOGIN_URL); } catch (_) { view.src = NEXUS_LOGIN_URL; }
+    const url = nexusSignInUrl();
+    try { view.loadURL(url); } catch (_) { view.src = url; }
   });
   // The shared [data-close-modal] handler hides the panel; also blank the guest.
   const closeBtn = document.querySelector('[data-close-modal="nexus-dl-modal"]');

@@ -10,6 +10,13 @@
   window, most noticeably at startup and while installing. The game itself is
   started exactly as before.
 
+**Startup: no "MaxListenersExceededWarning"**
+- The startup work that waits for the window to load (update checks, startup
+  recovery, the archive restore, the update-freeze check and more) now runs
+  from one queue instead of ten separate listeners, which made Node print a
+  MaxListenersExceededWarning at every start. If one of those tasks fails, it
+  is logged and the rest still run.
+
 ## v1.9.19 (2026-10-01)
 
 Ships together with v1.9.18, v1.9.17, v1.9.16 and v1.9.15 below as public 1.0.10.

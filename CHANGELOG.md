@@ -58,6 +58,15 @@
 - Switching off or removing another mod that once deployed a file of the same
   name never deletes a signature file the runtime owns.
 
+**Startup recovery: two false alarms fixed**
+- A UE4SS mod whose `enabled.txt` was rewritten (by UE4SS, another tool or
+  you) no longer counts as "changed outside Mod Command": its missing files
+  are put back as usual, and Diagnostics no longer flags it.
+- Restoring from the mod archive on a fresh setup now deploys game-folder
+  mods again. They replace game files by design (the originals go into their
+  backups), so the "different files already in the game" rule left every one
+  of them disabled.
+
 ## v1.9.19 (2026-10-01)
 
 Ships together with v1.9.18, v1.9.17, v1.9.16 and v1.9.15 below as public 1.0.10.

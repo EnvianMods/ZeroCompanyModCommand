@@ -134,6 +134,20 @@
   footer promised that already). An unusable `nxm://` link in an error no
   longer shows its key.
 
+**Download progress no longer jumps around**
+- The bottom progress strip and the Nexus download panel now follow each
+  download on its own: one download shows its name, several show
+  "Downloading 2 files" with one total. The label and the bar always show the
+  same number, and the total never goes backwards. The Nexus panel only shows
+  the download of the mod it has open.
+- The same file handed over twice by Nexus (a second click on the download
+  button) now downloads once — the second link is ignored with a note,
+  instead of a second download writing into the same file and the install
+  then failing.
+- A dropped connection no longer fails the download: it resumes where it
+  stopped when the server allows it (Nexus does), otherwise starts again
+  from the beginning, and the strip says so.
+
 ## v1.9.19 (2026-10-01)
 
 Ships together with v1.9.18, v1.9.17, v1.9.16 and v1.9.15 below as public 1.0.10.

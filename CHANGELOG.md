@@ -17,6 +17,19 @@
   MaxListenersExceededWarning at every start. If one of those tasks fails, it
   is logged and the rest still run.
 
+**Fixed: UE4SS could be replaced while the game was running**
+- Before Mod Command installs, updates, switches or restores UE4SS it checks
+  that Star Wars Zero Company is closed. On some PCs that check took so long
+  that it gave up — and then counted the game as closed, so UE4SS was
+  replaced under a running game.
+- The check now looks at whether the game's own files are in use, which
+  takes a few milliseconds, and only asks Windows for the running programs
+  when that can't tell.
+- If it still can't be sure, nothing is changed: you see "Couldn't confirm
+  Star Wars Zero Company is closed — close it and try again" with a
+  **Check again** button, which repeats what you were doing once the game is
+  confirmed closed. The automatic UE4SS update waits instead.
+
 ## v1.9.19 (2026-10-01)
 
 Ships together with v1.9.18, v1.9.17, v1.9.16 and v1.9.15 below as public 1.0.10.

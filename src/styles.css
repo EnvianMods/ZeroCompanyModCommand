@@ -730,6 +730,7 @@ body.reduced-motion * { transition: none !important; animation: none !important;
 }
 .toast.error { border-left-color: var(--danger); }
 .toast.warn { border-left-color: var(--amber); }
+.toast.toast-action { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 @keyframes toastIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: none; } }
 
 /* ---------- v1.1.0: game-folder mods, FOMOD wizard, order review ---------- */

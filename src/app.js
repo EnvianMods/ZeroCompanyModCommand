@@ -48,10 +48,47 @@ function zcPrompt(title, initial = '') {
 async function call(fn, ...args) {
   const res = await window.zc[fn](...args);
   if (!res.ok) {
+    if (isGameUnknownError(res.error)) return gameUnknownRetry(res.error, () => call(fn, ...args));
     toast(res.error, 'error', 6000);
     return null;
   }
   return res.data;
+}
+
+// A change was refused because Mod Command could not confirm the game is
+// closed (the game-running check did not finish). The toast offers "Check
+// again": a fresh check, and when the game is closed the same action runs
+// again (its caller gets that result). Dismissed or expired = nothing done.
+function isGameUnknownError(msg) {
+  return typeof msg === 'string' && /confirm Star Wars Zero Company is closed/.test(msg);
+}
+function gameUnknownRetry(msg, retry) {
+  return new Promise((resolve) => {
+    const el = document.createElement('div');
+    el.className = 'toast error toast-action';
+    const text = document.createElement('div');
+    text.textContent = msg;
+    const btn = document.createElement('button');
+    btn.className = 'btn tiny';
+    btn.textContent = 'Check again';
+    el.append(text, btn);
+    $('#toast-stack').appendChild(el);
+    let settled = false;
+    const close = () => { if (settled) return false; settled = true; clearTimeout(timer); el.remove(); return true; };
+    const timer = setTimeout(() => { if (close()) resolve(null); }, 30000);
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      btn.textContent = 'Checking…';
+      let st = 'unknown';
+      try { const r = await window.zc.checkGameRunning(); if (r && r.ok && r.data) st = r.data.state; } catch (_) {}
+      if (settled) return;
+      if (st === 'not-running') { close(); resolve(await retry()); return; }
+      if (st === 'running') { close(); resolve(null); toast('Star Wars Zero Company is running — close it first. Nothing was changed.', 'warn', 6000); return; }
+      btn.disabled = false;
+      btn.textContent = 'Check again';
+      toast('Still couldn’t confirm the game is closed — close it and press Check again.', 'warn', 5000);
+    });
+  });
 }
 
 // Wraps calls that can hit the SHA-256 ownership check (disable/uninstall).
@@ -69,6 +106,7 @@ async function verifiedCall(fn, args, actionLabel) {
     res = await window.zc[fn](...args, true); // force
   }
   if (!res.ok) {
+    if (isGameUnknownError(res.error)) return gameUnknownRetry(res.error, () => verifiedCall(fn, args, actionLabel));
     toast(res.error, 'error', 6000);
     return null;
   }

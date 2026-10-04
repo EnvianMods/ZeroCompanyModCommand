@@ -68,6 +68,7 @@ contextBridge.exposeInMainWorld('zc', {
   launcherUpdateStatus: (opts) => invoke('launcher-update-status', opts || {}),
   updateMod: (id) => invoke('update-mod', { id }),
   scanUnmanaged: () => invoke('scan-unmanaged'),
+  checkGameRunning: () => invoke('check-game-running'),
   adoptMods: (ids) => invoke('adopt-mods', { ids }),
   linkOrigin: (id, type, ref) => invoke('link-origin', { id, type, ref }),
   unlinkOrigin: (id) => invoke('unlink-origin', { id }),

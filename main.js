@@ -58,7 +58,7 @@ checkRuntimeFiles();
 
 const { Store } = require('./lib/store');
 const steam = require('./lib/steam');
-const { ModEngine, compareVersions, MODS_REL, LOGIC_MODS_REL, WIN64_REL, UE4SS_MODS_REL, GAME_MODS_REL } = require('./lib/mods');
+const { ModEngine, GAME_UNKNOWN_MESSAGE, compareVersions, MODS_REL, LOGIC_MODS_REL, WIN64_REL, UE4SS_MODS_REL, GAME_MODS_REL } = require('./lib/mods');
 const { findSevenZip, bundledSevenZip } = require('./lib/archive');
 const nexus = require('./lib/nexus');
 const nexusHttp = require('./lib/nexus-http');
@@ -103,6 +103,27 @@ function resolveDataDir() {
 const store = new Store(resolveDataDir());
 const engine = new ModEngine(store);
 let win = null;
+
+// Is Star Wars Zero Company running from the configured game folder? Asked
+// before every change that takes files out of the game or puts them back.
+// Answers 'running' | 'not-running' | 'unknown' (lib/steam.js
+// gameRunningState, cached there for a few seconds); 'unknown' — the check
+// could not finish — is treated as running by every change (refused with
+// "Couldn't confirm … is closed") and makes background work wait, exactly
+// like a running game. No game folder = nothing to guard.
+steam._setGameRunningLog((level, msg) => log(level, msg));
+function gameRunningNow(opts) {
+  const gp = store.settings.gamePath;
+  if (!gp) return 'not-running';
+  return steam.gameRunningState(gp, opts).state;
+}
+function gameIsRunningOrUnknown(opts) { return gameRunningNow(opts) !== 'not-running'; }
+// UE4SS installs, switches and restores: the running game has UE4SS loaded.
+function assertGameClosedForUe4ss() {
+  const st = gameRunningNow();
+  if (st === 'unknown') throw new Error(`${GAME_UNKNOWN_MESSAGE} (The running game would have UE4SS loaded.) Nothing was changed.`);
+  if (st !== 'not-running') throw new Error(GAME_RUNNING_UE4SS);
+}
 
 // ---------------------------------------------------------- mod archive location
 // The archive (library/backups/versions + a mirrored manifest) lives in the
@@ -505,7 +526,7 @@ async function handleNxm(rawUrl) {
       // first, and record the install so updates can be tracked.
       const isUe4ssPage = link.modId === ue4ssDl.NEXUS_MOD_ID;
       if (isUe4ssPage) {
-        if (steam.isGameRunning(store.settings.gamePath)) throw new Error(GAME_RUNNING_UE4SS);
+        assertGameClosedForUe4ss();
         keepCurrentUe4ss();
       }
       if (existing) {
@@ -1747,6 +1768,14 @@ const handlers = {
 
   'scan-unmanaged': async () => engine.scanUnmanaged(),
 
+  // "Check again" after a change was refused because the game could not be
+  // confirmed closed: a fresh check, skipping the few-second cache.
+  'check-game-running': async () => {
+    if (!store.settings.gamePath) return { state: 'not-running' };
+    const r = steam.gameRunningState(store.settings.gamePath, { force: true });
+    return { state: r.state, method: r.method, ms: r.ms };
+  },
+
   'scan-manager-sources': async () => ({
     orphans: engine.scanOrphanLibraries(),
     sources: detectManagerSources(),
@@ -2143,7 +2172,7 @@ const handlers = {
   // notice again and a kept Nexus file is tracked for updates again.
   'ue4ss-restore': async (_e, { entryId }) => {
     if (!store.settings.gamePath) throw new Error('Locate the game folder in Settings first.');
-    if (steam.isGameRunning(store.settings.gamePath)) throw new Error(GAME_RUNNING_UE4SS);
+    assertGameClosedForUe4ss();
     const cur = currentUe4ssMeta();
     const m = engine.ue4ssRestore(entryId, ue4ssLabel(cur), cur);
     const at = new Date().toISOString();
@@ -2302,7 +2331,7 @@ async function installUe4ssFromNexus(fileId, { auto = false } = {}) {
       hint: 'Press Mod Manager Download on the main file and Mod Command installs it — your UE4SS mods, mods.txt and settings are kept.',
     };
   }
-  if (steam.isGameRunning(store.settings.gamePath)) throw new Error(GAME_RUNNING_UE4SS);
+  assertGameClosedForUe4ss();
   const files = await nexus.filesList(ue4ssDl.NEXUS_MOD_ID, token);
   const file = files.find((f) => f.file_id === fileId);
   if (!file) throw new Error('That file is no longer listed on the Nexus page.');
@@ -2406,7 +2435,7 @@ async function maybeCheckUe4ss({ force = false } = {}) {
       sendEvent({ type: 'toast', kind, message });
     };
     if (auto && premium) {
-      if (steam.isGameRunning(store.settings.gamePath)) {
+      if (gameIsRunningOrUnknown()) {
         const first = !ue4ssPending || ue4ssPending.fileId !== nx.fileId;
         ue4ssPending = { fileId: nx.fileId, version: nx.version || null, reason: 'game-running', since: new Date().toISOString() };
         if (first) {

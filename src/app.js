@@ -2716,6 +2716,12 @@ async function openImportModal(opts = {}) {
   const mgrList = $('#import-manager-list');
   mgrList.innerHTML = '';
   mgrSection.classList.toggle('hidden', !(orphans.length || sources.length));
+  // Adopting can replace installed mods: never under a running game.
+  const running = !!(managerSources && managerSources.gameRunning);
+  const runNote = $('#import-game-running');
+  if (runNote) runNote.classList.toggle('hidden', !running);
+  $('#btn-import-adopt').disabled = running;
+  $('#btn-import-adopt').title = running ? 'Close Star Wars Zero Company first — adopting can replace installed mods whose files the game has loaded.' : '';
   for (const o of orphans) {
     const row = document.createElement('label');
     row.className = 'import-row';

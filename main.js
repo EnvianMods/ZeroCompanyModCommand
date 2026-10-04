@@ -118,6 +118,7 @@ function gameRunningNow(opts) {
   return steam.gameRunningState(gp, opts).state;
 }
 function gameIsRunningOrUnknown(opts) { return gameRunningNow(opts) !== 'not-running'; }
+engine.gameRunning = gameRunningNow;
 // UE4SS installs, switches and restores: the running game has UE4SS loaded.
 function assertGameClosedForUe4ss() {
   const st = gameRunningNow();
@@ -910,20 +911,7 @@ app.whenReady().then(() => {
   });
   // Startup recovery: redeploy enabled mods whose deployed files went missing,
   // unless the files left in the game were changed outside Mod Command.
-  onWindowLoad(() => {
-    if (!store.settings.gamePath) return;
-    try {
-      const { repaired, skipped } = engine.repairDeployments();
-      if (repaired.length) {
-        log('warn', `startup recovery redeployed: ${repaired.join(', ')}`);
-        sendEvent({ type: 'state', state: fullState() });
-        sendEvent({ type: 'toast', kind: 'warn', message: `Recovered missing deployed files for: ${repaired.join(', ')}.` });
-      }
-      if (skipped.length) {
-        sendEvent({ type: 'toast', kind: 'warn', message: `Not restored: ${skipped.join(', ')} — the files in the game were changed outside Mod Command (e.g. a newer build), so they were left as they are. To bring the mod up to date in Mod Command, install that build with Hangar Bay → ⊕ Install archive.` });
-      }
-    } catch (_) {}
-  });
+  onWindowLoad(() => startupRecovery());
   // Background mod update check: at startup when the last one is over an
   // hour old, then every hour while the app stays open (one Nexus files call
   // per linked mod, one GitHub call per GitHub-linked mod). The Hangar's
@@ -936,6 +924,40 @@ app.whenReady().then(() => {
   onWindowLoad(() => maybeCheckSdkUpdate());
   setInterval(() => { if (win && !win.isDestroyed()) maybeCheckSdkUpdate(); }, UPDATE_CHECK_MS);
 });
+
+// Redeploy enabled mods whose deployed files went missing. Under a running
+// game (or one that can't be confirmed closed) nothing is touched: it runs
+// again once the game has closed.
+let startupRecoveryTimer = null;
+function startupRecovery() {
+  if (!store.settings.gamePath) return;
+  if (gameIsRunningOrUnknown()) {
+    if (!startupRecoveryTimer) {
+      log('info', 'startup recovery waits for the game to close (or until it can be confirmed closed)');
+      startupRecoveryTimer = setInterval(() => {
+        if (gameIsRunningOrUnknown({ force: true })) return;
+        clearInterval(startupRecoveryTimer);
+        startupRecoveryTimer = null;
+        startupRecovery();
+      }, 30000);
+      if (startupRecoveryTimer.unref) startupRecoveryTimer.unref();
+    }
+    return;
+  }
+  try {
+    // Files changed outside Mod Command (e.g. a newer build) are never
+    // replaced by the stored copy: those mods come back in `skipped`.
+    const { repaired, skipped } = engine.repairDeployments();
+    if (repaired.length) {
+      log('warn', `startup recovery redeployed: ${repaired.join(', ')}`);
+      sendEvent({ type: 'state', state: fullState() });
+      sendEvent({ type: 'toast', kind: 'warn', message: `Recovered missing deployed files for: ${repaired.join(', ')}.` });
+    }
+    if (skipped.length) {
+      sendEvent({ type: 'toast', kind: 'warn', message: `Not restored: ${skipped.join(', ')} — the files in the game were changed outside Mod Command (e.g. a newer build), so they were left as they are. To bring the mod up to date in Mod Command, install that build with Hangar Bay → ⊕ Install archive.` });
+    }
+  } catch (_) {}
+}
 
 // WHERE TO GET THE SDK. Mod Command hard-codes no destination: the operator
 // publishes one in the asset repo's launcher-version.json `sdk` block, which
@@ -1779,9 +1801,17 @@ const handlers = {
   'scan-manager-sources': async () => ({
     orphans: engine.scanOrphanLibraries(),
     sources: detectManagerSources(),
+    gameRunning: gameIsRunningOrUnknown(),
   }),
 
   'adopt-mods': async (_e, { ids }) => {
+    // Adopting can replace installed mods (a newer copy of one) and claims
+    // files in the game: never under a running game.
+    const gameState = gameRunningNow();
+    if (gameState === 'unknown') throw new Error(`${GAME_UNKNOWN_MESSAGE} (Adopting mods can replace installed ones, whose files the running game would have loaded.) Nothing was changed.`);
+    if (gameState !== 'not-running') {
+      throw new Error('Close Star Wars Zero Company first — adopting mods can replace installed ones, whose files the running game has loaded. Nothing was changed.');
+    }
     const results = [];
     // Orphaned entries in our own library (lost store) re-import directly.
     for (const oid of ids.filter((i) => i.startsWith('orphan:'))) {

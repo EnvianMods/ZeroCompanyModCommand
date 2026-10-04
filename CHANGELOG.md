@@ -30,6 +30,26 @@
   **Check again** button, which repeats what you were doing once the game is
   confirmed closed. The automatic UE4SS update waits instead.
 
+**Safer mod changes**
+- No mod changes while Star Wars Zero Company is running: switching mods on
+  or off, removing, updating, rolling back, renaming, reordering, squad
+  profiles, installing the ZCSDK Runtime and Hangar Bay → Import wait for you
+  to close the game, with a clear "Nothing was changed" message (and the
+  **Check again** button when Mod Command can't confirm the game is closed).
+  Startup recovery waits for the game to close, too.
+- Switching off or removing a mod removes only the files Mod Command put
+  there. A settings file the mod wrote, or a file you added to its folder, is
+  kept (and the log says so); the folder goes only once it is empty.
+- If a file can't be removed because something holds it open, the mod is not
+  left half-removed: it stays on with all its files, and you are told why.
+- If an update, adoption, rollback or update-from-Nexus fails part way, the
+  version you had is put back exactly as it was.
+- A mod that was off stays off through an update, rollback or restore — it is
+  no longer deployed and then taken out again — and keeps its name and its
+  load-order or start-order slot.
+- Adopting a UE4SS mod folder that is switched off no longer deletes it from
+  the game.
+
 ## v1.9.19 (2026-10-01)
 
 Ships together with v1.9.18, v1.9.17, v1.9.16 and v1.9.15 below as public 1.0.10.

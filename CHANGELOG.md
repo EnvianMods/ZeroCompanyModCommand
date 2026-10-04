@@ -30,6 +30,11 @@
   lists add-ons while ZC Unlocked is missing.
 - A UE4SS mod folder that carries an `addon.ini` (an add-on pack) still
   installs as a UE4SS mod, as before.
+- Add-ons you copied into `ue4ss\Mods\ZCUnlocked\addons\` by hand show up in
+  Hangar Bay → Import as **ZCU ADD-ON** entries (name and version from
+  `addon.ini`, "currently inactive" when it says `enabled=0`) and are adopted
+  where they are — nothing moves. Adopting ZC Unlocked itself still leaves
+  them out.
 
 **Updating or removing ZC Unlocked (or any UE4SS mod) keeps what else is in its folder**
 - Disabling, updating, rolling back or uninstalling a UE4SS mod used to
@@ -152,6 +157,8 @@
   "installs as a new mod", "older than your installed … — added to its
   ⧗ Versions only", or "REPLACES your installed …". A replacement asks once
   more before it happens.
+- The mods found in the game folder are not ticked in advance either: tick
+  the ones you want to adopt.
 - An old ZCSDK Runtime copy in the archive shows as "Old ZCSDK Runtime copy —
   safe to clean up" with its own **Clean up** button; it can't be adopted.
 

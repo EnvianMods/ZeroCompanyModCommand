@@ -3059,7 +3059,8 @@ async function openImportModal(opts = {}) {
     row.className = 'import-row';
     const check = document.createElement('input');
     check.type = 'checkbox';
-    check.checked = true;
+    // Nothing in the dialog is pre-ticked: you pick what to adopt.
+    check.checked = false;
     check.dataset.candidateId = c.id;
     const info = document.createElement('div');
     info.className = 'import-info';

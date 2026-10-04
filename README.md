@@ -78,7 +78,8 @@ automatically for IoStore package inspection; a different copy can be selected i
     is kept in the library, not deployed, with a warning, and deployed once ZC
     Unlocked is there. Uninstall removes only the add-on's own files. A UE4SS mod
     folder that carries an `addon.ini` (an add-on pack) still installs as that
-    UE4SS mod.
+    UE4SS mod. Add-on folders you copied in by hand are found by the
+    existing-mods scan (Hangar Bay → **Import**) and adopted in place.
   - UE4SS runtime archives (dwmapi.dll + ue4ss folder) → installed into `Binaries/Win64`,
     replacing only UE4SS's own files (your `ue4ss/Mods`, `mods.txt` and settings are kept).
   - `gamefolder` (GAMEFILES) — archives laid out against the game root

@@ -67,6 +67,29 @@
   backups), so the "different files already in the game" rule left every one
   of them disabled.
 
+**The ZCSDK Runtime is protected while SDK mods need it**
+- The ZCSDK Runtime (ZCSDKBridge + ZCSDKLoader) is now installed, updated and
+  removed only from Settings → ZCSDK Runtime. While mods built with the Zero
+  Company Mod SDK are installed, its Hangar rows say "◆ Required by N SDK
+  mods" and can't be switched off, uninstalled, rolled back or renamed;
+  Disable all and squad profiles leave it on (and say so).
+- An old or stray copy of ZCSDKBridge or ZCSDKLoader — from the mod archive,
+  another manager, or a dropped folder — can no longer be installed as a
+  regular mod or replace the runtime; the "existing mods" scan no longer
+  offers the runtime's folders for adoption.
+- Applying the UE4SS start order keeps the runtime's `enabled.txt` switches.
+- New: Settings → ZCSDK Runtime → **Remove** takes both parts out together
+  (with their UE4SS signature files), after listing the SDK mods that will
+  stop working.
+- Self-heal: if SDK mods are installed and the runtime is missing, incomplete
+  or switched off, Mod Command switches it back on or reinstalls the bundled
+  copy and tells you (it asks first when that needs a download, and waits
+  until the game is closed). A runtime whose files in the game were changed
+  outside Mod Command (for example a newer build) is left alone, with a note.
+  If you removed the runtime yourself, it stays removed.
+- A runtime install or update that fails part way puts the previous runtime
+  back as it was.
+
 ## v1.9.19 (2026-10-01)
 
 Ships together with v1.9.18, v1.9.17, v1.9.16 and v1.9.15 below as public 1.0.10.

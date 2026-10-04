@@ -327,11 +327,27 @@ function renderMods() {
       if (!rtOk) zcChip.addEventListener('click', () => installZcsdkRuntime());
     }
 
+    // ZCSDK Runtime part: a protected dependency while SDK mods need it.
+    const rtLocked = !!(mod.runtimePart && mod.requiredBy > 0);
+    const rtWhy = rtLocked
+      ? `Part of the ZCSDK Runtime — required by ${mod.requiredBy} installed SDK mod${mod.requiredBy === 1 ? '' : 's'}`
+        + `${mod.requiredByNames && mod.requiredByNames.length ? ` (${mod.requiredByNames.join(', ')}${mod.requiredBy > mod.requiredByNames.length ? ', …' : ''})` : ''}. `
+        + 'It stays on and installed while they are; to take the runtime out, use Settings → ZCSDK Runtime → Remove.'
+      : '';
+    let rtChip = null;
+    if (mod.runtimePart) {
+      rtChip = document.createElement('span');
+      rtChip.className = `mod-badge zc-chip ${rtLocked ? 'zc-ok' : 'zc-note'}`;
+      rtChip.textContent = rtLocked ? `◆ Required by ${mod.requiredBy} SDK mod${mod.requiredBy === 1 ? '' : 's'}` : '◆ ZCSDK Runtime';
+      rtChip.title = rtLocked ? rtWhy : 'Part of the ZCSDK Runtime (Settings → ZCSDK Runtime). No installed mod needs it right now.';
+    }
+
     const toggle = document.createElement('input');
     toggle.type = 'checkbox';
     toggle.className = 'switch';
     toggle.checked = mod.enabled;
     toggle.title = mod.enabled ? 'Disable (undeploy)' : 'Enable (deploy)';
+    if (rtLocked && mod.enabled) { toggle.disabled = true; toggle.title = rtWhy; }
     toggle.addEventListener('change', async () => {
       if (toggle.checked && onEA && compat && compat.status === 'incompatible') {
         const go = window.confirm(
@@ -358,6 +374,7 @@ function renderMods() {
     versionsBtn.textContent = mod.version ? `⧗ v${mod.version}` : '⧗ versions';
     versionsBtn.title = 'Version vault — roll back to an archived version';
     versionsBtn.addEventListener('click', () => openVersionsModal(mod));
+    if (rtLocked) { versionsBtn.disabled = true; versionsBtn.title = rtWhy; }
     actions.appendChild(versionsBtn);
     const renameBtn = document.createElement('button');
     renameBtn.className = 'btn ghost tiny';
@@ -368,9 +385,11 @@ function renderMods() {
       const data = await call('renameMod', mod.id, name2);
       if (data) { state = data; render(); toast(`Renamed to “${name2}”`); }
     });
+    if (mod.runtimePart) { renameBtn.disabled = true; renameBtn.title = 'A ZCSDK Runtime part keeps its name — it is its folder in ue4ss\\Mods.'; }
     const delBtn = document.createElement('button');
     delBtn.className = 'btn danger tiny';
     delBtn.textContent = 'Uninstall';
+    if (rtLocked) { delBtn.disabled = true; delBtn.title = rtWhy; }
     delBtn.addEventListener('click', async () => {
       const note = mod.modType === 'gamefolder'
         ? ' Replaced game files are restored from backup.'
@@ -418,6 +437,7 @@ function renderMods() {
     row.append(badge, srcBadge, main, flag);
     if (eaChip) row.appendChild(eaChip);
     if (zcChip) row.appendChild(zcChip);
+    if (rtChip) row.appendChild(rtChip);
     if (buildChip) row.appendChild(buildChip);
     if (updateEl) row.appendChild(updateEl);
     row.append(toggle, actions);
@@ -448,6 +468,9 @@ $('#btn-disable-all').addEventListener('click', async () => {
   state = res.state;
   render();
   toast(`Disabled ${res.result.changed} mod(s).`);
+  if (res.result.kept && res.result.kept.length) {
+    toast(`Kept the ZCSDK Runtime on (${res.result.kept.join(', ')}) — installed SDK mods need it. Settings → ZCSDK Runtime → Remove takes it out.`, 'info', 9000);
+  }
   for (const e of res.result.errors.slice(0, 3)) toast(e, 'error', 7000);
 });
 
@@ -1218,6 +1241,9 @@ function renderSettings() {
   zcBtn.disabled = !zcPkg;
   zcBtn.textContent = !zcPkg ? 'Unavailable'
     : (zc.installed ? (zc.updateAvailable ? `Update to ${zcPkg.version}` : 'Reinstall') : `Install ${zcPkg.version || ''}`.trim());
+  const zcRemove = $('#btn-remove-zcsdk');
+  zcRemove.classList.toggle('hidden', !state.mods.some((m) => m.runtimePart));
+  zcRemove.title = 'Removes both parts of the ZCSDK Runtime (ZCSDKBridge and ZCSDKLoader) together';
   zcBtn.title = !zcPkg ? 'GitHub is unreachable and this build has no bundled runtime copy.'
     : (zcPkg.source === 'github'
       ? `Downloads ZCSDK Runtime ${zcPkg.version} from the EnvianMods/ZCSDK-Runtime-Release GitHub repo`
@@ -1576,6 +1602,30 @@ $('#btn-install-zcsdk').addEventListener('click', async () => {
   try { await installZcsdkRuntime(); } finally {
     btn.disabled = false;
     $('#progress-toast').classList.add('hidden');
+  }
+});
+
+// Settings → ZCSDK Runtime → Remove: both parts together, after saying which
+// installed SDK mods stop working without it.
+$('#btn-remove-zcsdk').addEventListener('click', async () => {
+  const deps = ((state.zcsdk && state.zcsdk.neededBy) || []).map((m) => m.name);
+  const msg = deps.length
+    ? `Remove the ZCSDK Runtime (ZCSDKBridge + ZCSDKLoader)?\n\n${deps.length} installed mod${deps.length === 1 ? '' : 's'} built with the Zero Company Mod SDK need${deps.length === 1 ? 's' : ''} it and will not work until you install it again:\n\n`
+      + deps.map((n) => `• ${n}`).join('\n')
+      + '\n\nMod Command will not put it back by itself until you install it again from here.'
+    : 'Remove the ZCSDK Runtime (ZCSDKBridge + ZCSDKLoader)? No installed mod needs it right now.';
+  if (!window.confirm(msg)) return;
+  const btn = $('#btn-remove-zcsdk');
+  btn.disabled = true;
+  try {
+    const res = await call('removeZcsdkRuntime');
+    if (!res) return;
+    state = res.state;
+    render();
+    toast(`ZCSDK Runtime removed${res.removed && res.removed.length ? ` (${res.removed.join(', ')})` : ''}.`
+      + `${res.leftover && res.leftover.length ? ` ${res.leftover.join(' and ')} ${res.leftover.length === 1 ? 'is' : 'are'} still in ue4ss\\Mods — not installed by Mod Command, so left alone.` : ''}`, 'info', 9000);
+  } finally {
+    btn.disabled = false;
   }
 });
 
@@ -3626,6 +3676,20 @@ window.zc.onEvent((payload) => {
   if (payload.type === 'first-scan') {
     pendingFirstScan = true;
     if ($('#setup-modal').classList.contains('hidden')) maybeRunFirstScan();
+    return;
+  }
+  if (payload.type === 'zcsdk-heal-ask') {
+    // Self-heal found the runtime the installed SDK mods need missing or
+    // incomplete, and putting it back means a download: ask first.
+    const n = payload.dependents || 0;
+    const what = payload.sigsMissing ? 'missing its UE4SS signature files'
+      : (/incomplete/i.test(payload.reason || '') ? 'incomplete' : 'missing or switched off');
+    const go = window.confirm(
+      `The ZCSDK Runtime is ${what}, `
+      + `and ${n} installed SDK mod${n === 1 ? '' : 's'} need${n === 1 ? 's' : ''} it.\n\n`
+      + `Download and install ZCSDK Runtime ${payload.version || ''} from GitHub now?`);
+    if (go) installZcsdkRuntime().finally(() => $('#progress-toast').classList.add('hidden'));
+    else toast('The ZCSDK Runtime is not in place — install it from Settings → ZCSDK Runtime.', 'warn', 9000);
     return;
   }
   if (payload.type === 'toast') {

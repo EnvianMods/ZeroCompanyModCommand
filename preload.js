@@ -61,6 +61,7 @@ contextBridge.exposeInMainWorld('zc', {
   ue4ssRestore: (entryId) => invoke('ue4ss-restore', { entryId }),
   installZcsdkRuntime: () => invoke('install-zcsdk-runtime'),
   checkZcsdkRuntime: () => invoke('check-zcsdk-runtime'),
+  removeZcsdkRuntime: () => invoke('remove-zcsdk-runtime'),
   browseNexus: (opts) => invoke('nexus-browse', opts),
   browseGithub: (opts) => invoke('github-browse', opts),
   installGithub: (fullName) => invoke('github-install', { fullName }),

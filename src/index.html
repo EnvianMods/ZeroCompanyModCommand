@@ -387,9 +387,10 @@
               <div class="setting-actions">
                 <button class="btn ghost" id="btn-check-zcsdk" title="Re-read the newest release from GitHub now">Check for updates</button>
                 <button class="btn" id="btn-install-zcsdk">Install</button>
+                <button class="btn danger hidden" id="btn-remove-zcsdk">Remove</button>
               </div>
             </div>
-            <p class="dim settings-note">Two UE4SS mods (ZCSDKBridge + ZCSDKLoader). Mod Command checks the ZCSDK-Runtime-Release GitHub repo at startup and installs the newest release from there, so runtime updates no longer wait for a Mod Command update; a bundled copy covers offline installs. At startup the runtime loads each SDK-built mod's asset registry so the game can discover its new content, and grants the mod's items once per save. Requires UE4SS; installed mods that need it show a ◆ SDK chip in the Hangar.</p>
+            <p class="dim settings-note">Two UE4SS mods (ZCSDKBridge + ZCSDKLoader). Mod Command checks the ZCSDK-Runtime-Release GitHub repo at startup and installs the newest release from there, so runtime updates no longer wait for a Mod Command update; a bundled copy covers offline installs. At startup the runtime loads each SDK-built mod's asset registry so the game can discover its new content, and grants the mod's items once per save. Requires UE4SS; installed mods that need it show a ◆ SDK chip in the Hangar. While they are installed the runtime is kept in place: its two parts can't be switched off, removed or replaced from the Hangar, and if it goes missing or gets switched off Mod Command puts it back (from the bundled copy, or after asking when that needs a download). Remove takes both parts out together.</p>
           </div>
         </div>
 

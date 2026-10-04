@@ -58,7 +58,7 @@ checkRuntimeFiles();
 
 const { Store } = require('./lib/store');
 const steam = require('./lib/steam');
-const { ModEngine, GAME_UNKNOWN_MESSAGE, compareVersions, MODS_REL, LOGIC_MODS_REL, WIN64_REL, UE4SS_MODS_REL, GAME_MODS_REL } = require('./lib/mods');
+const { ModEngine, GAME_UNKNOWN_MESSAGE, isZcsdkRuntimeRecord, compareVersions, MODS_REL, LOGIC_MODS_REL, WIN64_REL, UE4SS_MODS_REL, GAME_MODS_REL } = require('./lib/mods');
 const { findSevenZip, bundledSevenZip } = require('./lib/archive');
 const nexus = require('./lib/nexus');
 const nexusHttp = require('./lib/nexus-http');
@@ -942,6 +942,7 @@ function startupRecovery() {
       }, 30000);
       if (startupRecoveryTimer.unref) startupRecoveryTimer.unref();
     }
+    healZcsdkRuntime('startup').catch(() => {}); // notifies and waits itself
     return;
   }
   try {
@@ -957,7 +958,127 @@ function startupRecovery() {
       sendEvent({ type: 'toast', kind: 'warn', message: `Not restored: ${skipped.join(', ')} — the files in the game were changed outside Mod Command (e.g. a newer build), so they were left as they are. To bring the mod up to date in Mod Command, install that build with Hangar Bay → ⊕ Install archive.` });
     }
   } catch (_) {}
+  healZcsdkRuntime('startup').catch(() => {});
 }
+
+// ZCSDK Runtime self-heal. The runtime is a protected dependency: while
+// installed mods need it (they ship a *.zcsdk.lua), it must be present and
+// switched on. Runs at startup and after every mod operation; when it finds
+// the runtime missing, incomplete or switched off it
+//   - switches this app's own copy back on / redeploys its missing files
+//     (when that copy is not older than the package available now), or
+//   - reinstalls it: silently from the copy bundled with the app, or, when
+//     that would need a download (the newest release is on GitHub), only
+//     after asking (a 'zcsdk-heal-ask' event; the renderer confirms and runs
+//     the normal install).
+// Only a runtime this app installed (or still holds records of) is healed —
+// a first install stays the user's choice — and never after the user removed
+// it (Settings → ZCSDK Runtime → Remove). Files of the runtime that were
+// changed outside Mod Command (a newer runtime build) are never replaced.
+// With the game running it waits for the game to close, and says so.
+let zcsdkHealBusy = false;
+let zcsdkHealWait = null;
+let zcsdkHealAsked = null;
+let zcsdkHealLeftNoted = null;
+// Self-heal found runtime files changed outside Mod Command and left them
+// alone: say so once per set of parts (it runs after every mod operation).
+function zcsdkHealLeftAlone(names) {
+  const key = [...names].sort().join('|');
+  if (zcsdkHealLeftNoted === key) return;
+  zcsdkHealLeftNoted = key;
+  sendEvent({ type: 'toast', kind: 'warn', message: `ZCSDK Runtime not restored: the files of ${names.join(' and ')} in the game were changed outside Mod Command (e.g. a newer runtime build), so they were left as they are. To have Mod Command manage the runtime again, use Settings → ZCSDK Runtime → Update / Reinstall.` });
+}
+async function healZcsdkRuntime(reason) {
+  if (zcsdkHealBusy || !store.settings.gamePath || store.settings.zcsdkRemovedByUser) return null;
+  zcsdkHealBusy = true;
+  try {
+    let first = engine.zcsdkHealPlan(zcsdkRt.availableRuntime());
+    // The runtime has none (or not all) of its UE4SS signature files: only a
+    // newer release may bring them (the bundled copy can be older) — read
+    // latest.json first (cached for an hour) before deciding there is
+    // nothing to do.
+    const sg = first.action === 'none' && first.reason === 'healthy' ? engine.zcsdkStatus().signatures : null;
+    if (sg && (!sg.files.length || sg.installed < sg.files.length)) {
+      try { await zcsdkRt.latestRuntime(); } catch (_) {}
+      first = engine.zcsdkHealPlan(zcsdkRt.availableRuntime());
+    }
+    if (first.action === 'none') return null;
+    if (!store.settings.zcsdkRuntimeWanted && !store.mods.some((m) => isZcsdkRuntimeRecord(m))) return null;
+    if (gameIsRunningOrUnknown()) {
+      if (!zcsdkHealWait) {
+        log('warn', `ZCSDK Runtime needs restoring (${first.reason}) — waiting for the game to close`);
+        sendEvent({ type: 'toast', kind: 'warn', message: 'The ZCSDK Runtime your SDK mods need is missing or switched off. Mod Command restores it as soon as the game is closed.' });
+        zcsdkHealWait = setInterval(() => {
+          if (gameIsRunningOrUnknown({ force: true })) return;
+          clearInterval(zcsdkHealWait);
+          zcsdkHealWait = null;
+          healZcsdkRuntime('after the game closed').catch(() => {});
+        }, 30000);
+        if (zcsdkHealWait.unref) zcsdkHealWait.unref();
+      }
+      return { deferred: true };
+    }
+    try { await zcsdkRt.latestRuntime(); } catch (_) {} // cached for an hour
+    const pkg = zcsdkRt.availableRuntime();
+    const plan = engine.zcsdkHealPlan(pkg);
+    if (plan.action === 'enable') {
+      const { fixed, skipped } = engine.healZcsdkParts(plan.ids);
+      if (skipped.length) zcsdkHealLeftAlone(skipped);
+      if (!fixed.length) return null;
+      log('warn', `ZCSDK Runtime self-heal (${reason}): switched back on / redeployed ${fixed.join(', ')} — ${plan.reason}`);
+      sendEvent({ type: 'state', state: fullState() });
+      sendEvent({ type: 'toast', kind: 'warn', message: `The ZCSDK Runtime your SDK mods need was switched off or incomplete — restored it (${fixed.join(', ')}).` });
+      return { fixed };
+    }
+    if (plan.action !== 'install') return null;
+    if (!pkg) {
+      log('error', `ZCSDK Runtime self-heal (${reason}): the runtime is missing and no package is available`);
+      sendEvent({ type: 'toast', kind: 'error', message: 'The ZCSDK Runtime your SDK mods need is missing, and no copy is available offline — install it from Settings → ZCSDK Runtime when you are online.' });
+      return null;
+    }
+    // A runtime whose files in the game were changed outside Mod Command (a
+    // newer build deployed by the Mod SDK) is not silently reinstalled over.
+    const changedOutside = engine.zcsdkPartsChangedOutside();
+    if (changedOutside.length) {
+      for (const c of changedOutside) {
+        log('warn', `ZCSDK Runtime self-heal (${reason}) skipped reinstalling: ${c.name}'s files in the game were changed outside Mod Command (${c.files.slice(0, 3).join(', ')}${c.files.length > 3 ? ', …' : ''})`);
+      }
+      zcsdkHealLeftAlone(changedOutside.map((c) => c.name));
+      return null;
+    }
+    if (pkg.source === 'github') {
+      if (zcsdkHealAsked === pkg.version) return null;
+      zcsdkHealAsked = pkg.version;
+      log('warn', `ZCSDK Runtime self-heal (${reason}): ${plan.reason} — asking before downloading ${pkg.version} from GitHub`);
+      sendEvent({ type: 'zcsdk-heal-ask', version: pkg.version, reason: plan.reason, dependents: plan.dependents, sigsMissing: !!plan.sigsMissing });
+      return { asked: true };
+    }
+    const res = await engine.installZcsdkRuntime(pkg.zip, pkg.version);
+    store.settings.zcsdkRuntimeWanted = true;
+    store.save();
+    log('warn', `ZCSDK Runtime self-heal (${reason}): reinstalled the bundled ${pkg.version || 'copy'} (${res.replaced} previous part(s) replaced) — ${plan.reason}`);
+    sendEvent({ type: 'state', state: fullState() });
+    sendEvent({ type: 'toast', kind: 'warn', message: plan.sigsMissing
+      ? `The ZCSDK Runtime's UE4SS signature files were missing (without them UE4SS mods do not run) — reinstalled the runtime (${pkg.version || 'bundled copy'}) to put them back.`
+      : `The ZCSDK Runtime your SDK mods need was missing or incomplete — reinstalled it (${pkg.version || 'bundled copy'}).` });
+    return { installed: pkg.version };
+  } catch (err) {
+    log('error', `ZCSDK Runtime self-heal (${reason}) failed: ${err.message}`);
+    sendEvent({ type: 'toast', kind: 'error', message: `Could not restore the ZCSDK Runtime: ${err.message}` });
+    return null;
+  } finally {
+    zcsdkHealBusy = false;
+  }
+}
+
+// Channels after which the runtime self-heal looks again.
+const HEAL_AFTER = new Set([
+  'set-mod-enabled', 'uninstall-mod', 'set-all-enabled', 'rollback-version', 'apply-profile',
+  'adopt-mods', 'apply-ue4ss-order', 'apply-load-order', 'rollback-load-order', 'rename-mod',
+  'install-mods', 'install-folder', 'install-dropped', 'update-mod', 'import-manager-folder',
+  'nexus-install-file', 'nexus-install-remote', 'github-install', 'fomod-complete',
+  'ue4ss-restore', 'install-ue4ss', 'clean-runtime-copy',
+]);
 
 // WHERE TO GET THE SDK. Mod Command hard-codes no destination: the operator
 // publishes one in the asset repo's launcher-version.json `sdk` block, which
@@ -1127,7 +1248,15 @@ function fullState() {
     },
     modCompat,
     ue4ssOrder: store.settings.gamePath ? engine.ue4ssOrderState() : { managed: [], others: [], applied: false },
-    mods: store.mods,
+    // runtimePart / requiredBy: a ZCSDK Runtime part and how many installed
+    // SDK mods need it — the row can't be switched off, removed or rolled
+    // back while that is > 0 (Settings → ZCSDK Runtime → Remove instead).
+    mods: (() => {
+      const deps = engine.runtimeDependents().map((m) => m.name);
+      return store.mods.map((m) => (isZcsdkRuntimeRecord(m)
+        ? { ...m, runtimePart: true, requiredBy: deps.length, requiredByNames: deps.slice(0, 8) }
+        : m));
+    })(),
     conflicts,
     ue4ssHooks,
     // release = what this app last installed (null for a copy placed by hand);
@@ -2259,10 +2388,27 @@ const handlers = {
       if (downloaded) fs.rmSync(downloaded, { force: true });
     }
     store.settings.zcsdkNoticedVersion = version || null;
+    // Wanted from now on: self-heal keeps it in place while SDK mods need it.
+    store.settings.zcsdkRuntimeWanted = true;
+    store.settings.zcsdkRemovedByUser = false;
     store.save();
     const sigs = (res.signatures || []).length;
     log('info', `ZCSDK Runtime ${version || ''} installed from ${source} (${res.replaced} previous cop${res.replaced === 1 ? 'y' : 'ies'} replaced${sigs ? `; ${sigs} UE4SS signature file${sigs === 1 ? '' : 's'} in ue4ss\\UE4SS_Signatures` : ''})`);
     return { state: fullState(), version, source, replaced: res.replaced, signatures: sigs };
+  },
+
+  // Settings → ZCSDK Runtime → Remove: both parts together, after the
+  // renderer's confirmation (which lists the SDK mods that stop working).
+  // Self-heal stays off until the runtime is installed again.
+  'remove-zcsdk-runtime': async () => {
+    const res = engine.removeZcsdkRuntime();
+    store.settings.zcsdkRemovedByUser = true;
+    store.save();
+    log('info', `ZCSDK Runtime removed (${res.removed.join(', ') || 'nothing managed'})`
+      + `${res.signaturesRemoved ? `; ${res.signaturesRemoved} UE4SS signature file(s) removed` : ''}`
+      + `${res.leftover.length ? `; left in place (not installed by Mod Command): ${res.leftover.join(', ')}` : ''}`
+      + `${res.dependents.length ? `; ${res.dependents.length} SDK mod(s) now lack it` : ''}`);
+    return { state: fullState(), ...res, status: undefined };
   },
 
   // Settings → retoc: check GitHub now / install the newest release into
@@ -2896,6 +3042,8 @@ for (const [channel, fn] of Object.entries(handlers)) {
     } catch (err) {
       log('error', `${channel}: ${err && err.message ? err.message : err}`);
       return fail(err);
+    } finally {
+      if (HEAL_AFTER.has(channel)) setImmediate(() => { healZcsdkRuntime(`after ${channel}`).catch(() => {}); });
     }
   });
 }

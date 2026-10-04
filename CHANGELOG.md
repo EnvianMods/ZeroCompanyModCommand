@@ -116,6 +116,24 @@
 - Refusals are noted once per site in the session log (site only, never the
   full address).
 
+**Nexus sign-in: no tokens in plain text, and no account name in reports**
+- Your Nexus sign-in is never written to disk in plain text any more. With
+  the operating system's key store (Windows' own encryption, the macOS
+  Keychain, a Linux keyring) it is stored encrypted as before; without one,
+  you stay signed in for this session only and Settings says so. Plain-text
+  sign-in data an older version wrote is removed at startup (encrypted, or
+  kept for the session only). On Linux, Mod Command asks for the desktop
+  keyring instead of the obfuscation-only fallback.
+- The mod archive in the game folder (`ModCommandArchive\manager-data.json`)
+  no longer carries your sign-in at all, not even encrypted; an existing copy
+  is cleaned at startup.
+- The session log, the support report and error messages run through one
+  scrubber: sign-in tokens, authorization headers, `nxm://` link keys and the
+  query strings of signed download links are masked, and your Nexus account
+  name appears as its first two letters followed by `***` (the report's
+  footer promised that already). An unusable `nxm://` link in an error no
+  longer shows its key.
+
 ## v1.9.19 (2026-10-01)
 
 Ships together with v1.9.18, v1.9.17, v1.9.16 and v1.9.15 below as public 1.0.10.

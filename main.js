@@ -56,7 +56,7 @@ function checkRuntimeFiles() {
 }
 checkRuntimeFiles();
 
-const { Store } = require('./lib/store');
+const { Store, SECRET_SETTINGS } = require('./lib/store');
 const steam = require('./lib/steam');
 const { ModEngine, GAME_UNKNOWN_MESSAGE, isZcsdkRuntimeRecord, compareVersions, MODS_REL, LOGIC_MODS_REL, WIN64_REL, UE4SS_MODS_REL, GAME_MODS_REL } = require('./lib/mods');
 const { findSevenZip, bundledSevenZip } = require('./lib/archive');
@@ -73,6 +73,7 @@ const ea = require('./lib/ea');
 const { checkLauncherUpdate, cachedInfo: cachedLauncherInfo, parseSdkBlock } = require('./lib/launcher-update');
 const { isAllowedExternalUrl } = require('./lib/external-url');
 const { log, logText } = require('./lib/log');
+const { redactSecrets, registerSecret, registerAccountName } = require('./lib/redact');
 const report = require('./lib/report');
 // SDK LINK: Mod Command hosts the Zero Company Mod SDK's OWN UI when one is
 // installed. It carries no copy of that UI — see lib/sdk-link.js and
@@ -206,47 +207,137 @@ async function autoRestoreFromArchive() {
 // credentials, so the app signs the user in with OAuth 2.0 (Authorization Code
 // + PKCE, see lib/nexus-oauth.js) and keeps only the tokens Nexus issues. They are
 // encrypted with the OS user's credentials (DPAPI on Windows) via Electron
-// safeStorage; plaintext is the fallback when the OS store is unavailable.
-// Tokens never reach the renderer and are never written to the log.
+// safeStorage. They are NEVER written to disk in plain text: without a secure
+// OS key store (safeStorage unavailable, or Linux's obfuscation-only
+// basic_text backend) they are kept in memory for this session only and the
+// user signs in again next time. A plaintext copy an older build wrote is
+// migrated on startup and deleted. Tokens never reach the renderer, and the
+// redactor (lib/redact.js) masks them anywhere they might appear in the log,
+// the support report or an error.
 
 const SIGN_IN_REQUIRED = 'Sign in to Nexus Mods in Settings first.';
 const SIGN_IN_EXPIRED = 'Your Nexus Mods sign-in expired or was revoked. Sign in again in Settings.';
 const REFRESH_MARGIN_MS = 60 * 1000; // refresh this long before the token lapses
 
 let nexusTokens = null; // { access_token, refresh_token, expires_at, obtained_at }
+// Tokens with no secure home on this system live here, for this session only.
+let sessionOnlyTokens = null;
+
+// Linux: ask Chromium for a real keyring instead of letting it fall back to
+// `basic_text` on a desktop it does not recognise (tiling WMs, gamescope…).
+// KDE is auto-detected to kwallet already; an explicit --password-store wins.
+if (process.platform === 'linux' && !app.commandLine.hasSwitch('password-store')) {
+  const desktop = String(process.env.XDG_CURRENT_DESKTOP || '').toLowerCase();
+  if (!/kde|plasma/.test(desktop)) app.commandLine.appendSwitch('password-store', 'gnome-libsecret');
+}
+
+// Is there a SECURE place to keep the tokens? isEncryptionAvailable() alone is
+// not enough on Linux, where it is also true for the obfuscation-only
+// basic_text backend. ZC_TEST_NO_SECURE_STORE=1 simulates "no store" in dev
+// runs only (ignored when packaged).
+function secureTokenStore() {
+  if (!app.isPackaged && process.env.ZC_TEST_NO_SECURE_STORE === '1') return { available: false, backend: 'test-disabled' };
+  let available = false;
+  let backend = null;
+  try { available = safeStorage.isEncryptionAvailable(); } catch (_) {}
+  if (process.platform === 'linux') {
+    try { backend = safeStorage.getSelectedStorageBackend(); } catch (_) {}
+    if (!backend || backend === 'basic_text' || backend === 'unknown') available = false;
+  }
+  return { available, backend };
+}
+
+function registerTokenSecrets(t) {
+  if (!t) return;
+  registerSecret(t.access_token);
+  registerSecret(t.refresh_token);
+}
 let nexusRefreshInFlight = null;
 let nexusSignInFlow = null;
 let legacyCredentialsDropped = false;
 
 function loadNexusTokens() {
   const s = store.settings;
-  let raw = null;
-  if (s.nexusOAuthEncrypted) {
-    try {
-      if (safeStorage.isEncryptionAvailable()) {
-        raw = safeStorage.decryptString(Buffer.from(s.nexusOAuthEncrypted, 'base64'));
+  // Plaintext tokens an older build wrote when the OS store was unavailable:
+  // encrypted now, or kept for this session only — and gone from disk.
+  if (s.nexusOAuth) {
+    let plain = null;
+    try { plain = typeof s.nexusOAuth === 'string' ? JSON.parse(s.nexusOAuth) : s.nexusOAuth; } catch (_) {}
+    s.nexusOAuth = null;
+    if (plain && plain.access_token) {
+      registerTokenSecrets(plain);
+      if (!s.nexusOAuthEncrypted) {
+        saveNexusTokens(plain);
+        log('info', `nexus sign-in: plaintext tokens removed from settings — ${sessionOnlyTokens ? 'no secure OS key store, kept for this session only' : 'now encrypted with the OS key store'}`);
+      } else {
+        store.save();
+        log('info', 'nexus sign-in: removed leftover plaintext tokens (encrypted ones are stored)');
       }
-    } catch (_) { /* wrong OS user / corrupted blob — treat as signed out */ }
-    if (!raw) return null;
-  } else if (s.nexusOAuth) {
-    raw = s.nexusOAuth;
+    } else {
+      store.save();
+    }
   }
-  if (!raw) return null;
+  if (sessionOnlyTokens) return sessionOnlyTokens;
+  if (!s.nexusOAuthEncrypted) return null;
+  let raw = null;
   try {
-    const t = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    return t && t.access_token ? t : null;
-  } catch (_) { return null; }
+    if (secureTokenStore().available) raw = safeStorage.decryptString(Buffer.from(s.nexusOAuthEncrypted, 'base64'));
+  } catch (_) { /* wrong OS user / corrupted blob / keyring locked — treat as signed out */ }
+  if (!raw) {
+    log('warn', 'nexus sign-in: the stored tokens could not be decrypted on this system — signed out');
+    return null;
+  }
+  try {
+    const t = JSON.parse(raw);
+    if (t && t.access_token) { registerTokenSecrets(t); return t; }
+  } catch (_) {}
+  return null;
 }
 
+// Never plaintext on disk: encrypted with the OS key store, else in memory for
+// this session only.
 function saveNexusTokens(tokens) {
-  if (tokens && safeStorage.isEncryptionAvailable()) {
-    store.settings.nexusOAuthEncrypted = safeStorage.encryptString(JSON.stringify(tokens)).toString('base64');
-    store.settings.nexusOAuth = null;
-  } else {
+  store.settings.nexusOAuth = null;
+  sessionOnlyTokens = null;
+  if (!tokens) {
     store.settings.nexusOAuthEncrypted = null;
-    store.settings.nexusOAuth = tokens || null;
+  } else if (secureTokenStore().available) {
+    registerTokenSecrets(tokens);
+    store.settings.nexusOAuthEncrypted = safeStorage.encryptString(JSON.stringify(tokens)).toString('base64');
+  } else {
+    registerTokenSecrets(tokens);
+    store.settings.nexusOAuthEncrypted = null;
+    sessionOnlyTokens = tokens;
   }
   store.save();
+}
+
+// Remove credential fields from every settings copy this app itself writes
+// besides its own settings file: a leftover atomic-write .tmp and the
+// manager-data.json mirror in the mod archive (Store.save() writes the
+// mirror without them, but its empty-store guard can skip a rewrite, so an
+// older mirror is cleaned here explicitly). The encrypted blob is kept out of
+// the mirror too: it belongs to this machine's OS account and has no use in
+// a game-folder backup.
+function scrubSecretsFromDisk() {
+  const files = [`${store.file}.tmp`];
+  if (store.storageRoot && path.resolve(store.storageRoot) !== path.resolve(store.dataDir)) {
+    files.push(path.join(store.storageRoot, 'manager-data.json'));
+  }
+  for (const file of files) {
+    try {
+      if (!fs.existsSync(file)) continue;
+      if (file.endsWith('.tmp')) { fs.rmSync(file, { force: true }); continue; }
+      const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+      const st = raw && raw.settings;
+      if (!st || !SECRET_SETTINGS.some((k) => k in st)) continue;
+      for (const k of SECRET_SETTINGS) delete st[k];
+      fs.writeFileSync(file, JSON.stringify(raw, null, 2));
+      log('info', 'removed stored credentials from the archive manifest mirror');
+    } catch (err) {
+      log('error', `could not scrub credentials from a settings copy: ${err.message}`);
+    }
+  }
 }
 
 // A token set fresh from the token endpoint. The access token's RS256 signature
@@ -263,6 +354,7 @@ function applyNexusTokens(fresh) {
   const who = oauth.userFromToken(next.access_token); // throws on a token we cannot verify
   nexusTokens = next;
   saveNexusTokens(next);
+  registerAccountName(who.name);
   nexusUser = {
     name: who.name,
     isPremium: who.isPremium,
@@ -322,6 +414,7 @@ async function refreshNexusPreferences() {
 
 function nexusSignOutLocal() {
   nexusTokens = null;
+  sessionOnlyTokens = null;
   nexusUser = null;
   store.settings.nexusOAuth = null;
   store.settings.nexusOAuthEncrypted = null;
@@ -416,6 +509,7 @@ function initNexusAuth() {
   // refreshes it). A token we cannot verify is refused outright.
   try {
     const who = oauth.userFromToken(nexusTokens.access_token, { ignoreExpiry: true });
+    registerAccountName(who.name);
     // Adult content stays hidden until the account's own preferences answer.
     nexusUser = { name: who.name, isPremium: who.isPremium, adult: false, adultBlurImages: false, ageVerified: false };
     refreshNexusPreferences().catch(() => {});
@@ -809,6 +903,8 @@ app.whenReady().then(() => {
   // Archive lives in the game folder (or the custom location) — migrate any
   // app-side content there, then restore from it when this store is fresh.
   try { ensureStorage(); } catch (err) { log('error', `archive setup failed: ${err.message}`); }
+  // No credential in a settings copy outside the app's own settings file.
+  try { scrubSecretsFromDisk(); } catch (_) {}
   try { eaAppDetected = ea.eaAppPresent(); } catch (_) {}
   // EA-compat community list: fetch now and refresh every 30 minutes; a state
   // push follows so freshly flagged mods surface without a restart.
@@ -1219,6 +1315,8 @@ function fullState() {
     nexus: {
       signedIn: nexusSignedIn(),
       tokensEncrypted: !!store.settings.nexusOAuthEncrypted,
+      // Signed in without a secure OS key store: tokens kept in memory only.
+      tokensSessionOnly: !!sessionOnlyTokens,
       user: nexusUser ? {
         name: nexusUser.name,
         isPremium: !!nexusUser.isPremium,
@@ -1541,7 +1639,8 @@ function detectManagerSources() {
 }
 
 function ok(data) { return { ok: true, data }; }
-function fail(err) { return { ok: false, error: err && err.message ? err.message : String(err) }; }
+// Error text crossing to the renderer goes through the secret redactor too.
+function fail(err) { return { ok: false, error: redactSecrets(err && err.message ? err.message : String(err)) }; }
 
 const handlers = {
   'get-state': async () => fullState(),
@@ -2952,6 +3051,7 @@ function buildSupportReport() {
     settings: store.settings,
     nexusSignedIn: nexusSignedIn(),
     nexusTokensEncrypted: !!store.settings.nexusOAuthEncrypted,
+    nexusTokensSessionOnly: !!sessionOnlyTokens,
     mods: store.mods,
     modCompat,
     conflicts,

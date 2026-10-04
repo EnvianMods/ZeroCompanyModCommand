@@ -1168,7 +1168,8 @@ function renderSettings() {
   renderProfiles();
   // Nexus
   const nx = state.nexus || {};
-  const atRest = nx.tokensEncrypted ? ' · tokens encrypted at rest' : '';
+  const atRest = nx.tokensEncrypted ? ' · tokens encrypted at rest'
+    : (nx.tokensSessionOnly ? ' · signed in for this session only (no secure key store on this system — tokens are not saved)' : '');
   $('#nexus-status').textContent = nx.signedIn
     ? (nx.user
       ? `Signed in as ${nx.user.name} · ${nx.user.isPremium ? 'Premium' : 'Free'} member${atRest}`

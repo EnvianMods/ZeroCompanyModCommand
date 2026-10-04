@@ -1,6 +1,8 @@
 # Zero Company Mod Command — Changelog
 
-## v1.9.20 (unreleased)
+## v1.9.20 (2026-10-04)
+
+Released as public 1.0.11.
 
 **ZC Unlocked add-ons install where ZC Unlocked looks for them**
 - An add-on for ZC Unlocked — a folder with an `addon.ini` (`[addon]`

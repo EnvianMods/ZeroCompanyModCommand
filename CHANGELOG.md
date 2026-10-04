@@ -50,6 +50,14 @@
 - Adopting a UE4SS mod folder that is switched off no longer deletes it from
   the game.
 
+**The ZCSDK Runtime's UE4SS signatures are safe from UE4SS updates and other mods**
+- A UE4SS update that stops shipping a signature file of the same name as one
+  the ZCSDK Runtime placed no longer removes the runtime's copy.
+- UE4SS version snapshots (⧗ Versions) no longer include the runtime's
+  signature files, so restoring an older UE4SS build leaves them in place.
+- Switching off or removing another mod that once deployed a file of the same
+  name never deletes a signature file the runtime owns.
+
 ## v1.9.19 (2026-10-01)
 
 Ships together with v1.9.18, v1.9.17, v1.9.16 and v1.9.15 below as public 1.0.10.

@@ -1,6 +1,8 @@
 # Zero Company Mod Command — Changelog
 
-## v1.9.21 (unreleased)
+## v1.9.21 (2026-10-04)
+
+Released as public 1.0.12.
 
 **No more double-loaded ZC Unlocked add-ons**
 - ZC Unlocked also loads add-on packs placed straight in

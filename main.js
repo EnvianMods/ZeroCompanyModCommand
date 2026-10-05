@@ -1334,6 +1334,9 @@ function compactQuota() {
 const promotedCache = { mods: null, at: 0, authors: [], adult: false };
 
 function fullState() {
+  // Mods an older build named after their archive id get a readable name
+  // (display only — nothing in the game moves). A no-op once done.
+  try { engine.repairLibraryIdNames(); } catch (_) {}
   const detection = steam.detectGame(store.settings.gamePath);
   const ue4ssHooks = store.settings.gamePath ? engine.scanUe4ssHooks() : { entries: [], conflicts: [] };
   const conflicts = store.settings.gamePath ? engine.conflicts(ue4ssHooks) : [];

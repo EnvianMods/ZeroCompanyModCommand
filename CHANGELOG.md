@@ -53,6 +53,77 @@
   also when the zip nests it under `SWZeroCompany/Binaries/Win64/` or in a
   wrapper folder (now covered by tests). README: add-on notes per the guide.
 
+**More ZC Unlocked add-on fixes**
+- Applying a squad profile no longer stops at a ZC Unlocked add-on that can't
+  come on because ZC Unlocked is missing: the add-on stays off with a warning,
+  and the rest of the profile and the load order still apply.
+- Every install path (one-click Nexus, GitHub, nxm links, updates, drops) now
+  says when a ZC Unlocked add-on is waiting for ZC Unlocked, under the mod's
+  current name.
+- Mod Command reads ZC Unlocked's own `settings.ini` (`addons`,
+  `addons_mods`, `addon_<Folder>`) and its version. An add-on that is on
+  here but that ZC Unlocked won't load gets a chip saying what to change
+  (off in the ZC Unlocked Menu, add-ons switched off, `addons_mods=0`, or
+  ZC Unlocked older than 1.4.73), and Diagnostics warns about it.
+- Disable all checks an add-on's files first when another copy of it is in
+  the game; a failed add-on enable no longer leaves a switched-off copy next
+  to another copy.
+- ZC Unlocked add-on paks (`050_ZCA_*_P`) that come without an `addon.ini`
+  are kept in the library switched off, with a note, instead of being put in
+  `~mods` where they never register.
+- Installs no longer drop files without a word: skipped files are named, and
+  the mod's row shows an "ⓘ notes" chip.
+- Add-ons that older versions installed as plain paks are flagged with a
+  banner, a row chip and a Diagnostics warning naming the add-on (for example
+  "HeavyArmor" (050_ZCA_HeavyArmor_P)). **Reinstall as ZC Unlocked add-on**
+  fixes them from the stored copy, an archive you pick, or Nexus (Premium
+  downloads directly; free accounts get the Files page and press "Mod
+  Manager Download" themselves). The add-on is installed first; only then
+  are the old paks removed. Refused while the game runs; nothing is removed
+  if the install fails.
+
+**Keep original pak file names (optional)**
+- New setting: Settings → Behavior → **Keep original pak file names** (off by
+  default). When on, pak and IoStore mods keep the file names they shipped
+  with in `~mods` instead of load-order names. The game then loads them
+  alphabetically by file name, so the load-order list is kept but marked
+  "not applied" and locked. Two mods that ship a file with the same name
+  can't both be enabled — Mod Command names the mod that already holds it.
+  Switching redeploys your enabled pak mods (close the game first); if
+  anything goes wrong, every mod is put back the way it was. Diagnostics
+  flags mods whose files aren't under the names the current setting gives
+  them.
+
+**Nexus Mods identification**
+- Every request Mod Command sends to Nexus Mods — the API, sign-in, downloads,
+  thumbnails and the embedded Nexus panel — now names the app and its version
+  (`Application-Name: Zero Company Mod Command`, `Application-Version:` the
+  public version shown on the Nexus page, e.g. 1.0.12), as Nexus Mods
+  requires. The embedded panel keeps Electron's own browser identity, which
+  names Mod Command and its version.
+
+**Embedded Nexus panel**
+- When Nexus Mods shows its "Something went wrong" page, or refuses many parts
+  of a page, the panel says so and offers **Reload** and **Open in browser**.
+  It never reloads on its own.
+- The signed-in check also reads the panel's Nexus account cookie (by name
+  only) when the page itself doesn't say.
+- The support report has a new "Nexus panel" section: your account type
+  (Premium / Free) and what happened in the last three panel sessions
+  (signed in or not, sign-in page visited, Cloudflare checks, error pages,
+  refused page parts, downloads caught). Addresses keep only the site and
+  path; no query strings, no cookie values.
+
+**Sign in with Nexus Mods**
+- While Mod Command waits for you to finish signing in in your browser, the
+  button turns into **Cancel sign-in**, and after 30 seconds a hint tells you
+  what's left to do.
+
+**Under the hood**
+- Electron 33 → 44 (Chromium 152). Release builds encrypt the Nexus panel's
+  sign-in cookies at rest and turn off `NODE_OPTIONS` / `--inspect`.
+  Building from source now needs Node.js 22.12 or newer.
+
 ## v1.9.21 (2026-10-04)
 
 Released as public 1.0.12.

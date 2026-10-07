@@ -1922,10 +1922,10 @@ const handlers = {
   // paks, from builds before the add-on type): reinstall them as add-ons —
   //   source 'library' : from their stored copies (only when those carry addon.ini)
   //   source 'file'    : from the add-on edition's archive the player picks
-  //   source 'nexus'   : download the add-on edition again from the recorded
-  //                      Nexus mod (premium: right here; free: the Files page
-  //                      opens in the panel, the player presses "Mod Manager
-  //                      Download", and the nxm hand-off finishes it)
+  //   source 'nexus'   : the recorded Nexus mod's Files page opens in the
+  //                      panel (any account), the player presses "Mod Manager
+  //                      Download" on the add-on edition, and the nxm
+  //                      hand-off finishes it
   // The add-on entries go in first; the ~mods copies go only after that.
   'reinstall-zca': async (_e, { ids, source }) => {
     const olds = (ids || []).map((id) => store.getMod(id)).filter(Boolean);
@@ -1950,39 +1950,19 @@ const handlers = {
     if (source === 'nexus') {
       const o = olds[0].origin || {};
       if (o.type !== 'nexus' || !o.modId) throw new Error(`“${olds[0].name}” has no Nexus source recorded — choose the add-on edition’s archive instead.`);
-      const token = await nexusAccessToken();
-      if (!nexusUser) {
-        try { mergeNexusUser(await nexus.validateToken(token)); } catch (err) { throw new Error(err.message); }
-      }
-      if (!nexusUser.isPremium) {
-        // Nexus policy: non-premium downloads start on the website. The Files
-        // page opens in the embedded panel; the player presses "Mod Manager
-        // Download" there and handleNxm finishes the reinstall.
-        pendingZcaReinstall.set(Number(o.modId), { ids: olds.map((m) => m.id), at: Date.now() });
-        return {
-          opened: 'embed',
-          url: `https://www.nexusmods.com/${nexus.GAME_DOMAIN}/mods/${o.modId}?tab=files`,
-          name: olds[0].name,
-          state: fullState(),
-        };
-      }
-      const files = await nexus.filesList(o.modId, token);
-      const listed = (f) => f && !['ARCHIVED', 'DELETED', 'REMOVED'].includes(String(f.category_name || '').toUpperCase());
-      const recorded = o.fileId ? files.find((f) => f.file_id === o.fileId) : null;
-      const file = (listed(recorded) && recorded) || nexus.pickPrimaryFile(files);
-      if (!file) throw new Error('That Nexus mod has no downloadable main file.');
-      const uri = await nexus.downloadLink({ modId: o.modId, fileId: file.file_id }, token);
-      const dest = await nexus.downloadToFile(uri, store.stagingDir, file.file_name, (got, total, dl) => {
-        sendEvent({ type: 'progress', key: `nexus:${o.modId}`, label: olds[0].name, received: got, total, ...dl });
-      });
-      try {
-        const origin = { type: 'nexus', modId: o.modId, fileId: file.file_id, version: file.version || null };
-        const out = await engine.reinstallAsAddon(olds.map((m) => m.id), dest, { origin, version: file.version || null });
-        toastZcaReinstall(out);
-        return { done: true, out: zcaOutSummary(out), state: fullState() };
-      } finally {
-        fs.rmSync(dest, { force: true });
-      }
+      // Every account (Premium too): the recorded file is the one that went
+      // in as plain paks, so which file on the page is the add-on edition
+      // is the player's pick. The Files page opens in the embedded panel; the
+      // player presses "Mod Manager Download" on that file and handleNxm
+      // finishes the reinstall with it (nothing is downloaded before that).
+      await nexusAccessToken(); // signed in first: the hand-off needs it
+      pendingZcaReinstall.set(Number(o.modId), { ids: olds.map((m) => m.id), at: Date.now() });
+      return {
+        opened: 'embed',
+        url: `https://www.nexusmods.com/${nexus.GAME_DOMAIN}/mods/${o.modId}?tab=files`,
+        name: olds[0].name,
+        state: fullState(),
+      };
     }
     throw new Error('Unknown source.');
   },

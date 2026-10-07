@@ -76,9 +76,10 @@
 - Add-ons that older versions installed as plain paks are flagged with a
   banner, a row chip and a Diagnostics warning naming the add-on (for example
   "HeavyArmor" (050_ZCA_HeavyArmor_P)). **Reinstall as ZC Unlocked add-on**
-  fixes them from the stored copy, an archive you pick, or Nexus (Premium
-  downloads directly; free accounts get the Files page and press "Mod
-  Manager Download" themselves). The add-on is installed first; only then
+  fixes them from the stored copy, an archive you pick, or Nexus (the mod's
+  Files page opens and you press "Mod Manager Download" on the add-on
+  edition yourself — Premium too, so the right file is the one you
+  pick). The add-on is installed first; only then
   are the old paks removed. Refused while the game runs; nothing is removed
   if the install fails.
 
@@ -136,7 +137,7 @@
 - Profiles switch mods off before they switch others on, so two mods that ship
   the same pak file name no longer stop a profile when **Keep original pak
   file names** is on.
-- A free-account "Reinstall as ZC Unlocked add-on" only waits while its Nexus
+- "Reinstall as ZC Unlocked add-on" from Nexus only waits while its Nexus
   panel is open; a later ordinary download of the same mod installs normally.
 - The UE4SS install's "Sign in now?" no longer cancels a sign-in that is
   already waiting, and **Cancel sign-in** isn't shown as an error.

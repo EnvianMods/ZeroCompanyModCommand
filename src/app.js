@@ -455,14 +455,14 @@ function buildNotesChip(mod) {
 
 // "Reinstall as ZC Unlocked add-on" for one download's pak entries.
 //   source 'library' — the stored copies carry their addon.ini
-//   source 'nexus'   — download the add-on edition again from its Nexus page
-//                      (a free account: the Files page opens in the panel and
-//                      the player presses "Mod Manager Download" there)
+//   source 'nexus'   — the Files page of its Nexus mod opens in the panel (any
+//                      account) and the player presses "Mod Manager Download"
+//                      on the add-on edition there
 //   source 'file'    — pick the add-on edition's archive
 async function reinstallZca(g, source) {
   const list = zcaLabels(g).join(', ');
   const how = source === 'library' ? 'from the stored copies (they carry their addon.ini)'
-    : source === 'nexus' ? `by downloading it again from its Nexus page (mod ${g.origin.modId})`
+    : source === 'nexus' ? `from its Nexus page (mod ${g.origin.modId}) — the Files page opens and you press “Mod Manager Download” on the add-on edition`
       : 'from the add-on edition’s archive you pick next (the one with addon.ini)';
   if (!window.confirm(`Reinstall ${g.ids.length === 1 ? list : `these ${g.ids.length} entries (${list})`} as a ZC Unlocked add-on, ${how}?\n\n`
     + 'The add-on is installed first; only then are the old pak entries and their copies in ~mods removed. Close the game first.')) return;
@@ -503,7 +503,7 @@ function renderZcaBanner() {
       row.appendChild(b);
     };
     if (g.fromLibrary) btn('↻ From the stored copy', 'library', 'The stored copies carry their addon.ini — reinstall from them, nothing to download.');
-    if (g.origin && g.origin.type === 'nexus') btn('⇩ Download from Nexus', 'nexus', `Download the add-on edition again from Nexus mod ${g.origin.modId} and reinstall it.`);
+    if (g.origin && g.origin.type === 'nexus') btn('⇩ From Nexus…', 'nexus', `Open the Files page of Nexus mod ${g.origin.modId}: press “Mod Manager Download” on the add-on edition and it is reinstalled from that file.`);
     btn('📂 Choose archive…', 'file', 'Pick the add-on edition’s archive (the one with addon.ini in each add-on folder).');
     box.appendChild(row);
   }

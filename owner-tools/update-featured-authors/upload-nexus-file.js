@@ -10,7 +10,7 @@
 //   POST /v3/mod-files {upload_id, mod_id(global), name, version,
 //        file_category:"main", primary_mod_manager_download:true}
 //
-// Usage: node upload-nexus-file.js <version> <zipPath> [--mod-id 121]
+// Usage: node upload-nexus-file.js <version> <zipPath> [--mod-id 313]
 //        [--name "Zero Company Mod Command"] [--category main|optional]
 //        [--no-primary] [--dry-run]
 //        [--update] [--archive-old] [--set-mod-version] [--description "..."]
@@ -78,7 +78,7 @@ async function api(method, pathname, apiKey, body) {
 
 (async () => {
   const [version, zipPath] = process.argv.slice(2).filter((a) => !a.startsWith('--'));
-  const modId = Number(arg('--mod-id', '121'));
+  const modId = Number(arg('--mod-id', '313'));
   const fileName = arg('--name', null);
   const dryRun = process.argv.includes('--dry-run');
   const updateMode = process.argv.includes('--update');
@@ -87,7 +87,7 @@ async function api(method, pathname, apiKey, body) {
   const description = arg('--description', null);
   if (updateMode && !fileName) { console.error('--update needs --name "<existing file name>" to pick the file line to update.'); process.exit(1); }
   if (!version || !zipPath) {
-    console.error('Usage: node upload-nexus-file.js <version> <zipPath> [--mod-id 121] [--name "..."] [--dry-run]');
+    console.error('Usage: node upload-nexus-file.js <version> <zipPath> [--mod-id 313] [--name "..."] [--dry-run]');
     process.exit(1);
   }
   const apiKey = findKey();

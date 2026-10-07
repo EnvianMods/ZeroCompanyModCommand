@@ -4,7 +4,7 @@
 // Run: node --test test/*.test.js
 const test = require('node:test');
 const assert = require('node:assert');
-const { isAllowedExternalUrl, isNexusPageUrl } = require('../lib/external-url');
+const { isAllowedExternalUrl, isNexusPageUrl, isWebUrl } = require('../lib/external-url');
 
 test('Nexus panel popups: real Nexus Mods pages are followed in the panel', () => {
   for (const u of [
@@ -35,4 +35,12 @@ test('open-external allowlist is unchanged', () => {
   assert.ok(isAllowedExternalUrl('https://github.com/EnvianMods/ZeroCompanyModCommand'));
   assert.ok(!isAllowedExternalUrl('https://nexusmods.com.example.net/'));
   assert.ok(!isAllowedExternalUrl('file:///C:/x'));
+});
+
+test('SDK workbench openExternal: web pages only', () => {
+  assert.ok(isWebUrl('https://example.com/docs'));
+  assert.ok(isWebUrl('http://localhost:8080/'));
+  for (const u of ['file:///C:/Windows/System32/calc.exe', 'ms-settings:privacy', 'steam://run/1', 'javascript:1', 'C:\\x.exe', '', undefined]) {
+    assert.ok(!isWebUrl(u), String(u));
+  }
 });

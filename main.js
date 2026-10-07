@@ -75,7 +75,7 @@ const { getPromotedAuthors } = require('./lib/featured');
 const github = require('./lib/github');
 const ea = require('./lib/ea');
 const { checkLauncherUpdate, cachedInfo: cachedLauncherInfo, parseSdkBlock } = require('./lib/launcher-update');
-const { isAllowedExternalUrl, isNexusPageUrl } = require('./lib/external-url');
+const { isAllowedExternalUrl, isNexusPageUrl, isWebUrl } = require('./lib/external-url');
 const { log, logText } = require('./lib/log');
 const { redactSecrets, registerSecret, registerAccountName } = require('./lib/redact');
 const report = require('./lib/report');
@@ -951,7 +951,9 @@ function createWindow() {
       return res.canceled || !res.filePaths.length ? null : res.filePaths[0];
     },
     openPath: (p) => shell.openPath(p),
-    openExternal: (url) => shell.openExternal(url),
+    // Web pages only: never a file:, a custom protocol or anything else the
+    // OS would hand to a program.
+    openExternal: (url) => (isWebUrl(url) ? shell.openExternal(url) : Promise.reject(new Error('Blocked URL.'))),
     // The SDK's update answer is cached in OUR store, so the host badge and
     // the hosted page's own line read one cache and cost one fetch an hour.
     getUpdateCache: () => store.settings.sdkUpdate || null,
@@ -973,6 +975,21 @@ function createWindow() {
 app.on('web-contents-created', (_e, contents) => {
   // No page — ours, the SDK's or Nexus's — gets to pick a Bluetooth device.
   lockWebContentsDevices(contents);
+  // The only <webview> the app has is the Nexus panel: whatever asks to
+  // attach one gets that panel's isolation (no preload, no Node, sandboxed,
+  // the persist:nexus session) or is refused.
+  contents.on('will-attach-webview', (e, webPreferences, params) => {
+    delete webPreferences.preload;
+    webPreferences.nodeIntegration = false;
+    webPreferences.nodeIntegrationInSubFrames = false;
+    webPreferences.contextIsolation = true;
+    webPreferences.sandbox = true;
+    webPreferences.webSecurity = true;
+    if (params.partition !== 'persist:nexus' || !(params.src === 'about:blank' || isNexusPageUrl(params.src))) {
+      log('error', `refused to attach a <webview> (partition ${params.partition || 'none'})`);
+      e.preventDefault();
+    }
+  });
   if (contents.getType() !== 'webview') return;
   const catchNxm = (url) => {
     if (typeof url === 'string' && url.startsWith('nxm://')) {

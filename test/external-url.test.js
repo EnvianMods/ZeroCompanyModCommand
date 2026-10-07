@@ -30,11 +30,34 @@ test('Nexus panel popups: look-alike hosts and other schemes are refused', () =>
   ]) assert.ok(!isNexusPageUrl(u), String(u));
 });
 
-test('open-external allowlist is unchanged', () => {
-  assert.ok(isAllowedExternalUrl('https://www.nexusmods.com/starwarszerocompany/mods/1'));
-  assert.ok(isAllowedExternalUrl('https://github.com/EnvianMods/ZeroCompanyModCommand'));
-  assert.ok(!isAllowedExternalUrl('https://nexusmods.com.example.net/'));
-  assert.ok(!isAllowedExternalUrl('file:///C:/x'));
+test('open-external: Nexus (any of its hosts, the sign-in pages too), GitHub and Discord over https', () => {
+  for (const u of [
+    'https://www.nexusmods.com/starwarszerocompany/mods/1',
+    'https://nexusmods.com/',
+    'https://next.nexusmods.com/profile',
+    'https://users.nexusmods.com/auth/sign_in?redirect_url=x',
+    'https://users.nexusmods.com/account/profile',
+    'https://github.com/EnvianMods/ZeroCompanyModCommand',
+    'https://www.github.com/EnvianMods',
+    'https://discord.gg/abc',
+  ]) assert.ok(isAllowedExternalUrl(u), u);
+});
+
+test('open-external: look-alikes, credentials, other ports and schemes are refused', () => {
+  for (const u of [
+    'https://nexusmods.com.example.net/',
+    'https://users.nexusmods.com.example.net/auth',
+    'https://nexusmods.com@example.net/',
+    'https://u:p@www.nexusmods.com/',
+    'https://www.nexusmods.com:8443/',
+    'http://www.nexusmods.com/',
+    'https://gist.github.com/x',
+    'https://github.com.example.net/',
+    'https://evilnexusmods.com/',
+    'file:///C:/x',
+    'nxm://starwarszerocompany/mods/1/files/2',
+    null,
+  ]) assert.ok(!isAllowedExternalUrl(u), String(u));
 });
 
 test('SDK workbench openExternal: web pages only', () => {

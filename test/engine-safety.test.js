@@ -148,3 +148,68 @@ test('an add-on that cannot come back on never force-deletes a file the player c
     assert.strictEqual(fs.readFileSync(f.abs(pakRel), 'utf8'), 'EDITED BY THE PLAYER', 'the edited file stays');
   } finally { f.cleanup(); }
 });
+
+const zcuAt = (version, settings) => ({
+  'ue4ss/Mods/ZCUnlocked/dlls/main.dll': 'MZ zcu',
+  'ue4ss/Mods/ZCUnlocked/modinfo.json': JSON.stringify({ title: 'ZC Unlocked', version }),
+  ...(settings ? { 'ue4ss/Mods/ZCUnlocked/dlls/settings.ini': settings } : {}),
+});
+// A pack the player put straight in ue4ss\Mods\<folder> (layout 2).
+function handPack(f, folder, version) {
+  const dir = f.abs(path.join(M.UE4SS_MODS_REL, folder));
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'addon.ini'), `[addon]\r\nname=${folder}\r\nversion=${version}\r\n`);
+  fs.writeFileSync(path.join(dir, `050_ZCA_${folder}_P.pak`), `HAND-${folder}-${version}`);
+  return dir;
+}
+const packV = (folder, version) => ({
+  [`${folder}/addon.ini`]: `[addon]\r\nname=${folder}\r\nversion=${version}\r\n`,
+  [`${folder}/050_ZCA_${folder}_P.pak`]: `PAK-${folder}-${version}`,
+});
+
+test('updating a hand-placed add-on: when neither the update nor the put-back works, nothing is deleted', async () => {
+  const f = fixture();
+  try {
+    const { engine } = f;
+    await engine.install(f.src(zcuFiles));
+    const dir = handPack(f, 'Kit', '1.0');
+    engine._installFromFolder = () => { throw new Error('disk full (update)'); };
+    const realDeploy = engine._deployMod.bind(engine);
+    engine._deployMod = () => { throw new Error('disk full (put back)'); };
+    await assert.rejects(engine.install(f.src(packV('Kit', '1.1'))), /keeps managing that copy/);
+    engine._deployMod = realDeploy;
+    const rec = engine.store.mods.find((m) => m.modType === 'zcu-addon');
+    assert.ok(rec, 'the adoption record stays');
+    assert.ok((rec.deployed || []).length, 'it still lists its files, so the start-up repair puts them back');
+    const vault = engine.store.modVaultDir(engine._vaultKey(rec));
+    const entries = fs.existsSync(vault) ? fs.readdirSync(vault) : [];
+    assert.ok(entries.length >= 1, 'the previous version is kept in the vault');
+    assert.ok(fs.existsSync(path.join(engine.store.modLibraryDir(rec.id), 'addon.ini')), 'the stored copy stays');
+    // …and the repair brings the files back from it.
+    engine.repairDeployments();
+    assert.ok(fs.existsSync(path.join(dir, 'addon.ini')), 'repaired');
+  } finally { f.cleanup(); }
+});
+
+test('updating a hand-placed add-on: a failed update that is put back keeps any earlier version history', async () => {
+  const f = fixture();
+  try {
+    const { engine } = f;
+    await engine.install(f.src(zcuFiles));
+    const dir = handPack(f, 'Kit', '1.0');
+    let earlier = null;
+    const realCap = engine._captureForReplace.bind(engine);
+    engine._captureForReplace = (mod) => {
+      // An older entry of the same add-on left history under the same key.
+      earlier = path.join(engine.store.modVaultDir(engine._vaultKey(mod)), 'earlier-entry');
+      fs.mkdirSync(earlier, { recursive: true });
+      fs.writeFileSync(path.join(earlier, 'marker.txt'), 'history');
+      return realCap(mod);
+    };
+    engine._installFromFolder = () => { throw new Error('disk full (update)'); };
+    await assert.rejects(engine.install(f.src(packV('Kit', '1.1'))), /Could not update the copy/);
+    assert.ok(!engine.store.mods.some((m) => m.modType === 'zcu-addon'), 'the adoption record is dropped (the copy is back as it was)');
+    assert.strictEqual(fs.readFileSync(path.join(dir, '050_ZCA_Kit_P.pak'), 'utf8'), 'HAND-Kit-1.0', 'the copy is back');
+    assert.ok(fs.existsSync(path.join(earlier, 'marker.txt')), 'earlier version history is not deleted');
+  } finally { f.cleanup(); }
+});

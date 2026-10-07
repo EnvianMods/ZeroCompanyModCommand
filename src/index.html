@@ -208,6 +208,9 @@
             <button id="btn-apply-order" class="btn primary" disabled>Review &amp; apply</button>
           </div>
         </div>
+        <div id="order-original-note" class="order-original-note hidden">
+          <b>Not applied while original names are kept.</b> “Keep original pak file names” is on (Settings → Behavior): pak files keep the names they shipped with, so the game loads <span class="mono">~mods</span> alphabetically by file name and this order doesn’t decide which mod wins. It is kept, and applies again when the setting is off.
+        </div>
         <div id="order-list" class="order-list"></div>
         <div id="order-empty" class="empty-state hidden">
           <div class="empty-glyph">≡</div>
@@ -279,6 +282,14 @@
                 <span class="setting-name">Reduced motion <span class="dim">(disable starfield &amp; glow animations)</span></span>
               </div>
               <input type="checkbox" id="chk-reduced-motion" class="switch" />
+            </label>
+            <label class="setting-row toggle-row" id="row-keep-pak-names">
+              <div class="setting-info">
+                <span class="setting-name">Keep original pak file names</span>
+                <p class="setting-note dim">Off (recommended): pak and IoStore files are renamed in <span class="mono">~mods</span> to <span class="mono">pakchunk99-P001_&lt;Mod&gt;_…</span>, so the load order decides which mod wins and two mods that ship a file with the same generic name never overwrite each other.
+                  On: every file keeps the name it shipped with. The load order then no longer decides which mod wins — the game goes <b>alphabetically by file name</b> — and two mods that ship a file with the same name <b>can’t both be enabled</b>. Switching redeploys your enabled pak mods (close the game first). ZCSDK sidecar files keep their names either way.</p>
+              </div>
+              <input type="checkbox" id="chk-keep-pak-names" class="switch" />
             </label>
           </div>
         </div>

@@ -1765,6 +1765,8 @@ const handlers = {
 
   'save-settings': async (_e, patch) => {
     delete patch.promotedAuthors; // owner-controlled (lib/featured.js), not a user setting
+    // Renames files in the game: only through set-keep-pak-names.
+    delete patch.keepOriginalPakNames;
     Object.assign(store.settings, patch);
     store.save();
     return fullState();
@@ -1815,6 +1817,22 @@ const handlers = {
   },
   'dismiss-ue4ss-folder-notice': async (_e, { id }) => {
     engine.dismissUe4ssFolderNotice(id);
+    return fullState();
+  },
+  // Settings → Behavior → "Keep original pak file names": redeploys every
+  // enabled pak/IoStore mod under the new names (progress as toasts). The
+  // engine refuses it while the game runs (or can't be confirmed closed).
+  'set-keep-pak-names': async (_e, { on }) => {
+    let last = 0;
+    const res = engine.setKeepOriginalPakNames(!!on, (done, total, name) => {
+      if (!name || total < 2 || Date.now() - last < 400) return;
+      last = Date.now();
+      sendEvent({ type: 'toast', message: `Renaming pak files… ${done + 1} of ${total} (${name})` });
+    });
+    sendEvent({
+      type: 'toast',
+      message: `Pak files now keep ${on ? 'their original names' : 'load-order names'}${res.changed ? ` — ${res.changed} mod${res.changed === 1 ? '' : 's'} redeployed` : ''}.`,
+    });
     return fullState();
   },
   'apply-load-order': async (_e, { orderedIds }) => {
@@ -3149,17 +3167,20 @@ function diagnostics() {
       sz ? `Available for .7z/.rar archives (${sz === bundledSevenZip() ? 'bundled with Mod Command' : sz})` : 'Not found — only .zip archives can be installed.');
   }
   const missing = store.settings.gamePath ? engine.auditDeployedFiles() : [];
-  // UE4SS mods with files outside their recorded folder.
+  // Files under names the current settings would not give them (a pak mod
+  // still under the other "Keep original pak file names" mode, a UE4SS mod
+  // outside its folder).
   const misnamed = store.settings.gamePath ? engine.auditDeployedNames() : [];
+  const naming = store.settings.keepOriginalPakNames ? 'original pak file names' : 'load-order pak names';
   if (missing.length) {
     add('warning', 'Deployed files', `${missing.length} deployed file(s) are missing: ${missing.map((m) => m.file).join(', ')}`);
   }
   if (misnamed.length) {
-    add('warning', 'Deployed files', `${misnamed.length} UE4SS mod(s) are not deployed in their folder: `
+    add('warning', 'Deployed files', `${misnamed.length} mod(s) are not deployed under the names they should have (${naming}): `
       + `${misnamed.map((m) => `${m.modName} — expected ${m.expected}${m.found.length ? `, found ${m.found.join(', ')}` : ''}`).join('; ')}. Disable and re-enable them to redeploy.`);
   }
   if (!missing.length && !misnamed.length) {
-    add('good', 'Deployed files', 'All enabled mods are fully deployed.');
+    add('good', 'Deployed files', `All enabled mods are fully deployed (${naming}).`);
   }
   const drifted = store.settings.gamePath ? engine.auditChangedDeployments() : [];
   if (drifted.length) {

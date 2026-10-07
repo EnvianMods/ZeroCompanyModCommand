@@ -284,6 +284,16 @@ body.reduced-motion * { transition: none !important; animation: none !important;
 .order-num { font-family: var(--mono); font-size: 12px; color: var(--amber); width: 34px; }
 .order-name { flex: 1; font-size: 13px; font-weight: 600; }
 .order-hint { font-size: 11px; color: var(--text-dim); }
+/* "Keep original pak file names" on: the order is kept but not applied. */
+.order-original-note {
+  max-width: 760px; margin: 0 0 10px; padding: 10px 14px; font-size: 12px; line-height: 1.5;
+  color: var(--text); background: rgba(255, 200, 87, 0.08);
+  border: 1px solid rgba(255, 200, 87, 0.4); border-left-width: 3px;
+}
+.order-original-note b { color: var(--amber); }
+.order-row.order-off { cursor: default; }
+.order-row.order-off .order-num { color: var(--text-dim); text-decoration: line-through; }
+.order-row.order-off .order-hint { color: var(--amber-dim); }
 
 /* UE4SS mod deployed under a folder other than its own folder name. */
 .folder-notice {

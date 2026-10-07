@@ -78,6 +78,7 @@ const { isAllowedExternalUrl } = require('./lib/external-url');
 const { log, logText } = require('./lib/log');
 const { redactSecrets, registerSecret, registerAccountName } = require('./lib/redact');
 const report = require('./lib/report');
+const nexusPanel = require('./lib/nexus-panel');
 // SDK LINK: Mod Command hosts the Zero Company Mod SDK's OWN UI when one is
 // installed. It carries no copy of that UI — see lib/sdk-link.js and
 // docs/SDK_LINK.md.
@@ -529,12 +530,14 @@ function initNexusAuth() {
 // The whole browser round trip: listen on loopback, open the authorization page
 // in the system browser, wait for the callback, swap the code for tokens. A
 // second call while one is pending joins the pending flow.
+let nexusSignInServer = null;
 function nexusSignIn() {
   if (nexusSignInFlow) return nexusSignInFlow;
   const flow = (async () => {
     const verifier = oauth.makeVerifier();
     const state = oauth.randomState();
     const server = await oauth.startCallbackServer({ state });
+    nexusSignInServer = server;
     try {
       const url = oauth.buildAuthorizeUrl({ state, codeChallenge: oauth.challengeFor(verifier) });
       log('info', `nexus sign-in: listening on ${server.redirectUri}, opening the authorization page in the browser`);
@@ -544,6 +547,7 @@ function nexusSignIn() {
       log('info', `nexus sign-in: signed in as ${nexusUser.name}${nexusUser.isPremium ? ' (premium)' : ''}`);
       return fullState();
     } finally {
+      if (nexusSignInServer === server) nexusSignInServer = null;
       server.close();
     }
   })();
@@ -619,6 +623,10 @@ const protocolArgs = () => {
 // the same file into the same staging file.
 const nxmInFlight = new Set();
 
+// What happened in the embedded Nexus panel, for the log and the support
+// report (lib/nexus-panel.js). It only observes; the page is shown untouched.
+const panelDiary = nexusPanel.createPanelDiary({ log });
+
 async function handleNxm(rawUrl) {
   let busyKey = null;
   try {
@@ -631,6 +639,7 @@ async function handleNxm(rawUrl) {
       return;
     }
     nxmInFlight.add(busyKey);
+    if (panelDiary.current) panelDiary.event('nxm', { modId: link.modId, fileId: link.fileId });
     const token = await nexusAccessToken();
     sendEvent({ type: 'toast', message: `Nexus download requested (mod ${link.modId})…` });
     let info = null;
@@ -942,6 +951,14 @@ app.whenReady().then(() => {
     for (const ses of [session.defaultSession, session.fromPartition('persist:nexus')]) nexusHttp.addIdentityToWebSession(ses);
     log('info', `nexus identification: Application-Name="${ident['Application-Name']}" Application-Version="${ident['Application-Version']}"`);
   } catch (err) { log('error', `Nexus identification headers could not be set on the web sessions: ${err.message}`); }
+  // The panel's refused Nexus subresources (4xx/5xx), counted per page load so
+  // the panel can tell a partly blocked page apart and the support report can
+  // name it. Observation only: nothing is changed or cancelled.
+  try {
+    session.fromPartition('persist:nexus').webRequest.onCompleted({ urls: nexusHttp.NEXUS_WEB_URL_PATTERNS }, (d) => {
+      if (d.statusCode >= 400 && d.webContentsId && d.resourceType !== 'mainFrame') panelDiary.subresource(d.webContentsId, d.url, d.statusCode);
+    });
+  } catch (err) { log('error', `nexus panel error counting could not be set up: ${err.message}`); }
   // Load the stored OAuth tokens — and throw away any credential an older
   // build left behind.
   try { initNexusAuth(); } catch (err) { log('error', `Nexus sign-in state could not be read: ${err.message}`); }
@@ -1921,6 +1938,13 @@ const handlers = {
   // OAuth sign-in: opens nexusmods.com in the user's own browser and waits for
   // the loopback callback. The app never sees the password, only the tokens.
   'nexus-sign-in': async () => nexusSignIn(),
+  // The Cancel button while the app waits for the browser step.
+  'nexus-sign-in-cancel': async () => {
+    if (!nexusSignInServer) return false;
+    log('info', 'nexus sign-in: canceled by the user while waiting for the browser');
+    nexusSignInServer.cancel('The Nexus Mods sign-in was canceled.');
+    return true;
+  },
 
   'nexus-sign-out': async () => {
     const tokens = nexusTokens;
@@ -3196,6 +3220,8 @@ function buildSupportReport() {
     nexusSignedIn: nexusSignedIn(),
     nexusTokensEncrypted: !!store.settings.nexusOAuthEncrypted,
     nexusTokensSessionOnly: !!sessionOnlyTokens,
+    nexusAccountType: nexusSignedIn() ? (nexusUser ? (nexusUser.isPremium ? 'Premium' : 'Free') : 'unknown') : null,
+    nexusPanelLines: panelDiary.reportLines(),
     mods: store.mods,
     modCompat,
     conflicts,
@@ -3214,6 +3240,27 @@ function buildSupportReport() {
 }
 
 handlers['support-report'] = async () => ({ text: buildSupportReport() });
+
+// The embedded Nexus panel reports its state changes here (for the log and
+// the support report). Only known kinds and plain fields are taken.
+const PANEL_EVENT_KINDS = new Set(['open', 'close', 'signed-in', 'challenge', 'challenge-passed', 'signin-page', 'oops', 'blocked']);
+handlers['nexus-panel-event'] = async (_e, { kind, url, state, signal, target, view, count } = {}) => {
+  if (!PANEL_EVENT_KINDS.has(kind)) return false;
+  const str = (v) => (typeof v === 'string' ? v.slice(0, 500) : undefined);
+  panelDiary.event(kind, { url: str(url), state: str(state), signal: str(signal), target: str(target), view: !!view, count: Number(count) || undefined });
+  return true;
+};
+// Refused subresources of the panel's current page load; reset = a new load.
+handlers['nexus-panel-page-errors'] = async (_e, { webContentsId, reset } = {}) => {
+  const r = panelDiary.pageErrors(Number(webContentsId), { reset: !!reset });
+  return { refusedNexus: r.refusedNexus, threshold: nexusPanel.BLOCKED_THRESHOLD };
+};
+// Which Nexus account cookie (by NAME) the panel session carries, if any —
+// the fallback when the page itself says neither signed in nor out.
+handlers['nexus-panel-cookie-signal'] = async () => {
+  const cookies = await session.fromPartition('persist:nexus').cookies.get({});
+  return nexusPanel.authCookieSignal(cookies);
+};
 
 handlers['save-support-report'] = async () => {
   const res = await dialog.showSaveDialog(win, {

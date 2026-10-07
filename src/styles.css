@@ -970,6 +970,9 @@ body.reduced-motion * { transition: none !important; animation: none !important;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 46vw;
 }
 .nexus-dl-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.nexus-dl-trouble { display: flex; align-items: center; gap: 10px; padding: 8px 14px; font-size: 12px; background: rgba(255, 170, 60, 0.12); border-bottom: 1px solid rgba(255, 170, 60, 0.35); }
+.nexus-dl-trouble.hidden { display: none; }
+.nexus-dl-trouble span { flex: 1; min-width: 0; }
 .nexus-dl-pill {
   font-family: var(--mono); font-size: 11px; letter-spacing: 0.5px;
   color: var(--amber); border: 1px solid var(--amber-dim);

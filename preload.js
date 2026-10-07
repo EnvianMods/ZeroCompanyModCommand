@@ -22,6 +22,9 @@ contextBridge.exposeInMainWorld('zc', {
   applyUe4ssOrder: (orderedIds) => invoke('apply-ue4ss-order', { orderedIds }),
   confirmModBuild: (id) => invoke('confirm-mod-build', { id }),
   supportReport: () => invoke('support-report'),
+  nexusPanelEvent: (ev) => invoke('nexus-panel-event', ev),
+  nexusPanelPageErrors: (webContentsId, reset) => invoke('nexus-panel-page-errors', { webContentsId, reset }),
+  nexusPanelCookieSignal: () => invoke('nexus-panel-cookie-signal'),
   saveSupportReport: () => invoke('save-support-report'),
   setAllEnabled: (enabled, force) => invoke('set-all-enabled', { enabled, force }),
   scanManagerSources: () => invoke('scan-manager-sources'),
@@ -48,6 +51,7 @@ contextBridge.exposeInMainWorld('zc', {
   // Nexus OAuth sign-in. No credential ever crosses this bridge: the browser
   // does the login and the tokens stay in the main process.
   nexusSignIn: () => invoke('nexus-sign-in'),
+  nexusSignInCancel: () => invoke('nexus-sign-in-cancel'),
   nexusSignOut: () => invoke('nexus-sign-out'),
   nexusRefreshUser: () => invoke('nexus-refresh-user'),
   nexusQuota: () => invoke('nexus-quota'),

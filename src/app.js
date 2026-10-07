@@ -1496,10 +1496,20 @@ $('#btn-browse-7z').addEventListener('click', async () => {
   if (data) { state = data; render(); }
 });
 // Sign-in runs in the user's own browser; the app just waits for the callback.
+// While it waits, the same button cancels the wait; after 30 seconds a hint
+// says where the missing step is.
 async function runNexusSignIn(btn, after) {
+  if (btn.dataset.signinWaiting === '1') {
+    window.zc.nexusSignInCancel();
+    return false;
+  }
   const label = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = 'Waiting for your browser…';
+  btn.dataset.signinWaiting = '1';
+  btn.textContent = '✕ Cancel sign-in';
+  btn.title = 'Stop waiting for the browser sign-in';
+  const hint = setTimeout(() => {
+    toast('Still waiting for Nexus Mods — finish the sign-in in your browser (approve Mod Command there), or press “Cancel sign-in”.', 'info', 9000);
+  }, 30000);
   try {
     const data = await call('nexusSignIn');
     if (!data) return false;
@@ -1509,6 +1519,9 @@ async function runNexusSignIn(btn, after) {
     toast(`Signed in to Nexus Mods — welcome, ${state.nexus.user.name}.`);
     return true;
   } finally {
+    clearTimeout(hint);
+    delete btn.dataset.signinWaiting;
+    btn.title = '';
     btn.disabled = false;
     btn.textContent = label;
   }
@@ -2742,8 +2755,63 @@ $$('[data-close-modal]').forEach((b) =>
 // process and installed (main.js). Faithful render — the page is shown untouched.
 // This panel surfaces download progress from the same events the install
 // pipeline already emits, and closes itself once the mod is installed.
-const nexusDl = { open: false, sawProgress: false, done: false, target: '' };
+const nexusDl = { open: false, sawProgress: false, done: false, target: '', challenge: false };
 const NEXUS_LOGIN_URL = 'https://users.nexusmods.com/auth/sign_in';
+
+// Panel diagnostics for the log and the support report (main.js /
+// lib/nexus-panel.js). Silent: a failure here never shows a toast.
+async function panelCall(fn, ...args) {
+  try {
+    const res = await window.zc[fn](...args);
+    return res && res.ok ? res.data : null;
+  } catch (_) { return null; }
+}
+function panelEvent(kind, d = {}) { panelCall('nexusPanelEvent', { kind, ...d }); }
+
+// Nexus sometimes serves its own "Something went wrong" page, or a page whose
+// scripts/styles it refused. The panel says so and offers Reload and Open in
+// browser; it never reloads by itself. Runs INSIDE the guest page, so it must
+// stay self-contained.
+function nexusErrorPageCheck() {
+  const t = (document.body && document.body.innerText) || '';
+  return /something went wrong/i.test(t) && /discover some new collections/i.test(t);
+}
+function showNexusTrouble(text) {
+  const box = $('#nexus-dl-trouble');
+  if (!box) return;
+  if (!text) { box.classList.add('hidden'); return; }
+  $('#nexus-dl-trouble-text').textContent = text;
+  box.classList.remove('hidden');
+}
+async function checkNexusPage(view) {
+  let url = '';
+  try { url = view.getURL(); } catch (_) {}
+  if (!/^https?:/i.test(url)) return;
+  let title = '';
+  try { title = view.getTitle(); } catch (_) {}
+  const challenge = /^just a moment/i.test(title);
+  if (challenge && !nexusDl.challenge) panelEvent('challenge', { url });
+  if (!challenge && nexusDl.challenge) panelEvent('challenge-passed', { url });
+  nexusDl.challenge = challenge;
+  if (/users\.nexusmods\.com\/auth/i.test(url)) panelEvent('signin-page', { url });
+  if (challenge) { showNexusTrouble(null); return; }
+  let oops = false;
+  try { oops = !!(await view.executeJavaScript(`(${nexusErrorPageCheck.toString()})()`, true)); } catch (_) {}
+  if (oops) {
+    panelEvent('oops', { url });
+    showNexusTrouble('Nexus Mods showed its “Something went wrong” page. Reload it, or open the page in your browser.');
+    return;
+  }
+  let id = null;
+  try { id = view.getWebContentsId(); } catch (_) {}
+  const errs = id ? await panelCall('nexusPanelPageErrors', id, false) : null;
+  if (errs && errs.refusedNexus >= errs.threshold) {
+    panelEvent('blocked', { url, count: errs.refusedNexus });
+    showNexusTrouble(`Parts of this Nexus Mods page didn’t load (${errs.refusedNexus} refused). Reload it, or open the page in your browser.`);
+    return;
+  }
+  showNexusTrouble(null);
+}
 
 function setNexusPill(text, kind) {
   const status = $('#nexus-dl-status');
@@ -2761,6 +2829,9 @@ function openNexusDownload(name, url, opts = {}) {
   if (!modal || !view) return;
   nexusDl.open = true; nexusDl.sawProgress = false; nexusDl.done = false; nexusDl.target = url;
   nexusDl.viewOnly = !!opts.view;
+  nexusDl.challenge = false;
+  showNexusTrouble(null);
+  panelEvent('open', { target: url, view: !!opts.view });
   const title = $('#nexus-dl-title');
   if (title) title.textContent = opts.view ? 'NEXUS PAGE' : 'NEXUS DOWNLOAD';
   $('#nexus-dl-sub').textContent = name || 'Nexus Mods';
@@ -2783,6 +2854,7 @@ function openNexusDownload(name, url, opts = {}) {
 window.openNexusDownload = openNexusDownload; // reachable for verification harness
 
 function closeNexusDownload() {
+  if (nexusDl.open) panelEvent('close');
   nexusDl.open = false;
   const modal = $('#nexus-dl-modal');
   const view = $('#nexus-dl-view');
@@ -2894,6 +2966,12 @@ async function refreshNexusAccount() {
     res = await view.executeJavaScript(`(${nexusPageState.toString()})()`, true);
   } catch (_) { return; }
   if (!res) return;
+  // The page said neither: the session's account cookie (by name) fills in.
+  if (res.state === 'unknown') {
+    const sig = await panelCall('nexusPanelCookieSignal');
+    if (sig) { res.state = 'in'; res.signal = `account cookie ${sig}`; }
+  }
+  if (nexusDl.open) { let u = ''; try { u = view.getURL(); } catch (_) {} panelEvent('signed-in', { state: res.state, signal: res.signal, url: u }); }
   res.loggedIn = res.state === 'in';
   if (res.loggedIn) {
     chip.textContent = res.name ? `◈ ${res.name}` : '◈ Signed in';
@@ -2925,6 +3003,21 @@ async function refreshNexusAccount() {
       setNexusPill('Awaiting “Mod Manager Download”', '');
     }
     refreshNexusAccount();
+    if (nexusDl.open) checkNexusPage(view);
+  });
+  // A new page in the panel starts a fresh count of refused subresources.
+  view.addEventListener('did-navigate', () => {
+    let id = null;
+    try { id = view.getWebContentsId(); } catch (_) {}
+    if (id) panelCall('nexusPanelPageErrors', id, true);
+  });
+  const tReload = $('#nexus-dl-trouble-reload');
+  if (tReload) tReload.addEventListener('click', () => { showNexusTrouble(null); try { view.reload(); } catch (_) {} });
+  const tExt = $('#nexus-dl-trouble-ext');
+  if (tExt) tExt.addEventListener('click', () => {
+    let u = 'about:blank';
+    try { u = view.getURL(); } catch (_) {}
+    if (u && u.startsWith('http')) call('openExternal', u);
   });
   const reload = $('#nexus-dl-reload');
   if (reload) reload.addEventListener('click', () => { try { view.reload(); } catch (_) {} });

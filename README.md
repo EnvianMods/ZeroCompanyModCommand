@@ -283,7 +283,7 @@ automatically for IoStore package inspection; a different copy can be selected i
 - **Request allowance, read from Nexus** — Settings → Nexus Mods shows the quota
   Nexus reports on every reply ("API requests: 1,950 of 2,000 this hour (resets
   16:00) · 19,900 of 20,000 today (resets 00:00 UTC)"). When it runs out the app
-  stops instead of retrying, with a readable "try again after HH:MM"; it honours
+  stops instead of retrying, with a readable "try again after HH:MM"; it honors
   `Retry-After` on a 429, keeps at most two requests in flight, and background
   work (the hourly update check, the file-name index) leaves a reserve for your
   own clicks and reschedules itself rather than spending it.

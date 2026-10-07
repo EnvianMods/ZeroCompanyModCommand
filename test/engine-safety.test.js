@@ -232,3 +232,20 @@ test('reinstall from stored copies refuses to overwrite a copy Mod Command does 
     assert.strictEqual(engine.store.mods.length, count, 'no stray entry');
   } finally { f.cleanup(); }
 });
+
+test('an add-on copy never takes over files another managed mod put in its folder', async () => {
+  const f = fixture();
+  try {
+    const { engine } = f;
+    await engine.install(f.src({ ...zcuFiles, 'ue4ss/Mods/ZCUnlocked/addons/Sample/sample.txt': 'shipped by ZC Unlocked' }));
+    const dir = f.abs(path.join(M.ZCU_ADDONS_REL, 'Sample'));
+    assert.ok(fs.existsSync(path.join(dir, 'sample.txt')));
+    fs.writeFileSync(path.join(dir, 'addon.ini'), '[addon]\r\nname=Sample\r\nversion=1.0\r\n');
+    fs.writeFileSync(path.join(dir, '050_ZCA_Sample_P.pak'), 'PAK');
+    const c = engine.addonCopies().find((x) => x.folder === 'Sample');
+    const cand = engine._addonCandidate(c);
+    assert.ok(cand, 'offered');
+    assert.ok(!cand.files.some((r) => /sample\.txt$/i.test(r)), cand.files.join(','));
+    assert.ok(cand.files.some((r) => /addon\.ini$/i.test(r)));
+  } finally { f.cleanup(); }
+});

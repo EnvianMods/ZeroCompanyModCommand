@@ -57,6 +57,7 @@ function checkRuntimeFiles() {
 checkRuntimeFiles();
 
 const { Store, SECRET_SETTINGS } = require('./lib/store');
+const themes = require('./lib/themes');
 const steam = require('./lib/steam');
 const { ModEngine, GAME_UNKNOWN_MESSAGE, isZcsdkRuntimeRecord, compareVersions, MODS_REL, LOGIC_MODS_REL, WIN64_REL, UE4SS_MODS_REL, GAME_MODS_REL } = require('./lib/mods');
 const { findSevenZip, bundledSevenZip } = require('./lib/archive');
@@ -815,13 +816,17 @@ function runWindowLoadTasks() {
   }
 }
 
+// The saved theme, read synchronously by the preload so src/theme-boot.js can
+// set <html data-theme> before the first paint (lib/themes.js).
+ipcMain.on('theme-sync', (e) => { e.returnValue = themes.normalizeTheme(store.settings.theme); });
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1280,
     height: 820,
     minWidth: 980,
     minHeight: 640,
-    backgroundColor: '#05080f',
+    backgroundColor: themes.themeBackground(store.settings.theme),
     autoHideMenuBar: true,
     title: 'Zero Company Mod Command',
     icon: path.join(__dirname, 'src', 'assets', 'app-icon.png'),
@@ -1725,8 +1730,10 @@ const handlers = {
 
   'save-settings': async (_e, patch) => {
     delete patch.promotedAuthors; // owner-controlled (lib/featured.js), not a user setting
+    if ('theme' in patch && !themes.isTheme(patch.theme)) delete patch.theme;
     Object.assign(store.settings, patch);
     store.save();
+    if (patch.theme && win && !win.isDestroyed()) win.setBackgroundColor(themes.themeBackground(patch.theme));
     return fullState();
   },
 

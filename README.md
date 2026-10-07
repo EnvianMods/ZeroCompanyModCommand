@@ -402,7 +402,28 @@ automatically for IoStore package inspection; a different copy can be selected i
   hooks/loops) and cause frame stutter; folders are matched by `modinfo.json`
   title or identical entry script, so a copy with a manifest and one without
   still pair up. The report names each folder and whether it's managed.
-- **Settings** — game/retoc/7z paths, close-on-launch, reduced motion.
+- **Settings** — game/retoc/7z paths, theme, close-on-launch, reduced motion.
+
+### Themes
+
+A thank-you to everyone who has stuck with Mod Command: **Settings → Themes**
+changes the look of the whole app, instantly and without a restart.
+
+- **Mod Command** (default) — the original blue holo-terminal look. Everyone
+  starts on it, including existing users updating from an earlier version.
+- **Bounty Hunter** — weathered armor green, dented ochre gold and rust-red
+  markings on scorched gunmetal, with condensed stencil-style headings,
+  hazard stripes and a grimy plate texture. Pure CSS: no extra downloads, and
+  it uses only fonts already on your system (Bahnschrift on Windows 10/11,
+  falling back to common condensed fonts, then Segoe UI). Every text color
+  meets WCAG AA contrast.
+
+The choice is stored as `theme` in your settings (`manager-data.json`), so it
+survives restarts and updates. It is applied before the window first paints,
+so there is no flash of the other theme. An unknown or missing value falls
+back to Mod Command. The embedded Nexus Mods page and the SDK's own panel
+are their sites' own pages and are not restyled; only Mod Command's frame
+around them follows the theme.
 
 ## Mod metadata (`modinfo.json`)
 
@@ -437,7 +458,9 @@ lib/store.js       portable JSON store  → data/manager-data.json
 lib/mods.js        mod engine: classify/install/deploy/order/conflicts/UE4SS
 lib/ue4ss.js       UE4SS for Star Wars Zero Company (Nexus mod 9): page reads, install origin, updates
 lib/archive.js     zip (bsdtar / extract-zip) + 7z/rar (7-Zip CLI — tools/7-Zip on Windows, system copy on Linux)
-src/               UI (index.html / styles.css / app.js) — holo-terminal theme
+lib/themes.js      theme ids, default + fallback (Settings → Themes)
+src/               UI (index.html / styles.css / app.js); theme-boot.js sets the theme before first paint
+test/              node --test test/themes.test.js
 data/              settings when running from source (shipped builds use %APPDATA%\ZeroCompanyModCommand)
 build/uninstaller/ Uninstall.cs + app.manifest → release/ZeroCompanyModCommand-Uninstall.exe
 ```

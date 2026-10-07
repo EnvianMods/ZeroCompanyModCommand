@@ -1,5 +1,15 @@
 # Zero Company Mod Command — Changelog
 
+## v1.9.22 (unreleased)
+
+**Themes**
+- New **Settings → Themes** section, a thank-you to dedicated supporters:
+  pick **Mod Command** (the current look, still the default for everyone) or
+  the new optional **Bounty Hunter** theme (armor green, ochre gold and rust on
+  scorched gunmetal, stencil headings, hazard stripes). Applies instantly, is
+  saved with your settings across restarts and updates, and an unknown value
+  falls back to Mod Command.
+
 ## v1.9.21 (2026-10-04)
 
 Released as public 1.0.12.

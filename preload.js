@@ -3,7 +3,13 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 const invoke = (channel, payload) => ipcRenderer.invoke(channel, payload);
 
+// The saved theme, read synchronously once so src/theme-boot.js can set
+// <html data-theme> before the first paint (no flash of the other theme).
+let initialTheme = null;
+try { initialTheme = ipcRenderer.sendSync('theme-sync'); } catch (_) { /* the default applies */ }
+
 contextBridge.exposeInMainWorld('zc', {
+  theme: initialTheme,
   getState: () => invoke('get-state'),
   browseGamePath: () => invoke('browse-game-path'),
   browseToolPath: (opts) => invoke('browse-tool-path', opts),

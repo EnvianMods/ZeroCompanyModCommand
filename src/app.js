@@ -8,6 +8,35 @@ let pendingUe4ssOrder = null; // array of ids while dragging the UE4SS start lis
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
 
+// ------------------------------------------------------------------ theme
+// <html data-theme> is set before the first paint by theme-boot.js; this keeps
+// it in step with Settings -> Themes, which applies without a restart. The
+// "no image" card art is the one themed thing that is not CSS. The first id
+// is the default and the fallback for anything unknown (lib/themes.js).
+
+const THEMES = ['mod-command', 'bounty-hunter'];
+const THEME_PLACEHOLDER = {
+  'mod-command': 'assets/mod-placeholder.svg',
+  'bounty-hunter': 'assets/mod-placeholder-bounty-hunter.svg',
+};
+
+function currentTheme() {
+  const t = document.documentElement.getAttribute('data-theme');
+  return THEMES.includes(t) ? t : THEMES[0];
+}
+
+function modPlaceholder() { return THEME_PLACEHOLDER[currentTheme()]; }
+
+function applyTheme(theme) {
+  const t = THEMES.includes(theme) ? theme : THEMES[0];
+  if (document.documentElement.getAttribute('data-theme') === t) return;
+  document.documentElement.setAttribute('data-theme', t);
+  const art = Object.values(THEME_PLACEHOLDER);
+  for (const img of $$('img')) {
+    if (art.includes(img.getAttribute('src'))) img.setAttribute('src', THEME_PLACEHOLDER[t]);
+  }
+}
+
 // ------------------------------------------------------------------ toasts
 
 function toast(msg, kind = 'info', ms = 4500) {
@@ -236,6 +265,7 @@ const SAVE_CAVEAT = 'Unequip anything from this mod in game and save before disa
 
 function render() {
   if (!state) return;
+  applyTheme(state.settings.theme);
   document.body.classList.toggle('reduced-motion', !!state.settings.reducedMotion);
 
   // sidebar
@@ -1569,6 +1599,7 @@ function renderSettings() {
   }
   $('#set-7z-path').textContent = state.settings.sevenZipPath
     || (state.sevenZipBundled ? 'Bundled with Mod Command (7-Zip 25.01)' : (state.sevenZip ? 'Auto-detected' : 'Auto-detect (not found)'));
+  $('#set-theme').value = currentTheme();
   $('#chk-close-on-launch').checked = !!state.settings.closeOnLaunch;
   $('#chk-reduced-motion').checked = !!state.settings.reducedMotion;
   $('#chk-keep-pak-names').checked = !!state.settings.keepOriginalPakNames;
@@ -2000,6 +2031,8 @@ async function offerZcsdkRuntime(needing) {
   }
   await installZcsdkRuntime();
 }
+// Applied at once, then saved (the save's render() finds it already applied).
+$('#set-theme').addEventListener('change', (e) => { applyTheme(e.target.value); saveSetting({ theme: currentTheme() }); });
 $('#chk-close-on-launch').addEventListener('change', (e) => saveSetting({ closeOnLaunch: e.target.checked }));
 $('#chk-reduced-motion').addEventListener('change', (e) => saveSetting({ reducedMotion: e.target.checked }));
 // Renames files in the game (every enabled pak mod is redeployed), so it has
@@ -2228,10 +2261,10 @@ function buildBrowseCard(m) {
   const pic = document.createElement('div');
   pic.className = 'browse-pic';
   const img = document.createElement('img');
-  img.src = m.picture || 'assets/mod-placeholder.svg';
+  img.src = m.picture || modPlaceholder();
   img.loading = 'lazy';
   img.alt = '';
-  img.addEventListener('error', () => { img.src = 'assets/mod-placeholder.svg'; }, { once: true });
+  img.addEventListener('error', () => { img.src = modPlaceholder(); }, { once: true });
   pic.appendChild(img);
 
   const body = document.createElement('div');

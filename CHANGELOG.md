@@ -119,6 +119,14 @@
   button turns into **Cancel sign-in**, and after 30 seconds a hint tells you
   what's left to do.
 
+**Themes**
+- New **Settings → Themes** section, a thank-you to dedicated supporters:
+  pick **Mod Command** (the current look, still the default for everyone) or
+  the new optional **Bounty Hunter** theme (armor green, ochre gold and rust on
+  scorched gunmetal, stencil headings, hazard stripes). Applies instantly, is
+  saved with your settings across restarts and updates, and an unknown value
+  falls back to Mod Command.
+
 **Under the hood**
 - Electron 33 → 44 (Chromium 152). Release builds encrypt the Nexus panel's
   sign-in cookies at rest and turn off `NODE_OPTIONS` / `--inspect`.

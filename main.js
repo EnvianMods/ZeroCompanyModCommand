@@ -75,7 +75,7 @@ const { getPromotedAuthors } = require('./lib/featured');
 const github = require('./lib/github');
 const ea = require('./lib/ea');
 const { checkLauncherUpdate, cachedInfo: cachedLauncherInfo, parseSdkBlock } = require('./lib/launcher-update');
-const { isAllowedExternalUrl } = require('./lib/external-url');
+const { isAllowedExternalUrl, isNexusPageUrl } = require('./lib/external-url');
 const { log, logText } = require('./lib/log');
 const { redactSecrets, registerSecret, registerAccountName } = require('./lib/redact');
 const report = require('./lib/report');
@@ -986,7 +986,7 @@ app.on('web-contents-created', (_e, contents) => {
   contents.setWindowOpenHandler(({ url }) => {
     if (catchNxm(url)) return { action: 'deny' };
     // Keep navigation inside the panel; never spawn OS/native windows from Nexus.
-    if (/^https?:\/\/([a-z0-9-]+\.)?nexusmods\.com/i.test(url)) {
+    if (isNexusPageUrl(url)) {
       contents.loadURL(url);
     }
     return { action: 'deny' };

@@ -1,6 +1,6 @@
 'use strict';
 // Settings -> Themes: persistence, default and fallback.
-// Run: node --test test/
+// Run: node --test test/*.test.js
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');

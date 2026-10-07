@@ -485,7 +485,7 @@ lib/ue4ss.js       UE4SS for Star Wars Zero Company (Nexus mod 9): page reads, i
 lib/archive.js     zip (bsdtar / extract-zip) + 7z/rar (7-Zip CLI — tools/7-Zip on Windows, system copy on Linux)
 lib/themes.js      theme ids, default + fallback (Settings → Themes)
 src/               UI (index.html / styles.css / app.js); theme-boot.js sets the theme before first paint
-test/              node --test test/themes.test.js
+test/              node --test test/*.test.js
 data/              settings when running from source (shipped builds use %APPDATA%\ZeroCompanyModCommand)
 build/uninstaller/ Uninstall.cs + app.manifest → release/ZeroCompanyModCommand-Uninstall.exe
 ```

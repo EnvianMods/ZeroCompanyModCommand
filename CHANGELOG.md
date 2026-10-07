@@ -127,6 +127,22 @@
   saved with your settings across restarts and updates, and an unknown value
   falls back to Mod Command.
 
+**Fixes**
+- A ZC Unlocked add-on that can't come back on (ZC Unlocked missing) no
+  longer removes a file of it you changed in the game.
+- An add-on waiting for ZC Unlocked, or one you switch on, never overwrites a
+  copy of that add-on already in its folder that Mod Command doesn't manage —
+  it tells you instead.
+- Profiles switch mods off before they switch others on, so two mods that ship
+  the same pak file name no longer stop a profile when **Keep original pak
+  file names** is on.
+- A free-account "Reinstall as ZC Unlocked add-on" only waits while its Nexus
+  panel is open; a later ordinary download of the same mod installs normally.
+- The UE4SS install's "Sign in now?" no longer cancels a sign-in that is
+  already waiting, and **Cancel sign-in** isn't shown as an error.
+- The Nexus panel only opens pop-up links itself when they really are Nexus
+  Mods pages.
+
 **Under the hood**
 - Electron 33 → 44 (Chromium 152). Release builds encrypt the Nexus panel's
   sign-in cookies at rest and turn off `NODE_OPTIONS` / `--inspect`.

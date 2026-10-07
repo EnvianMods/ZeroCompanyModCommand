@@ -930,6 +930,15 @@ app.whenReady().then(() => {
   // handoff instead of will-navigate is routed to handleNxm in-process. See
   // lib/web-permissions.js.
   try { configureWebPermissions(session, { log, onNxm: (url) => handleNxm(url) }); } catch (err) { log('error', `web permission setup failed: ${err.message}`); }
+  // Nexus Mods application identification on Chromium's own requests to Nexus
+  // hosts too (thumbnails in the app window, the embedded Nexus panel): both
+  // sessions add Application-Name and Application-Version. The app's API
+  // traffic carries them through lib/nexus-http.js nexusFetch().
+  try {
+    const ident = nexusHttp.appHeaders();
+    for (const ses of [session.defaultSession, session.fromPartition('persist:nexus')]) nexusHttp.addIdentityToWebSession(ses);
+    log('info', `nexus identification: Application-Name="${ident['Application-Name']}" Application-Version="${ident['Application-Version']}"`);
+  } catch (err) { log('error', `Nexus identification headers could not be set on the web sessions: ${err.message}`); }
   // Load the stored OAuth tokens — and throw away any credential an older
   // build left behind.
   try { initNexusAuth(); } catch (err) { log('error', `Nexus sign-in state could not be read: ${err.message}`); }

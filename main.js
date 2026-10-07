@@ -611,6 +611,45 @@ function toastAddonAdopted(mods) {
       sendEvent({ type: 'toast', kind: 'warn', message: `“${name}” is a ZC Unlocked add-on and needs ZC Unlocked — install it first. The add-on is kept and is deployed as soon as ZC Unlocked is in the game.` });
     }
   }
+  // 050_ZCA paks with no addon.ini: kept off (they would never register).
+  const zca = mods.filter((m) => m && m.id && store.getMod(m.id) && store.getMod(m.id).zcaPaks)
+    .map((m) => store.getMod(m.id));
+  if (zca.length) {
+    sendEvent({ type: 'toast', kind: 'warn', message: zcaKeptOffMessage(zca) });
+  }
+}
+
+function zcaKeptOffMessage(mods) {
+  return `${mods.length === 1 ? `“${mods[0].name}” is` : `${mods.length} entries (${mods.map((m) => m.name).join(', ')}) are`} ZC Unlocked add-on paks (050_ZCA_…_P) without an addon.ini — they would not register, so they were kept in the library switched off, not put in ~mods. Install the add-on edition (with addon.ini) of this mod instead.`;
+}
+
+// "Reinstall as ZC Unlocked add-on" (lib/mods.js reinstallAsAddon): what the
+// renderer gets back, and the toasts.
+function zcaOutSummary(out) {
+  return { removed: out.removed, failed: out.failed, notCovered: out.notCovered, mods: out.mods.map((m) => ({ id: m.id, name: m.name, modType: m.modType })) };
+}
+function toastZcaReinstall(out) {
+  const what = out.mods.map((m) => `“${m.name}”`).join(', ');
+  sendEvent({ type: 'toast', kind: 'info', message: `Reinstalled as a ZC Unlocked add-on: ${what}. The old pak entries (${out.removed.join(', ')}) and their ~mods copies were removed.` });
+  if (out.notCovered.length) sendEvent({ type: 'toast', kind: 'warn', message: `Not in that archive, so left as they were: ${out.notCovered.join(', ')} — reinstall those from the archive that has them.` });
+  if (out.failed.length) sendEvent({ type: 'toast', kind: 'warn', message: out.failed.slice(0, 3).join(' · ') });
+  toastAddonAdopted(out.mods);
+}
+
+// A free account's "Reinstall as ZC Unlocked add-on" from Nexus: the Files
+// page opens in the panel, the player presses "Mod Manager Download"
+// themselves, and the nxm:// link for that mod (handleNxm) finishes the
+// reinstall instead of a plain install. Keyed by Nexus mod id; stale after
+// an hour.
+const pendingZcaReinstall = new Map();
+const PENDING_ZCA_MS = 60 * 60 * 1000;
+function takePendingZcaReinstall(modId) {
+  const p = pendingZcaReinstall.get(Number(modId));
+  if (!p) return null;
+  pendingZcaReinstall.delete(Number(modId));
+  if (Date.now() - p.at > PENDING_ZCA_MS) return null;
+  const ids = p.ids.filter((id) => store.getMod(id));
+  return ids.length ? ids : null;
 }
 
 const protocolArgs = () => {
@@ -665,7 +704,13 @@ async function handleNxm(rawUrl) {
         assertGameClosedForUe4ss();
         keepCurrentUe4ss();
       }
-      if (existing) {
+      const migrateIds = isUe4ssPage ? null : takePendingZcaReinstall(link.modId);
+      if (migrateIds) {
+        // "Reinstall as ZC Unlocked add-on" (free account): this download is
+        // the add-on edition for entries installed as plain paks.
+        const out = await engine.reinstallAsAddon(migrateIds, dest, { origin, version });
+        toastZcaReinstall(out);
+      } else if (existing) {
         const res = await engine.replaceOrigin({ type: 'nexus', modId: link.modId }, dest, origin, version);
         if (res.pendingFomod) {
           forwardFomod(res, info ? info.name : `mod ${link.modId}`);
@@ -1249,7 +1294,7 @@ const HEAL_AFTER = new Set([
   'adopt-mods', 'apply-ue4ss-order', 'apply-load-order', 'rollback-load-order', 'rename-mod',
   'install-mods', 'install-folder', 'install-dropped', 'update-mod', 'import-manager-folder',
   'nexus-install-file', 'nexus-install-remote', 'github-install', 'fomod-complete',
-  'ue4ss-restore', 'install-ue4ss', 'clean-runtime-copy',
+  'ue4ss-restore', 'install-ue4ss', 'clean-runtime-copy', 'reinstall-zca',
 ]);
 
 // WHERE TO GET THE SDK. Mod Command hard-codes no destination: the operator
@@ -1464,6 +1509,8 @@ function fullState() {
     })(),
     conflicts,
     ue4ssHooks,
+    // ZC Unlocked add-on paks installed as plain paks (see reinstall-zca).
+    zcaMigration: (() => { try { return store.settings.gamePath ? engine.zcaMigration() : []; } catch (_) { return []; } })(),
     // release = what this app last installed (null for a copy placed by hand);
     // origin = which UE4SS is on disk (nexus / stock / unknown / none, see
     // lib/ue4ss.js classifyInstall); pending = an update held back (game running).
@@ -1817,6 +1864,75 @@ const handlers = {
     return fullState();
   },
   'rename-mod': async (_e, { id, name }) => { engine.rename(id, name); return fullState(); },
+
+  // Entries installed as plain paks that are ZC Unlocked add-ons (050_ZCA
+  // paks, from builds before the add-on type): reinstall them as add-ons —
+  //   source 'library' : from their stored copies (only when those carry addon.ini)
+  //   source 'file'    : from the add-on edition's archive the player picks
+  //   source 'nexus'   : download the add-on edition again from the recorded
+  //                      Nexus mod (premium: right here; free: the Files page
+  //                      opens in the panel, the player presses "Mod Manager
+  //                      Download", and the nxm hand-off finishes it)
+  // The add-on entries go in first; the ~mods copies go only after that.
+  'reinstall-zca': async (_e, { ids, source }) => {
+    const olds = (ids || []).map((id) => store.getMod(id)).filter(Boolean);
+    if (!olds.length) throw new Error('Those mods are no longer installed.');
+    engine._assertGameClosed('reinstalling a ZC Unlocked add-on');
+    if (source === 'library') {
+      const out = await engine.reinstallAsAddon(olds.map((m) => m.id), null);
+      toastZcaReinstall(out);
+      return { done: true, out: zcaOutSummary(out), state: fullState() };
+    }
+    if (source === 'file') {
+      const res = await dialog.showOpenDialog(win, {
+        title: `The add-on edition of ${olds[0].name}${olds.length > 1 ? ` and ${olds.length - 1} more` : ''} (the archive with addon.ini)`,
+        properties: ['openFile'],
+        filters: [{ name: 'Mod archives', extensions: ['zip', '7z', 'rar'] }, { name: 'All files', extensions: ['*'] }],
+      });
+      if (res.canceled || !res.filePaths.length) return { canceled: true, state: fullState() };
+      const out = await engine.reinstallAsAddon(olds.map((m) => m.id), res.filePaths[0]);
+      toastZcaReinstall(out);
+      return { done: true, out: zcaOutSummary(out), state: fullState() };
+    }
+    if (source === 'nexus') {
+      const o = olds[0].origin || {};
+      if (o.type !== 'nexus' || !o.modId) throw new Error(`“${olds[0].name}” has no Nexus source recorded — choose the add-on edition’s archive instead.`);
+      const token = await nexusAccessToken();
+      if (!nexusUser) {
+        try { mergeNexusUser(await nexus.validateToken(token)); } catch (err) { throw new Error(err.message); }
+      }
+      if (!nexusUser.isPremium) {
+        // Nexus policy: non-premium downloads start on the website. The Files
+        // page opens in the embedded panel; the player presses "Mod Manager
+        // Download" there and handleNxm finishes the reinstall.
+        pendingZcaReinstall.set(Number(o.modId), { ids: olds.map((m) => m.id), at: Date.now() });
+        return {
+          opened: 'embed',
+          url: `https://www.nexusmods.com/${nexus.GAME_DOMAIN}/mods/${o.modId}?tab=files`,
+          name: olds[0].name,
+          state: fullState(),
+        };
+      }
+      const files = await nexus.filesList(o.modId, token);
+      const listed = (f) => f && !['ARCHIVED', 'DELETED', 'REMOVED'].includes(String(f.category_name || '').toUpperCase());
+      const recorded = o.fileId ? files.find((f) => f.file_id === o.fileId) : null;
+      const file = (listed(recorded) && recorded) || nexus.pickPrimaryFile(files);
+      if (!file) throw new Error('That Nexus mod has no downloadable main file.');
+      const uri = await nexus.downloadLink({ modId: o.modId, fileId: file.file_id }, token);
+      const dest = await nexus.downloadToFile(uri, store.stagingDir, file.file_name, (got, total, dl) => {
+        sendEvent({ type: 'progress', key: `nexus:${o.modId}`, label: olds[0].name, received: got, total, ...dl });
+      });
+      try {
+        const origin = { type: 'nexus', modId: o.modId, fileId: file.file_id, version: file.version || null };
+        const out = await engine.reinstallAsAddon(olds.map((m) => m.id), dest, { origin, version: file.version || null });
+        toastZcaReinstall(out);
+        return { done: true, out: zcaOutSummary(out), state: fullState() };
+      } finally {
+        fs.rmSync(dest, { force: true });
+      }
+    }
+    throw new Error('Unknown source.');
+  },
   // UE4SS mod deployed under a folder other than its own folder name: move it
   // back ("Use original name"), or keep it as it is and hide the notice.
   // The engine refuses it while the game runs (or can't be confirmed closed).
@@ -2898,7 +3014,9 @@ async function installPaths(paths) {
       }
       for (const mod of installedMods(res)) {
         log('info', `installed "${mod.name}" (${mod.modType}) from ${path.basename(p)}`);
-        results.push({ source: path.basename(p), ok: true, name: mod.name, modType: mod.modType, warnings: mod.warnings || [] });
+        // (the 050_ZCA "no addon.ini" note gets its own toast below)
+        const warnings = (mod.warnings || []).filter((w) => !(mod.zcaPaks && w.startsWith('ZC Unlocked add-on pak without addon.ini')));
+        results.push({ source: path.basename(p), ok: true, name: mod.name, modType: mod.modType, warnings });
         // Same mod (modinfo title + author) at another version — it joined the
         // existing line instead of becoming a new entry; say what happened.
         const va = mod.versionAction;
@@ -2917,6 +3035,13 @@ async function installPaths(paths) {
           results.push({
             source: path.basename(p), ok: true, note: true, name: mod.name, modType: mod.modType,
             message: `“${mod.name}” is a ZC Unlocked add-on and needs ZC Unlocked — install it first. The add-on is kept in the library and is deployed once ZC Unlocked is in the game.`,
+          });
+        }
+        // 050_ZCA paks without addon.ini: kept in the library, off.
+        if (mod.zcaPaks) {
+          results.push({
+            source: path.basename(p), ok: true, note: true, name: mod.name, modType: mod.modType,
+            message: zcaKeptOffMessage([mod]),
           });
         }
         // The add-on's pack folder was already in the game (a copy Mod
@@ -3141,6 +3266,15 @@ function diagnostics() {
       add('info', 'ZC Unlocked add-ons with the same name',
         `“${g.name}” is the name= of ${g.members.length} different add-on folders: ${g.members.map((c) => c.location).join(' and ')}. `
         + 'Same display name, different folders — both load (ZC Unlocked tells add-ons apart by folder name).');
+    }
+    // ZC Unlocked add-on paks installed as plain paks (050_ZCA, no addon.ini).
+    for (const g of engine.zcaMigration()) {
+      // “HeavyArmor” (050_ZCA_HeavyArmor_P): which add-on each entry is.
+      const labels = g.entries.map((e) => `“${/^[0-9a-f]{16}$/i.test(e.name) && e.keys.length ? e.keys.join(', ') : e.name}”${e.paks.length ? ` (${e.paks.join(', ')})` : ''}`);
+      add('warning', 'ZC Unlocked add-on installed as paks',
+        `${labels.join(', ')} ${g.ids.length === 1 ? 'is a ZC Unlocked add-on that holds' : 'are ZC Unlocked add-ons that hold'} only add-on paks (050_ZCA_…_P) and no addon.ini`
+        + `${g.inGame ? ' — deployed to ~mods, where ZC Unlocked never registers them' : ''}. `
+        + 'Reinstall as a ZC Unlocked add-on from the banner in the Hangar Bay (or the ⚠ NOT REGISTERED chip on the row).');
     }
     // ZC Unlocked's own switches (its dlls\settings.ini) and its version
     // decide which of those packs it reads at all.

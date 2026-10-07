@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('zc', {
   setModEnabled: (id, enabled, force) => invoke('set-mod-enabled', { id, enabled, force }),
   uninstallMod: (id, force) => invoke('uninstall-mod', { id, force }),
   renameMod: (id, name) => invoke('rename-mod', { id, name }),
+  // ZC Unlocked add-on paks installed as plain paks → reinstall as add-ons (source: library | file | nexus)
+  reinstallZca: (ids, source) => invoke('reinstall-zca', { ids, source }),
   useOwnUe4ssFolder: (id, force) => invoke('use-own-ue4ss-folder', { id, force }),
   dismissUe4ssFolderNotice: (id) => invoke('dismiss-ue4ss-folder-notice', { id }),
   applyLoadOrder: (orderedIds) => invoke('apply-load-order', { orderedIds }),

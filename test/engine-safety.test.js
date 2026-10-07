@@ -276,3 +276,23 @@ test('a hand-placed ue4ss\\Mods\\<Pack> this ZC Unlocked does not load is update
     assert.ok(fs.existsSync(path.join(dir, 'addon.ini')), 'updated in place');
   } finally { f.cleanup(); }
 });
+
+test('kept original pak names: a hand-placed identical file is used but stays the player\'s', async () => {
+  const f = fixture();
+  try {
+    const { engine } = f;
+    engine.setKeepOriginalPakNames(true);
+    const hand = f.abs(path.join(M.MODS_REL, 'Same_P.pak'));
+    fs.writeFileSync(hand, 'S'.repeat(100));
+    const mod = await engine.install(f.src({ 'Same_P.pak': 'S'.repeat(100), 'modinfo.json': mi('Same') }));
+    const rec = engine.store.getMod(mod.id);
+    assert.ok(rec.enabled);
+    assert.ok(!(rec.deployed || []).some((r) => /Same_P\.pak$/i.test(r)), 'not recorded as the mod\'s file');
+    assert.ok((rec.warnings || []).some((w) => /your own copy/.test(w)), 'said on the row');
+    engine.setEnabled(mod.id, false);
+    assert.ok(fs.existsSync(hand), 'switching the mod off keeps it');
+    engine.setEnabled(mod.id, true);
+    engine.uninstall(mod.id);
+    assert.ok(fs.existsSync(hand), 'removing the mod keeps it');
+  } finally { f.cleanup(); }
+});

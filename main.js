@@ -17,7 +17,10 @@ const { spawn } = require('child_process');
 // THAT is the quarantined file Windows fails the launch before any JavaScript
 // runs and this check never executes. It catches the lazily loaded graphics
 // DLLs (and reports ffmpeg.dll too, for the cases where we do get to run).
-const RUNTIME_DLLS = ['ffmpeg.dll', 'libEGL.dll', 'libGLESv2.dll', 'd3dcompiler_47.dll'];
+// The DLLs the Electron runtime ships next to the exe. Electron 44 links ANGLE
+// into the exe, so libEGL.dll / libGLESv2.dll no longer exist — listing them
+// would make every packaged launch report them "missing".
+const RUNTIME_DLLS = ['ffmpeg.dll', 'd3dcompiler_47.dll', 'dxcompiler.dll', 'dxil.dll', 'vk_swiftshader.dll', 'vulkan-1.dll'];
 
 function checkRuntimeFiles() {
   if (process.platform !== 'win32' || !app.isPackaged) return;

@@ -7,7 +7,7 @@ echo  ZERO COMPANY MOD COMMAND - build from source
 echo  ============================================
 echo  Builds the portable ZeroCompanyModCommand.exe on your own PC from the source
 echo  in this folder - the same source as github.com/EnvianMods/ZeroCompanyModCommand.
-echo  Needs Node.js 20 or newer and an internet connection. Takes 2-5 minutes.
+echo  Needs Node.js 22.12 or newer and an internet connection. Takes 2-5 minutes.
 echo.
 where node >nul 2>nul || goto :noNode
 where npm  >nul 2>nul || goto :noNode

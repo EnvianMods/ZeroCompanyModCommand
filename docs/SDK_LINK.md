@@ -237,7 +237,7 @@ few things on the page:
 * **`openPath`** — the page's Open folder / Open mod-def / Open config.
 * The SDK needs **Node.js 22.12+ on PATH** for its build driver. The host never
   runs the SDK's own Electron; it `require()`s `lib/sdk-cli.js` into its own
-  Electron 33 main process, and that module spawns `node` / `python` itself.
+  Electron 44 main process (Node 24), and that module spawns `node` / `python` itself.
 
 ## Where the SDK's own paths live
 

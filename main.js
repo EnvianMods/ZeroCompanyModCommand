@@ -602,6 +602,14 @@ function installedMods(res) {
 function toastAddonAdopted(mods) {
   for (const m of mods) {
     if (m && m.addonAdopted) sendEvent({ type: 'toast', kind: 'info', message: m.addonAdopted.message });
+    // An add-on installed before ZC Unlocked waits in the library: say so on
+    // every install path, under the entry's current name (one-click installs
+    // rename it after the Nexus page).
+    if (m && m.needsZcu && m.modType === 'zcu-addon') {
+      const cur = m.id ? store.getMod(m.id) : null;
+      const name = (cur && cur.name) || m.name;
+      sendEvent({ type: 'toast', kind: 'warn', message: `“${name}” is a ZC Unlocked add-on and needs ZC Unlocked — install it first. The add-on is kept and is deployed as soon as ZC Unlocked is in the game.` });
+    }
   }
 }
 
@@ -2055,6 +2063,7 @@ const handlers = {
       if (mods.length === 1 && mods[0].id && name) {
         try { engine.rename(mods[0].id, name); } catch (_) {}
       }
+      toastAddonAdopted(mods);
       return { installed: true, count: mods.length, state: fullState() };
     } finally {
       fs.rmSync(dest, { force: true });
@@ -2408,7 +2417,9 @@ const handlers = {
         forwardFomod(res, fullName);
         return { pendingFomod: true, state: fullState() };
       }
-      return { installed: true, count: installedMods(res).length, state: fullState() };
+      const mods = installedMods(res);
+      toastAddonAdopted(mods);
+      return { installed: true, count: mods.length, state: fullState() };
     } finally {
       fs.rmSync(dest, { force: true });
     }

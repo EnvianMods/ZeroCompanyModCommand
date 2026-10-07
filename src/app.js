@@ -8,6 +8,35 @@ let pendingUe4ssOrder = null; // array of ids while dragging the UE4SS start lis
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
 
+// ------------------------------------------------------------------ theme
+// <html data-theme> is set before the first paint by theme-boot.js; this keeps
+// it in step with Settings -> Themes, which applies without a restart. The
+// "no image" card art is the one themed thing that is not CSS. The first id
+// is the default and the fallback for anything unknown (lib/themes.js).
+
+const THEMES = ['mod-command', 'bounty-hunter'];
+const THEME_PLACEHOLDER = {
+  'mod-command': 'assets/mod-placeholder.svg',
+  'bounty-hunter': 'assets/mod-placeholder-bounty-hunter.svg',
+};
+
+function currentTheme() {
+  const t = document.documentElement.getAttribute('data-theme');
+  return THEMES.includes(t) ? t : THEMES[0];
+}
+
+function modPlaceholder() { return THEME_PLACEHOLDER[currentTheme()]; }
+
+function applyTheme(theme) {
+  const t = THEMES.includes(theme) ? theme : THEMES[0];
+  if (document.documentElement.getAttribute('data-theme') === t) return;
+  document.documentElement.setAttribute('data-theme', t);
+  const art = Object.values(THEME_PLACEHOLDER);
+  for (const img of $$('img')) {
+    if (art.includes(img.getAttribute('src'))) img.setAttribute('src', THEME_PLACEHOLDER[t]);
+  }
+}
+
 // ------------------------------------------------------------------ toasts
 
 function toast(msg, kind = 'info', ms = 4500) {
@@ -226,7 +255,7 @@ const TYPE_LABEL = {
 
 const TYPE_TITLE = {
   gfp: 'Game Feature plugin — installed as a folder in SWZeroCompany\\Mods',
-  'zcu-addon': 'ZC Unlocked add-on — installed as a folder in ue4ss\\Mods\\ZCUnlocked\\addons (needs ZC Unlocked; a pack adopted from ue4ss\\Mods stays there). Disabling sets enabled=0 in its addon.ini; the folder stays.',
+  'zcu-addon': 'ZC Unlocked add-on — installed as a folder in ue4ss\\Mods\\ZCUnlocked\\addons (needs ZC Unlocked; a pack adopted from ue4ss\\Mods stays there). Disabling sets enabled=0 in its addon.ini and the folder stays — unless another copy of the same pack folder is in the game: then its files are taken out (kept in the library), never left beside that copy with enabled=0.',
 };
 
 // Mods whose files the game records BY LOCATION in the save (a Game Feature
@@ -234,8 +263,15 @@ const TYPE_TITLE = {
 // unequipped before the folder goes away.
 const SAVE_CAVEAT = 'Unequip anything from this mod in game and save before disabling or removing it; saves record modded gear by file location.';
 
+// Settings the user just changed whose save is still on its way: every render
+// shows them (a state push that arrives meanwhile carries the old values), and
+// they are dropped once the save answers — the answer's state then rules, or,
+// on a refusal, the value from before.
+const pendingSettings = {};
 function render() {
   if (!state) return;
+  if (state.settings) Object.assign(state.settings, pendingSettings);
+  applyTheme(state.settings.theme);
   document.body.classList.toggle('reduced-motion', !!state.settings.reducedMotion);
 
   // sidebar
@@ -338,9 +374,151 @@ function buildFolderNotice(mod) {
   return box;
 }
 
+// ZC Unlocked add-on chip: waiting for ZC Unlocked; kept out of the game
+// because another copy of its pack folder is there (ZC Unlocked uses one copy
+// per folder); or on here but not loaded by ZC Unlocked because of its own
+// settings.ini (the add-on's Enabled row in the ZC Unlocked Menu, addons=0 /
+// addons_mods=0) or an older ZC Unlocked. null for anything else.
+function buildZcuChip(mod) {
+  if (mod.modType !== 'zcu-addon') return null;
+  let el = null;
+  const chip = (cls, text, title) => {
+    el = document.createElement('span');
+    el.className = `mod-badge zc-chip ${cls}`;
+    el.textContent = text;
+    el.title = title;
+  };
+  const outNote = !mod.enabled && (mod.warnings || []).find((w) => /^Not in the game: another copy of this add-on is at /.test(w));
+  if (mod.needsZcu) {
+    chip('zc-bad', '⚠ NEEDS ZC UNLOCKED', 'Install ZC Unlocked first. This add-on is kept in the library and is deployed to ue4ss\\Mods\\ZCUnlocked\\addons as soon as ZC Unlocked is in the game.');
+  } else if (outNote) {
+    chip('zc-note', '⧉ OTHER COPY IN USE', outNote);
+  } else if (mod.zcuLane === 'menu') {
+    chip('zc-note', '◌ OFF IN ZC UNLOCKED MENU', `On here, but its Enabled row in the ZC Unlocked Menu is off (addon_${mod.addonFolder}=0 in ZC Unlocked's settings.ini), so ZC Unlocked does not load it. Switch it on in the ZC Unlocked Menu in game.`);
+  } else if (mod.zcuLane === 'lane') {
+    chip('zc-bad', '◌ ZC UNLOCKED ADD-ONS OFF', 'On here, but ZC Unlocked\'s settings.ini (ue4ss\\Mods\\ZCUnlocked\\dlls) has addons=0 — no add-on pack is loaded at all. Set addons=1 there to use them.');
+  } else if (mod.zcuLane === 'mods') {
+    chip('zc-bad', '◌ NOT LOADED (addons_mods=0)', `On here, but ZC Unlocked's settings.ini has addons_mods=0, so it reads packs only from ue4ss\\Mods\\ZCUnlocked\\addons — this pack in ue4ss\\Mods\\${mod.addonFolder} is not loaded. Set addons_mods=1 to load it.`);
+  } else if (mod.zcuLane === 'old') {
+    chip('zc-bad', '⚠ NEEDS ZC UNLOCKED 1.4.73+', `On here, but ZC Unlocked ${mod.zcuVersion || ''} reads packs only from ue4ss\\Mods\\ZCUnlocked\\addons — this pack in ue4ss\\Mods\\${mod.addonFolder} needs ZC Unlocked 1.4.73 or newer. Update ZC Unlocked.`);
+  }
+  return el;
+}
+
+// ZC Unlocked add-on paks (050_ZCA_…_P) installed as plain paks: the group
+// (one download) this entry belongs to in state.zcaMigration, or null.
+function zcaGroupOf(mod) {
+  return ((state && state.zcaMigration) || []).find((g) => g.ids.includes(mod.id)) || null;
+}
+// Which add-on an entry is: “HeavyArmor” (050_ZCA_HeavyArmor_P) — the key(s)
+// come from its pak names (zcaMigration's entries), never parsed here.
+function zcaLabel(e) {
+  if (!e) return '';
+  const keys = e.keys || [];
+  const name = /^[0-9a-f]{16}$/i.test(e.name || '') && keys.length ? keys.join(', ') : e.name;
+  return `“${name}”${(e.paks || []).length ? ` (${e.paks.join(', ')})` : ''}`;
+}
+function zcaLabels(g) {
+  return (g.entries || g.names.map((name) => ({ name }))).map(zcaLabel);
+}
+// A size for the banner: 0.00 GB says nothing, so small ones are in MB.
+function zcaSize(bytes) {
+  if (!bytes) return '';
+  const gb = bytes / 1073741824;
+  if (gb.toFixed(2) !== '0.00') return `${gb.toFixed(gb > 1 ? 1 : 2)} GB`;
+  return `${Math.max(0.1, bytes / 1048576).toFixed(1)} MB`;
+}
+function zcaSource(g) {
+  return g.fromLibrary ? 'library' : (g.origin && g.origin.type === 'nexus' ? 'nexus' : 'file');
+}
+function buildZcaChip(mod) {
+  const g = zcaGroupOf(mod);
+  if (!g) return null;
+  const el = document.createElement('button');
+  el.className = 'mod-conflict-flag build-chip zca-chip';
+  el.textContent = '⚠ NOT REGISTERED — reinstall as ZC Unlocked add-on';
+  const mine = (g.entries || []).find((e) => e.id === mod.id);
+  el.title = `${mine ? `${zcaLabel(mine)} is a ZC Unlocked add-on. ` : ''}These are ZC Unlocked add-on paks (050_ZCA_…_P) installed as plain paks: ZC Unlocked only registers an add-on from its folder with the addon.ini, so nothing they add shows up in game`
+    + ((mod.deployed || []).length ? ', and the copies in ~mods only take up space' : '') + '. Click to reinstall '
+    + (g.ids.length > 1 ? `all ${g.ids.length} entries from this download (${zcaLabels(g).join(', ')})` : 'it')
+    + ' as a ZC Unlocked add-on — the paks in ~mods are removed once the add-on is installed.';
+  el.addEventListener('click', () => reinstallZca(g, zcaSource(g)));
+  return el;
+}
+
+// Install notes worth seeing on the row (files the install did not take,
+// …) — not the states the chips already show.
+const NOTE_SKIP_RE = /^(Not in the game: another copy of this add-on is at |Needs ZC Unlocked — install it first|ZC Unlocked add-on pak without addon\.ini)/;
+function buildNotesChip(mod) {
+  const notes = (mod.warnings || []).filter((w) => !NOTE_SKIP_RE.test(w));
+  if (!notes.length) return null;
+  const el = document.createElement('span');
+  el.className = 'mod-badge notes-chip';
+  el.textContent = `ⓘ ${notes.length} note${notes.length === 1 ? '' : 's'}`;
+  el.title = notes.join('\n');
+  return el;
+}
+
+// "Reinstall as ZC Unlocked add-on" for one download's pak entries.
+//   source 'library' — the stored copies carry their addon.ini
+//   source 'nexus'   — the Files page of its Nexus mod opens in the panel (any
+//                      account) and the player presses "Mod Manager Download"
+//                      on the add-on edition there
+//   source 'file'    — pick the add-on edition's archive
+async function reinstallZca(g, source) {
+  const list = zcaLabels(g).join(', ');
+  const how = source === 'library' ? 'from the stored copies (they carry their addon.ini)'
+    : source === 'nexus' ? `from its Nexus page (mod ${g.origin.modId}) — the Files page opens and you press “Mod Manager Download” on the add-on edition`
+      : 'from the add-on edition’s archive you pick next (the one with addon.ini)';
+  if (!window.confirm(`Reinstall ${g.ids.length === 1 ? list : `these ${g.ids.length} entries (${list})`} as a ZC Unlocked add-on, ${how}?\n\n`
+    + 'The add-on is installed first; only then are the old pak entries and their copies in ~mods removed. Close the game first.')) return;
+  try {
+    const res = await call('reinstallZca', g.ids, source);
+    if (!res) return;
+    if (res.opened === 'embed') {
+      openNexusDownload(res.name || g.names[0], res.url);
+      toast('Press “Mod Manager Download” on the add-on edition’s file — the reinstall finishes when the download arrives.', 'info', 9000);
+    }
+    if (res.state) { state = res.state; render(); }
+  } finally {
+    progressToastIdle();
+  }
+}
+
+function renderZcaBanner() {
+  const box = $('#zca-banner');
+  if (!box) return;
+  const groups = (state && state.zcaMigration) || [];
+  box.innerHTML = '';
+  box.classList.toggle('hidden', !groups.length);
+  for (const g of groups) {
+    const row = document.createElement('div');
+    row.className = 'zca-banner-row';
+    const text = document.createElement('span');
+    text.className = 'zca-banner-text';
+    const size = g.bytes ? ` (${zcaSize(g.bytes)})` : '';
+    const labels = zcaLabels(g);
+    text.textContent = `⚠ ${g.ids.length === 1 ? `${labels[0]} is a ZC Unlocked add-on` : `${labels.join(', ')} are ZC Unlocked add-ons`} installed as plain paks${size} — ZC Unlocked never registers ${g.ids.length === 1 ? 'it' : 'them'} that way${g.inGame ? ', and the copies in ~mods only take up space' : ''}. Reinstall as a ZC Unlocked add-on:`;
+    row.appendChild(text);
+    const btn = (label, source, title) => {
+      const b = document.createElement('button');
+      b.className = 'btn tiny';
+      b.textContent = label;
+      b.title = title;
+      b.addEventListener('click', () => reinstallZca(g, source));
+      row.appendChild(b);
+    };
+    if (g.fromLibrary) btn('↻ From the stored copy', 'library', 'The stored copies carry their addon.ini — reinstall from them, nothing to download.');
+    if (g.origin && g.origin.type === 'nexus') btn('⇩ From Nexus…', 'nexus', `Open the Files page of Nexus mod ${g.origin.modId}: press “Mod Manager Download” on the add-on edition and it is reinstalled from that file.`);
+    btn('📂 Choose archive…', 'file', 'Pick the add-on edition’s archive (the one with addon.ini in each add-on folder).');
+    box.appendChild(row);
+  }
+}
+
 function renderMods() {
   const list = $('#mod-list');
   list.innerHTML = '';
+  renderZcaBanner();
   $('#mods-empty').classList.toggle('hidden', state.mods.length > 0);
 
   for (const mod of state.mods) {
@@ -381,7 +559,9 @@ function renderMods() {
     meta.className = 'mod-meta';
     const parts = [
       `${mod.files.length} file${mod.files.length === 1 ? '' : 's'}`,
-      mod.loadPriority != null ? `priority ${mod.loadPriority}` : null,
+      mod.loadPriority != null
+        ? `priority ${mod.loadPriority}${state.settings.keepOriginalPakNames ? ' (not applied)' : ''}`
+        : null,
       mod.modType === 'ue4ss-mod' && mod.ue4ssFolder ? `folder ${mod.ue4ssFolder}` : null,
       mod.modType === 'zcu-addon' && mod.addonFolder
         ? (mod.addonRoot === 'mods' ? `add-on pack ue4ss\\Mods\\${mod.addonFolder}` : `add-on folder ${mod.addonFolder}`) : null,
@@ -574,8 +754,14 @@ function renderMods() {
     row.append(badge, srcBadge, main, flag);
     if (eaChip) row.appendChild(eaChip);
     if (zcChip) row.appendChild(zcChip);
+    const zcuChip = buildZcuChip(mod);
+    if (zcuChip) row.appendChild(zcuChip);
     if (rtChip) row.appendChild(rtChip);
     if (buildChip) row.appendChild(buildChip);
+    const zcaChip = buildZcaChip(mod);
+    if (zcaChip) row.appendChild(zcaChip);
+    const notesChip = buildNotesChip(mod);
+    if (notesChip) row.appendChild(notesChip);
     if (updateEl) row.appendChild(updateEl);
     row.append(toggle, actions);
     list.appendChild(row);
@@ -717,15 +903,23 @@ function renderOrder() {
   list.innerHTML = '';
   const mods = orderableMods();
   $('#order-empty').classList.toggle('hidden', mods.length > 0);
+  // "Keep original pak file names" on: the game orders ~mods by file name,
+  // so the list is shown (and kept) but marked as not applied, and locked.
+  const originalNames = !!(state && state.settings.keepOriginalPakNames);
+  $('#order-original-note').classList.toggle('hidden', !originalNames || !mods.length);
+  if (originalNames) pendingOrder = null;
+  const pakName = (m) => (m.files || []).map((f) => f.libraryRelative.split(/[\\/]/).pop())
+    .filter((n) => /\.(pak|utoc|ucas)$/i.test(n)).sort((x, y) => x.toLowerCase().localeCompare(y.toLowerCase()))[0] || '';
   const order = pendingOrder
     ? pendingOrder.map((id) => mods.find((m) => m.id === id)).filter(Boolean)
     : mods;
 
   order.forEach((mod, idx) => {
     const row = document.createElement('div');
-    row.className = `order-row${mod.enabled ? '' : ' disabled-mod'}`;
-    row.draggable = true;
+    row.className = `order-row${mod.enabled ? '' : ' disabled-mod'}${originalNames ? ' order-off' : ''}`;
+    row.draggable = !originalNames;
     row.dataset.id = mod.id;
+    if (originalNames) row.title = 'Not applied while original names are kept — the game loads ~mods alphabetically by file name.';
 
     const grip = document.createElement('span');
     grip.className = 'order-grip';
@@ -738,7 +932,9 @@ function renderOrder() {
     name.textContent = mod.name;
     const hint = document.createElement('span');
     hint.className = 'order-hint';
-    hint.textContent = idx === order.length - 1 ? 'loads last — wins conflicts' : '';
+    hint.textContent = originalNames
+      ? `not applied · file ${pakName(mod)}`
+      : (idx === order.length - 1 ? 'loads last — wins conflicts' : '');
     row.append(grip, num, name, hint);
 
     row.addEventListener('dragstart', (e) => {
@@ -750,14 +946,16 @@ function renderOrder() {
     list.appendChild(row);
   });
 
-  $('#btn-apply-order').disabled = !pendingOrder;
-  $('#btn-rollback-order').disabled = !(state && state.lastOrderBackup);
+  $('#btn-apply-order').disabled = !pendingOrder || originalNames;
+  $('#btn-rollback-order').disabled = !(state && state.lastOrderBackup) || originalNames;
+  $('#btn-suggest-order').disabled = originalNames;
 }
 
 $('#order-list').addEventListener('dragover', onOrderDragOver);
 
 function onOrderDragOver(e) {
   e.preventDefault();
+  if (state && state.settings.keepOriginalPakNames) return; // order locked
   const dragging = $('#order-list .order-row.dragging');
   if (!dragging) return;
   const rows = $$('#order-list .order-row:not(.dragging)');
@@ -1407,8 +1605,10 @@ function renderSettings() {
   }
   $('#set-7z-path').textContent = state.settings.sevenZipPath
     || (state.sevenZipBundled ? 'Bundled with Mod Command (7-Zip 25.01)' : (state.sevenZip ? 'Auto-detected' : 'Auto-detect (not found)'));
+  $('#set-theme').value = currentTheme();
   $('#chk-close-on-launch').checked = !!state.settings.closeOnLaunch;
   $('#chk-reduced-motion').checked = !!state.settings.reducedMotion;
+  $('#chk-keep-pak-names').checked = !!state.settings.keepOriginalPakNames;
   // Game update freeze
   const uf = state.updateFreeze || {};
   const chk = $('#chk-update-freeze');
@@ -1496,19 +1696,45 @@ $('#btn-browse-7z').addEventListener('click', async () => {
   if (data) { state = data; render(); }
 });
 // Sign-in runs in the user's own browser; the app just waits for the callback.
-async function runNexusSignIn(btn, after) {
+// While it waits, the same button cancels the wait; after 30 seconds a hint
+// says where the missing step is.
+// opts.join: called by code, not by a press of this button — a sign-in that
+// is already waiting is joined (its outcome returned), never canceled.
+let signInCanceledByUser = false;
+async function runNexusSignIn(btn, after, opts = {}) {
+  if (btn.dataset.signinWaiting === '1') {
+    if (opts.join) {
+      const res = await window.zc.nexusSignIn();
+      return !!(res && res.ok);
+    }
+    signInCanceledByUser = true;
+    window.zc.nexusSignInCancel();
+    return false;
+  }
+  signInCanceledByUser = false;
   const label = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = 'Waiting for your browser…';
+  btn.dataset.signinWaiting = '1';
+  btn.textContent = '✕ Cancel sign-in';
+  btn.title = 'Stop waiting for the browser sign-in';
+  const hint = setTimeout(() => {
+    toast('Still waiting for Nexus Mods — finish the sign-in in your browser (approve Mod Command there), or press “Cancel sign-in”.', 'info', 9000);
+  }, 30000);
   try {
-    const data = await call('nexusSignIn');
-    if (!data) return false;
-    state = data;
+    const res = await window.zc.nexusSignIn();
+    if (!res || !res.ok) {
+      // The user's own Cancel is not an error.
+      toast((res && res.error) || 'The Nexus Mods sign-in did not finish.', signInCanceledByUser ? 'info' : 'error', 6000);
+      return false;
+    }
+    state = res.data;
     render();
     if (after) after();
     toast(`Signed in to Nexus Mods — welcome, ${state.nexus.user.name}.`);
     return true;
   } finally {
+    clearTimeout(hint);
+    delete btn.dataset.signinWaiting;
+    btn.title = '';
     btn.disabled = false;
     btn.textContent = label;
   }
@@ -1669,7 +1895,7 @@ async function ue4ssSignInOrView(info) {
     toast('Sign in at Settings → Nexus Mods to install UE4SS for Star Wars Zero Company.', 'info', 9000);
     return null;
   }
-  const signedIn = await runNexusSignIn($('#btn-nexus-signin'));
+  const signedIn = await runNexusSignIn($('#btn-nexus-signin'), null, { join: true });
   if (!signedIn) return null;
   return runUe4ssInstall();
 }
@@ -1824,12 +2050,45 @@ async function offerZcsdkRuntime(needing) {
   }
   await installZcsdkRuntime();
 }
+// Applied at once, then saved (the save's render() finds it already applied).
+$('#set-theme').addEventListener('change', (e) => { applyTheme(e.target.value); saveSetting({ theme: currentTheme() }); });
 $('#chk-close-on-launch').addEventListener('change', (e) => saveSetting({ closeOnLaunch: e.target.checked }));
 $('#chk-reduced-motion').addEventListener('change', (e) => saveSetting({ reducedMotion: e.target.checked }));
+// Renames files in the game (every enabled pak mod is redeployed), so it has
+// its own call; a refusal (game running, a name two mods share) leaves the
+// switch where it was.
+$('#chk-keep-pak-names').addEventListener('change', async (e) => {
+  const on = e.target.checked;
+  e.target.disabled = true;
+  toast(on ? 'Switching pak files to their original names…' : 'Switching pak files back to load-order names…', 'info', 3000);
+  const before = !!(state && state.settings.keepOriginalPakNames);
+  pendingSettings.keepOriginalPakNames = on;
+  try {
+    const data = await call('setKeepPakNames', on);
+    delete pendingSettings.keepOriginalPakNames;
+    if (data) state = data; else if (state) state.settings.keepOriginalPakNames = before;
+    render();
+    e.target.checked = !!(state && state.settings.keepOriginalPakNames);
+  } finally {
+    delete pendingSettings.keepOriginalPakNames;
+    e.target.disabled = false;
+  }
+});
 
 async function saveSetting(patch) {
-  const data = await call('saveSettings', patch);
-  if (data) { state = data; render(); }
+  const before = {};
+  for (const k of Object.keys(patch)) before[k] = state && state.settings ? state.settings[k] : undefined;
+  Object.assign(pendingSettings, patch);
+  if (state && state.settings) Object.assign(state.settings, patch);
+  let data = null;
+  try {
+    data = await call('saveSettings', patch);
+  } finally {
+    for (const k of Object.keys(patch)) if (pendingSettings[k] === patch[k]) delete pendingSettings[k];
+  }
+  if (data) state = data;
+  else if (state && state.settings) for (const [k, v] of Object.entries(before)) if (!(k in pendingSettings)) state.settings[k] = v;
+  render();
 }
 
 // ------------------------------------------------------------------ actions
@@ -1889,7 +2148,7 @@ $('#btn-launch').addEventListener('click', async () => {
       'To take the update, turn the freeze off in Settings first.\n\n' +
       'Launch through Steam anyway?');
     if (!go) {
-      toast('Launch cancelled — use DIRECT LAUNCH to play on your current build.', 'info', 6000);
+      toast('Launch canceled — use DIRECT LAUNCH to play on your current build.', 'info', 6000);
       return;
     }
   }
@@ -2040,10 +2299,10 @@ function buildBrowseCard(m) {
   const pic = document.createElement('div');
   pic.className = 'browse-pic';
   const img = document.createElement('img');
-  img.src = m.picture || 'assets/mod-placeholder.svg';
+  img.src = m.picture || modPlaceholder();
   img.loading = 'lazy';
   img.alt = '';
-  img.addEventListener('error', () => { img.src = 'assets/mod-placeholder.svg'; }, { once: true });
+  img.addEventListener('error', () => { img.src = modPlaceholder(); }, { once: true });
   pic.appendChild(img);
 
   const body = document.createElement('div');
@@ -2742,8 +3001,63 @@ $$('[data-close-modal]').forEach((b) =>
 // process and installed (main.js). Faithful render — the page is shown untouched.
 // This panel surfaces download progress from the same events the install
 // pipeline already emits, and closes itself once the mod is installed.
-const nexusDl = { open: false, sawProgress: false, done: false, target: '' };
+const nexusDl = { open: false, sawProgress: false, done: false, target: '', challenge: false };
 const NEXUS_LOGIN_URL = 'https://users.nexusmods.com/auth/sign_in';
+
+// Panel diagnostics for the log and the support report (main.js /
+// lib/nexus-panel.js). Silent: a failure here never shows a toast.
+async function panelCall(fn, ...args) {
+  try {
+    const res = await window.zc[fn](...args);
+    return res && res.ok ? res.data : null;
+  } catch (_) { return null; }
+}
+function panelEvent(kind, d = {}) { panelCall('nexusPanelEvent', { kind, ...d }); }
+
+// Nexus sometimes serves its own "Something went wrong" page, or a page whose
+// scripts/styles it refused. The panel says so and offers Reload and Open in
+// browser; it never reloads by itself. Runs INSIDE the guest page, so it must
+// stay self-contained.
+function nexusErrorPageCheck() {
+  const t = (document.body && document.body.innerText) || '';
+  return /something went wrong/i.test(t) && /discover some new collections/i.test(t);
+}
+function showNexusTrouble(text) {
+  const box = $('#nexus-dl-trouble');
+  if (!box) return;
+  if (!text) { box.classList.add('hidden'); return; }
+  $('#nexus-dl-trouble-text').textContent = text;
+  box.classList.remove('hidden');
+}
+async function checkNexusPage(view) {
+  let url = '';
+  try { url = view.getURL(); } catch (_) {}
+  if (!/^https?:/i.test(url)) return;
+  let title = '';
+  try { title = view.getTitle(); } catch (_) {}
+  const challenge = /^just a moment/i.test(title);
+  if (challenge && !nexusDl.challenge) panelEvent('challenge', { url });
+  if (!challenge && nexusDl.challenge) panelEvent('challenge-passed', { url });
+  nexusDl.challenge = challenge;
+  if (/users\.nexusmods\.com\/auth/i.test(url)) panelEvent('signin-page', { url });
+  if (challenge) { showNexusTrouble(null); return; }
+  let oops = false;
+  try { oops = !!(await view.executeJavaScript(`(${nexusErrorPageCheck.toString()})()`, true)); } catch (_) {}
+  if (oops) {
+    panelEvent('oops', { url });
+    showNexusTrouble('Nexus Mods showed its “Something went wrong” page. Reload it, or open the page in your browser.');
+    return;
+  }
+  let id = null;
+  try { id = view.getWebContentsId(); } catch (_) {}
+  const errs = id ? await panelCall('nexusPanelPageErrors', id, false) : null;
+  if (errs && errs.refusedNexus >= errs.threshold) {
+    panelEvent('blocked', { url, count: errs.refusedNexus });
+    showNexusTrouble(`Parts of this Nexus Mods page didn’t load (${errs.refusedNexus} refused). Reload it, or open the page in your browser.`);
+    return;
+  }
+  showNexusTrouble(null);
+}
 
 function setNexusPill(text, kind) {
   const status = $('#nexus-dl-status');
@@ -2761,6 +3075,9 @@ function openNexusDownload(name, url, opts = {}) {
   if (!modal || !view) return;
   nexusDl.open = true; nexusDl.sawProgress = false; nexusDl.done = false; nexusDl.target = url;
   nexusDl.viewOnly = !!opts.view;
+  nexusDl.challenge = false;
+  showNexusTrouble(null);
+  panelEvent('open', { target: url, view: !!opts.view });
   const title = $('#nexus-dl-title');
   if (title) title.textContent = opts.view ? 'NEXUS PAGE' : 'NEXUS DOWNLOAD';
   $('#nexus-dl-sub').textContent = name || 'Nexus Mods';
@@ -2783,6 +3100,7 @@ function openNexusDownload(name, url, opts = {}) {
 window.openNexusDownload = openNexusDownload; // reachable for verification harness
 
 function closeNexusDownload() {
+  if (nexusDl.open) panelEvent('close');
   nexusDl.open = false;
   const modal = $('#nexus-dl-modal');
   const view = $('#nexus-dl-view');
@@ -2894,6 +3212,12 @@ async function refreshNexusAccount() {
     res = await view.executeJavaScript(`(${nexusPageState.toString()})()`, true);
   } catch (_) { return; }
   if (!res) return;
+  // The page said neither: the session's account cookie (by name) fills in.
+  if (res.state === 'unknown') {
+    const sig = await panelCall('nexusPanelCookieSignal');
+    if (sig) { res.state = 'in'; res.signal = `account cookie ${sig}`; }
+  }
+  if (nexusDl.open) { let u = ''; try { u = view.getURL(); } catch (_) {} panelEvent('signed-in', { state: res.state, signal: res.signal, url: u }); }
   res.loggedIn = res.state === 'in';
   if (res.loggedIn) {
     chip.textContent = res.name ? `◈ ${res.name}` : '◈ Signed in';
@@ -2925,6 +3249,24 @@ async function refreshNexusAccount() {
       setNexusPill('Awaiting “Mod Manager Download”', '');
     }
     refreshNexusAccount();
+    if (nexusDl.open) checkNexusPage(view);
+  });
+  // A new page in the panel starts a fresh count of refused subresources.
+  // (Nexus also changes pages in place — the same fresh count then.)
+  const freshPageCount = () => {
+    let id = null;
+    try { id = view.getWebContentsId(); } catch (_) {}
+    if (id) panelCall('nexusPanelPageErrors', id, true);
+  };
+  view.addEventListener('did-navigate', freshPageCount);
+  view.addEventListener('did-navigate-in-page', (e) => { if (e.isMainFrame) freshPageCount(); });
+  const tReload = $('#nexus-dl-trouble-reload');
+  if (tReload) tReload.addEventListener('click', () => { showNexusTrouble(null); try { view.reload(); } catch (_) {} });
+  const tExt = $('#nexus-dl-trouble-ext');
+  if (tExt) tExt.addEventListener('click', () => {
+    let u = 'about:blank';
+    try { u = view.getURL(); } catch (_) {}
+    if (u && u.startsWith('http')) call('openExternal', u);
   });
   const reload = $('#nexus-dl-reload');
   if (reload) reload.addEventListener('click', () => { try { view.reload(); } catch (_) {} });
@@ -3072,12 +3414,13 @@ async function openImportModal(opts = {}) {
     meta.className = 'import-meta';
     meta.textContent = `${TYPE_LABEL[c.modType] || c.modType} · ${c.files.length} file${c.files.length === 1 ? '' : 's'} · ${c.location}${c.active ? '' : ' · currently inactive'}`;
     info.append(name, meta);
-    // A ZC Unlocked add-on that is also somewhere else ZC Unlocked loads from.
+    // A ZC Unlocked add-on whose pack folder is also somewhere else ZC
+    // Unlocked looks (it uses only one copy of a folder).
     if (c.duplicateOf && c.duplicateOf.length) {
       const dup = document.createElement('div');
       dup.className = 'import-meta warn';
-      dup.textContent = `⚠ Duplicate — the same add-on is also at ${c.duplicateOf
-        .map((d) => `${d.location}${d.managed ? ` (managed as “${d.name}”)` : ''}${d.active ? '' : ' (off)'}`).join(', ')}. ZC Unlocked loads every copy that is on.`;
+      dup.textContent = `⚠ Duplicate — the same add-on folder is also at ${c.duplicateOf
+        .map((d) => `${d.location}${d.managed ? ` (managed as “${d.name}”)` : ''}${d.active ? '' : ' (off)'}`).join(', ')}. ZC Unlocked uses only one copy of a folder (the higher version=, then the newer addon.ini) — keep one.`;
       info.appendChild(dup);
     }
     row.append(check, info);
@@ -3879,7 +4222,7 @@ $('#btn-fomod-cancel').addEventListener('click', () => {
   $('#fomod-modal').classList.add('hidden');
   fomodWiz = null;
   call('fomodCancel', sessionId);
-  toast('Guided install cancelled — nothing was installed.');
+  toast('Guided install canceled — nothing was installed.');
   processFomodQueue();
 });
 

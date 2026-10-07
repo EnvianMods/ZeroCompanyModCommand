@@ -3,7 +3,13 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 const invoke = (channel, payload) => ipcRenderer.invoke(channel, payload);
 
+// The saved theme, read synchronously once so src/theme-boot.js can set
+// <html data-theme> before the first paint (no flash of the other theme).
+let initialTheme = null;
+try { initialTheme = ipcRenderer.sendSync('theme-sync'); } catch (_) { /* the default applies */ }
+
 contextBridge.exposeInMainWorld('zc', {
+  theme: initialTheme,
   getState: () => invoke('get-state'),
   browseGamePath: () => invoke('browse-game-path'),
   browseToolPath: (opts) => invoke('browse-tool-path', opts),
@@ -14,7 +20,10 @@ contextBridge.exposeInMainWorld('zc', {
   setModEnabled: (id, enabled, force) => invoke('set-mod-enabled', { id, enabled, force }),
   uninstallMod: (id, force) => invoke('uninstall-mod', { id, force }),
   renameMod: (id, name) => invoke('rename-mod', { id, name }),
+  // ZC Unlocked add-on paks installed as plain paks → reinstall as add-ons (source: library | file | nexus)
+  reinstallZca: (ids, source) => invoke('reinstall-zca', { ids, source }),
   useOwnUe4ssFolder: (id, force) => invoke('use-own-ue4ss-folder', { id, force }),
+  setKeepPakNames: (on) => invoke('set-keep-pak-names', { on }),
   dismissUe4ssFolderNotice: (id) => invoke('dismiss-ue4ss-folder-notice', { id }),
   applyLoadOrder: (orderedIds) => invoke('apply-load-order', { orderedIds }),
   previewLoadOrder: (orderedIds) => invoke('preview-load-order', { orderedIds }),
@@ -22,6 +31,9 @@ contextBridge.exposeInMainWorld('zc', {
   applyUe4ssOrder: (orderedIds) => invoke('apply-ue4ss-order', { orderedIds }),
   confirmModBuild: (id) => invoke('confirm-mod-build', { id }),
   supportReport: () => invoke('support-report'),
+  nexusPanelEvent: (ev) => invoke('nexus-panel-event', ev),
+  nexusPanelPageErrors: (webContentsId, reset) => invoke('nexus-panel-page-errors', { webContentsId, reset }),
+  nexusPanelCookieSignal: () => invoke('nexus-panel-cookie-signal'),
   saveSupportReport: () => invoke('save-support-report'),
   setAllEnabled: (enabled, force) => invoke('set-all-enabled', { enabled, force }),
   scanManagerSources: () => invoke('scan-manager-sources'),
@@ -48,6 +60,7 @@ contextBridge.exposeInMainWorld('zc', {
   // Nexus OAuth sign-in. No credential ever crosses this bridge: the browser
   // does the login and the tokens stay in the main process.
   nexusSignIn: () => invoke('nexus-sign-in'),
+  nexusSignInCancel: () => invoke('nexus-sign-in-cancel'),
   nexusSignOut: () => invoke('nexus-sign-out'),
   nexusRefreshUser: () => invoke('nexus-refresh-user'),
   nexusQuota: () => invoke('nexus-quota'),

@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - run: npm ci
       # --publish never: on tag builds electron-builder otherwise tries to
       # publish to GitHub itself and fails without a token; the attach step

@@ -1,5 +1,172 @@
 # Zero Company Mod Command — Changelog
 
+## v1.9.22 (unreleased)
+
+**ZC Unlocked add-ons follow the official drop-in add-on guide**
+- ZC Unlocked 1.4.73+ knows an add-on pack by its **folder name only** and,
+  when the same folder is in the game twice, uses ONE copy itself (the higher
+  `version=`, then the newer `addon.ini`, then the copy in `addons\`) — a
+  copy with `enabled=0` hides the pack completely. 1.0.12 installed a second
+  copy switched off (`enabled=0`) into `ue4ss\Mods\ZCUnlocked\addons\` when
+  you already had the add-on in `ue4ss\Mods\<Pack>\`; with the same version
+  that new copy won ZC Unlocked's pick and hid your working add-on. Fixed:
+  - Installing an add-on whose folder is already in the game never creates a
+    second copy. A copy Mod Command manages is updated in place (as before).
+    A copy you put there by hand (`ue4ss\Mods\<Pack>\` or
+    `ZCUnlocked\addons\<Pack>\`) is taken over in place and updated with the
+    new files — the copy that was there is kept in ⧗ versions; an older
+    incoming version only goes to ⧗ versions. While the game runs, or when
+    that copy can't be read, the install is refused, naming the copy and
+    pointing to Import, and nothing changes.
+  - Refused with a clear message (nothing changes): an add-on whose folder is
+    already in the game as a UE4SS Lua-mod pack (`Scripts\main.lua` beside
+    `addon.ini`), or a Lua-mod pack whose folder is already an add-on — the
+    same add-on as two mod types, keep one; a copy inside another mod's folder
+    (`ue4ss\Mods\<X>\<Pack>\`, `ue4ss\Mods\<X>\addons\<Pack>\`) — move it to
+    `ue4ss\Mods\<Pack>\` and Import it; a folder that is already in the game
+    more than once. A UE4SS mod never lands in a bare add-on pack's folder.
+  - `name=` in `addon.ini` no longer makes two different folders "the same
+    add-on" — they are different add-ons to ZC Unlocked and both load.
+    Diagnostics mentions them only as info.
+  - Switching an add-on on is no longer refused because another copy is on.
+    Switching it off while another copy of its folder is in the game takes
+    Mod Command's copy out (kept in the library) instead of leaving it there
+    with `enabled=0`. An add-on that was waiting for ZC Unlocked is simply
+    deployed on.
+  - Startup: a switched-off copy 1.0.12 left in `ZCUnlocked\addons\` beside
+    another copy of the same folder is taken out (only Mod Command's own
+    files), the entry stays in the library switched off, and a one-time
+    notice says so. Your copy is not touched. The old "would load both"
+    warnings are removed.
+- Mod Command now sees ZC Unlocked packs in all four places ZC Unlocked looks:
+  `ZCUnlocked\addons\<Pack>\`, `ue4ss\Mods\<Pack>\` (bare, or a Lua-mod
+  pack), `ue4ss\Mods\<X>\<Pack>\` and `ue4ss\Mods\<X>\addons\<Pack>\`.
+  Diagnostics lists every folder that is in the game more than once, with
+  each copy's version and on/off state, which copy ZC Unlocked uses and why,
+  and warns when that copy has `enabled=0` (the add-on is hidden). Import
+  marks a row as a duplicate only for the same folder.
+- The guide's recommended release layout — `ue4ss/Mods/<Pack>/` with
+  `addon.ini`, the `050_ZCA_*_P` paks beside it, a do-nothing
+  `Scripts/main.lua` and a `modinfo.json` — installs as a UE4SS mod into
+  `ue4ss\Mods\<Pack>\` under the pack's folder name (whatever the
+  `modinfo.json` title says), the paks beside `addon.ini`, never in `~mods`;
+  also when the zip nests it under `SWZeroCompany/Binaries/Win64/` or in a
+  wrapper folder (now covered by tests). README: add-on notes per the guide.
+
+**More ZC Unlocked add-on fixes**
+- Applying a squad profile no longer stops at a ZC Unlocked add-on that can't
+  come on because ZC Unlocked is missing: the add-on stays off with a warning,
+  and the rest of the profile and the load order still apply.
+- Every install path (one-click Nexus, GitHub, nxm links, updates, drops) now
+  says when a ZC Unlocked add-on is waiting for ZC Unlocked, under the mod's
+  current name.
+- Mod Command reads ZC Unlocked's own `settings.ini` (`addons`,
+  `addons_mods`, `addon_<Folder>`) and its version. An add-on that is on
+  here but that ZC Unlocked won't load gets a chip saying what to change
+  (off in the ZC Unlocked Menu, add-ons switched off, `addons_mods=0`, or
+  ZC Unlocked older than 1.4.73), and Diagnostics warns about it.
+- Disable all checks an add-on's files first when another copy of it is in
+  the game; a failed add-on enable no longer leaves a switched-off copy next
+  to another copy.
+- ZC Unlocked add-on paks (`050_ZCA_*_P`) that come without an `addon.ini`
+  are kept in the library switched off, with a note, instead of being put in
+  `~mods` where they never register.
+- Installs no longer drop files without a word: skipped files are named, and
+  the mod's row shows an "ⓘ notes" chip.
+- Add-ons that older versions installed as plain paks are flagged with a
+  banner, a row chip and a Diagnostics warning naming the add-on (for example
+  "HeavyArmor" (050_ZCA_HeavyArmor_P)). **Reinstall as ZC Unlocked add-on**
+  fixes them from the stored copy, an archive you pick, or Nexus (the mod's
+  Files page opens and you press "Mod Manager Download" on the add-on
+  edition yourself — Premium too, so the right file is the one you
+  pick). The add-on is installed first; only then
+  are the old paks removed. Refused while the game runs; nothing is removed
+  if the install fails.
+
+**Keep original pak file names (optional)**
+- New setting: Settings → Behavior → **Keep original pak file names** (off by
+  default). When on, pak and IoStore mods keep the file names they shipped
+  with in `~mods` instead of load-order names. The game then loads them
+  alphabetically by file name, so the load-order list is kept but marked
+  "not applied" and locked. Two mods that ship a file with the same name
+  can't both be enabled — Mod Command names the mod that already holds it.
+  Switching redeploys your enabled pak mods (close the game first); if
+  anything goes wrong, every mod is put back the way it was. Diagnostics
+  flags mods whose files aren't under the names the current setting gives
+  them.
+
+**Nexus Mods identification**
+- Every request Mod Command sends to Nexus Mods — the API, sign-in, downloads,
+  thumbnails and the embedded Nexus panel — now names the app and its version
+  (`Application-Name: Zero Company Mod Command`, `Application-Version:` the
+  public version shown on the Nexus page, e.g. 1.0.12), as Nexus Mods
+  requires. The embedded panel keeps Electron's own browser identity, which
+  names Mod Command and its version.
+
+**Embedded Nexus panel**
+- When Nexus Mods shows its "Something went wrong" page, or refuses many parts
+  of a page, the panel says so and offers **Reload** and **Open in browser**.
+  It never reloads on its own.
+- The signed-in check also reads the panel's Nexus account cookie (by name
+  only) when the page itself doesn't say.
+- The support report has a new "Nexus panel" section: your account type
+  (Premium / Free) and what happened in the last three panel sessions
+  (signed in or not, sign-in page visited, Cloudflare checks, error pages,
+  refused page parts, downloads caught). Addresses keep only the site and
+  path; no query strings, no cookie values.
+
+**Sign in with Nexus Mods**
+- While Mod Command waits for you to finish signing in in your browser, the
+  button turns into **Cancel sign-in**, and after 30 seconds a hint tells you
+  what's left to do.
+
+**Themes**
+- New **Settings → Themes** section, a thank-you to dedicated supporters:
+  pick **Mod Command** (the current look, still the default for everyone) or
+  the new optional **Bounty Hunter** theme (armor green, ochre gold and rust on
+  scorched gunmetal, stencil headings, hazard stripes). Applies instantly, is
+  saved with your settings across restarts and updates, and an unknown value
+  falls back to Mod Command.
+
+**Fixes**
+- A ZC Unlocked add-on that can't come back on (ZC Unlocked missing) no
+  longer removes a file of it you changed in the game.
+- An add-on waiting for ZC Unlocked, or one you switch on, never overwrites a
+  copy of that add-on already in its folder that Mod Command doesn't manage —
+  it tells you instead.
+- Profiles switch mods off before they switch others on, so two mods that ship
+  the same pak file name no longer stop a profile when **Keep original pak
+  file names** is on.
+- "Reinstall as ZC Unlocked add-on" from Nexus only waits while its Nexus
+  panel is open; a later ordinary download of the same mod installs normally.
+- The UE4SS install's "Sign in now?" no longer cancels a sign-in that is
+  already waiting, and **Cancel sign-in** isn't shown as an error.
+- The Nexus panel only opens pop-up links itself when they really are Nexus
+  Mods pages, and **Open in browser** now also works on the Nexus sign-in
+  and account pages.
+- When an update fails and the version before it can't be put back
+  completely, nothing is thrown away: that version stays in ⧗ versions and
+  missing files come back at the next start. Updating an add-on you placed
+  yourself keeps managing it in that case instead of forgetting it.
+- "Reinstall as ZC Unlocked add-on" from stored copies, and add-ons installed
+  switched off, never overwrite a copy of the add-on you placed yourself.
+- Files another mod put in an add-on's folder stay that mod's when the
+  add-on is imported or updated.
+- Updating an add-on you placed in `ue4ss\Mods\<Pack>\` while your ZC
+  Unlocked doesn't load packs there (older than 1.4.73, or `addons_mods=0`)
+  installs the update in `ue4ss\Mods\ZCUnlocked\addons\<Pack>\` and tells
+  you; a switched-off add-on lane or menu switch is named too.
+- With **Keep original pak file names** on, a pak you put in `~mods`
+  yourself with the same bytes stays yours: it's used, and never removed
+  when the mod is switched off or uninstalled.
+- The Theme and Keep-original-pak-names switches no longer flicker back while
+  they save.
+
+**Under the hood**
+- Electron 33 → 44 (Chromium 152). Release builds encrypt the Nexus panel's
+  sign-in cookies at rest and turn off `NODE_OPTIONS` / `--inspect`.
+  Building from source now needs Node.js 22.12 or newer.
+
 ## v1.9.21 (2026-10-04)
 
 Released as public 1.0.12.
@@ -243,10 +410,10 @@ Released as public 1.0.11.
   stopped when the server allows it (Nexus does), otherwise starts again
   from the beginning, and the strip says so.
 
-**Nexus download panel: signing in is recognised again**
+**Nexus download panel: signing in is recognized again**
 - After signing in to Nexus in the built-in download panel, Mod Command kept
   showing "◈ Sign in to Nexus": Nexus changed how its pages show that you are
-  signed in, so the panel no longer recognised it. It now reads the page's own
+  signed in, so the panel no longer recognized it. It now reads the page's own
   signed-in flag, your account picture and name in the header, or a visible
   log-out button — and never mistakes the guest profile Nexus shows to
   signed-out visitors for an account.
@@ -382,7 +549,7 @@ Ships together with v1.9.19 and v1.9.18 above and v1.9.16 and v1.9.15 below as p
   with the Mod SDK is never replaced. Kept builds in ⧗ Versions carry that
   copy with them.
 - The runtime's signature files no longer make a stock UE4SS look like one
-  Mod Command cannot identify — it is still recognised as the stock build.
+  Mod Command cannot identify — it is still recognized as the stock build.
 
 ## v1.9.16 (2026-09-27)
 
@@ -607,7 +774,7 @@ Ships together with v1.9.13 below as public 1.0.9.
   into `~mods`. The result was a mod that half-worked — the files mounted, so
   replacements of existing things could show up, but the game never read the
   plugin's own registry, so everything the mod ADDS (new outfits, new weapons)
-  simply never appeared in the armoury. That is exactly the failure the mod's
+  simply never appeared in the armory. That is exactly the failure the mod's
   own readme warns about, and it was easy to mistake for a broken mod.
 - These now install as their own type, **PLUGIN**. The whole folder goes to
   `SWZeroCompany\Mods\<Name>\` exactly as shipped — nothing renamed, no load
@@ -887,7 +1054,7 @@ Ships together with v1.9.13 below as public 1.0.9.
 ## v1.8.1 (2026-09-05)
 
 **Link mods now matches UE4SS mods, and lets you confirm every match**
-- The **Link mods** button (Command Deck toolbar) used to only recognise mods
+- The **Link mods** button (Command Deck toolbar) used to only recognize mods
   Nexus indexes by file hash — in practice loose-pak uploads — so it couldn't
   identify UE4SS mods at all. It now also searches Nexus by name, so mods like
   script and DLL tweaks get candidate sources too.

@@ -15,7 +15,8 @@
   "author": "Fulme",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^33.0.0",
+    "@electron/fuses": "1.8.0",
+    "electron": "^44.6.0",
     "electron-builder": "^25.1.8"
   },
   "dependencies": {
@@ -32,8 +33,10 @@
       "preload.js",
       "lib/**/*",
       "src/**/*",
-      "package.json"
+      "package.json",
+      "RELEASE_VERSION.txt"
     ],
+    "afterPack": "build/after-pack.js",
     "extraResources": [
       {
         "from": "tools",

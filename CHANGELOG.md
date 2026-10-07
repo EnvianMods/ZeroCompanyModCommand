@@ -142,7 +142,25 @@
 - The UE4SS install's "Sign in now?" no longer cancels a sign-in that is
   already waiting, and **Cancel sign-in** isn't shown as an error.
 - The Nexus panel only opens pop-up links itself when they really are Nexus
-  Mods pages.
+  Mods pages, and **Open in browser** now also works on the Nexus sign-in
+  and account pages.
+- When an update fails and the version before it can't be put back
+  completely, nothing is thrown away: that version stays in ⧗ versions and
+  missing files come back at the next start. Updating an add-on you placed
+  yourself keeps managing it in that case instead of forgetting it.
+- "Reinstall as ZC Unlocked add-on" from stored copies, and add-ons installed
+  switched off, never overwrite a copy of the add-on you placed yourself.
+- Files another mod put in an add-on's folder stay that mod's when the
+  add-on is imported or updated.
+- Updating an add-on you placed in `ue4ss\Mods\<Pack>\` while your ZC
+  Unlocked doesn't load packs there (older than 1.4.73, or `addons_mods=0`)
+  installs the update in `ue4ss\Mods\ZCUnlocked\addons\<Pack>\` and tells
+  you; a switched-off add-on lane or menu switch is named too.
+- With **Keep original pak file names** on, a pak you put in `~mods`
+  yourself with the same bytes stays yours: it's used, and never removed
+  when the mod is switched off or uninstalled.
+- The Theme and Keep-original-pak-names switches no longer flicker back while
+  they save.
 
 **Under the hood**
 - Electron 33 → 44 (Chromium 152). Release builds encrypt the Nexus panel's

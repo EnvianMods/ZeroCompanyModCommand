@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('zc', {
   uninstallMod: (id, force) => invoke('uninstall-mod', { id, force }),
   renameMod: (id, name) => invoke('rename-mod', { id, name }),
   useOwnUe4ssFolder: (id, force) => invoke('use-own-ue4ss-folder', { id, force }),
+  setKeepPakNames: (on) => invoke('set-keep-pak-names', { on }),
   dismissUe4ssFolderNotice: (id) => invoke('dismiss-ue4ss-folder-notice', { id }),
   applyLoadOrder: (orderedIds) => invoke('apply-load-order', { orderedIds }),
   previewLoadOrder: (orderedIds) => invoke('preview-load-order', { orderedIds }),

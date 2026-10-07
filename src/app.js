@@ -381,7 +381,9 @@ function renderMods() {
     meta.className = 'mod-meta';
     const parts = [
       `${mod.files.length} file${mod.files.length === 1 ? '' : 's'}`,
-      mod.loadPriority != null ? `priority ${mod.loadPriority}` : null,
+      mod.loadPriority != null
+        ? `priority ${mod.loadPriority}${state.settings.keepOriginalPakNames ? ' (not applied)' : ''}`
+        : null,
       mod.modType === 'ue4ss-mod' && mod.ue4ssFolder ? `folder ${mod.ue4ssFolder}` : null,
       mod.modType === 'zcu-addon' && mod.addonFolder
         ? (mod.addonRoot === 'mods' ? `add-on pack ue4ss\\Mods\\${mod.addonFolder}` : `add-on folder ${mod.addonFolder}`) : null,
@@ -717,15 +719,23 @@ function renderOrder() {
   list.innerHTML = '';
   const mods = orderableMods();
   $('#order-empty').classList.toggle('hidden', mods.length > 0);
+  // "Keep original pak file names" on: the game orders ~mods by file name,
+  // so the list is shown (and kept) but marked as not applied, and locked.
+  const originalNames = !!(state && state.settings.keepOriginalPakNames);
+  $('#order-original-note').classList.toggle('hidden', !originalNames || !mods.length);
+  if (originalNames) pendingOrder = null;
+  const pakName = (m) => (m.files || []).map((f) => f.libraryRelative.split(/[\\/]/).pop())
+    .filter((n) => /\.(pak|utoc|ucas)$/i.test(n)).sort((x, y) => x.toLowerCase().localeCompare(y.toLowerCase()))[0] || '';
   const order = pendingOrder
     ? pendingOrder.map((id) => mods.find((m) => m.id === id)).filter(Boolean)
     : mods;
 
   order.forEach((mod, idx) => {
     const row = document.createElement('div');
-    row.className = `order-row${mod.enabled ? '' : ' disabled-mod'}`;
-    row.draggable = true;
+    row.className = `order-row${mod.enabled ? '' : ' disabled-mod'}${originalNames ? ' order-off' : ''}`;
+    row.draggable = !originalNames;
     row.dataset.id = mod.id;
+    if (originalNames) row.title = 'Not applied while original names are kept — the game loads ~mods alphabetically by file name.';
 
     const grip = document.createElement('span');
     grip.className = 'order-grip';
@@ -738,7 +748,9 @@ function renderOrder() {
     name.textContent = mod.name;
     const hint = document.createElement('span');
     hint.className = 'order-hint';
-    hint.textContent = idx === order.length - 1 ? 'loads last — wins conflicts' : '';
+    hint.textContent = originalNames
+      ? `not applied · file ${pakName(mod)}`
+      : (idx === order.length - 1 ? 'loads last — wins conflicts' : '');
     row.append(grip, num, name, hint);
 
     row.addEventListener('dragstart', (e) => {
@@ -750,14 +762,16 @@ function renderOrder() {
     list.appendChild(row);
   });
 
-  $('#btn-apply-order').disabled = !pendingOrder;
-  $('#btn-rollback-order').disabled = !(state && state.lastOrderBackup);
+  $('#btn-apply-order').disabled = !pendingOrder || originalNames;
+  $('#btn-rollback-order').disabled = !(state && state.lastOrderBackup) || originalNames;
+  $('#btn-suggest-order').disabled = originalNames;
 }
 
 $('#order-list').addEventListener('dragover', onOrderDragOver);
 
 function onOrderDragOver(e) {
   e.preventDefault();
+  if (state && state.settings.keepOriginalPakNames) return; // order locked
   const dragging = $('#order-list .order-row.dragging');
   if (!dragging) return;
   const rows = $$('#order-list .order-row:not(.dragging)');
@@ -1409,6 +1423,7 @@ function renderSettings() {
     || (state.sevenZipBundled ? 'Bundled with Mod Command (7-Zip 25.01)' : (state.sevenZip ? 'Auto-detected' : 'Auto-detect (not found)'));
   $('#chk-close-on-launch').checked = !!state.settings.closeOnLaunch;
   $('#chk-reduced-motion').checked = !!state.settings.reducedMotion;
+  $('#chk-keep-pak-names').checked = !!state.settings.keepOriginalPakNames;
   // Game update freeze
   const uf = state.updateFreeze || {};
   const chk = $('#chk-update-freeze');
@@ -1826,6 +1841,18 @@ async function offerZcsdkRuntime(needing) {
 }
 $('#chk-close-on-launch').addEventListener('change', (e) => saveSetting({ closeOnLaunch: e.target.checked }));
 $('#chk-reduced-motion').addEventListener('change', (e) => saveSetting({ reducedMotion: e.target.checked }));
+// Renames files in the game (every enabled pak mod is redeployed), so it has
+// its own call; a refusal (game running, a name two mods share) leaves the
+// switch where it was.
+$('#chk-keep-pak-names').addEventListener('change', async (e) => {
+  const on = e.target.checked;
+  e.target.disabled = true;
+  toast(on ? 'Switching pak files to their original names…' : 'Switching pak files back to load-order names…', 'info', 3000);
+  try {
+    const data = await call('setKeepPakNames', on);
+    if (data) { state = data; render(); } else e.target.checked = !on;
+  } finally { e.target.disabled = false; }
+});
 
 async function saveSetting(patch) {
   const data = await call('saveSettings', patch);

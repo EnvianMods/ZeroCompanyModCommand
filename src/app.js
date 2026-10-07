@@ -263,8 +263,14 @@ const TYPE_TITLE = {
 // unequipped before the folder goes away.
 const SAVE_CAVEAT = 'Unequip anything from this mod in game and save before disabling or removing it; saves record modded gear by file location.';
 
+// Settings the user just changed whose save is still on its way: every render
+// shows them (a state push that arrives meanwhile carries the old values), and
+// they are dropped once the save answers — the answer's state then rules, or,
+// on a refusal, the value from before.
+const pendingSettings = {};
 function render() {
   if (!state) return;
+  if (state.settings) Object.assign(state.settings, pendingSettings);
   applyTheme(state.settings.theme);
   document.body.classList.toggle('reduced-motion', !!state.settings.reducedMotion);
 
@@ -2055,15 +2061,34 @@ $('#chk-keep-pak-names').addEventListener('change', async (e) => {
   const on = e.target.checked;
   e.target.disabled = true;
   toast(on ? 'Switching pak files to their original names…' : 'Switching pak files back to load-order names…', 'info', 3000);
+  const before = !!(state && state.settings.keepOriginalPakNames);
+  pendingSettings.keepOriginalPakNames = on;
   try {
     const data = await call('setKeepPakNames', on);
-    if (data) { state = data; render(); } else e.target.checked = !on;
-  } finally { e.target.disabled = false; }
+    delete pendingSettings.keepOriginalPakNames;
+    if (data) state = data; else if (state) state.settings.keepOriginalPakNames = before;
+    render();
+    e.target.checked = !!(state && state.settings.keepOriginalPakNames);
+  } finally {
+    delete pendingSettings.keepOriginalPakNames;
+    e.target.disabled = false;
+  }
 });
 
 async function saveSetting(patch) {
-  const data = await call('saveSettings', patch);
-  if (data) { state = data; render(); }
+  const before = {};
+  for (const k of Object.keys(patch)) before[k] = state && state.settings ? state.settings[k] : undefined;
+  Object.assign(pendingSettings, patch);
+  if (state && state.settings) Object.assign(state.settings, patch);
+  let data = null;
+  try {
+    data = await call('saveSettings', patch);
+  } finally {
+    for (const k of Object.keys(patch)) if (pendingSettings[k] === patch[k]) delete pendingSettings[k];
+  }
+  if (data) state = data;
+  else if (state && state.settings) for (const [k, v] of Object.entries(before)) if (!(k in pendingSettings)) state.settings[k] = v;
+  render();
 }
 
 // ------------------------------------------------------------------ actions

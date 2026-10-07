@@ -249,3 +249,30 @@ test('an add-on copy never takes over files another managed mod put in its folde
     assert.ok(cand.files.some((r) => /addon\.ini$/i.test(r)));
   } finally { f.cleanup(); }
 });
+
+test('a hand-placed ue4ss\\Mods\\<Pack> this ZC Unlocked does not load is updated into ZCUnlocked\\addons, and it says so', async () => {
+  for (const [label, zcu] of [['ZC Unlocked older than 1.4.73', zcuAt('1.4.5')], ['addons_mods=0', zcuAt('1.4.74', '[Creator]\r\naddons=1\r\naddons_mods=0\r\n')]]) {
+    const f = fixture();
+    try {
+      const { engine } = f;
+      await engine.install(f.src(zcu));
+      const dir = handPack(f, 'Kit', '1.0');
+      const res = await engine.install(f.src(packV('Kit', '1.1')));
+      const msg = (res.addonAdopted && res.addonAdopted.message) || '';
+      assert.match(msg, /not loaded/, `${label}: ${msg}`);
+      assert.match(msg, /ZCUnlocked\\addons\\Kit/, label);
+      assert.ok(fs.existsSync(f.abs(path.join(M.ZCU_ADDONS_REL, 'Kit', 'addon.ini'))), `${label}: moved to ZCUnlocked\\addons`);
+      assert.ok(!fs.existsSync(path.join(dir, 'addon.ini')), `${label}: no second copy left in ue4ss\\Mods`);
+      assert.strictEqual(engine.store.mods.filter((m) => m.modType === 'zcu-addon').length, 1, label);
+    } finally { f.cleanup(); }
+  }
+  // 1.4.73+ with addons_mods on: updated in place, nothing moves.
+  const f = fixture();
+  try {
+    await f.engine.install(f.src(zcuAt('1.4.74')));
+    const dir = handPack(f, 'Kit', '1.0');
+    const res = await f.engine.install(f.src(packV('Kit', '1.1')));
+    assert.doesNotMatch(res.addonAdopted.message, /not loaded/);
+    assert.ok(fs.existsSync(path.join(dir, 'addon.ini')), 'updated in place');
+  } finally { f.cleanup(); }
+});

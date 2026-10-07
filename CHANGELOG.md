@@ -1,5 +1,58 @@
 # Zero Company Mod Command — Changelog
 
+## v1.9.22 (unreleased)
+
+**ZC Unlocked add-ons follow the official drop-in add-on guide**
+- ZC Unlocked 1.4.73+ knows an add-on pack by its **folder name only** and,
+  when the same folder is in the game twice, uses ONE copy itself (the higher
+  `version=`, then the newer `addon.ini`, then the copy in `addons\`) — a
+  copy with `enabled=0` hides the pack completely. 1.0.12 installed a second
+  copy switched off (`enabled=0`) into `ue4ss\Mods\ZCUnlocked\addons\` when
+  you already had the add-on in `ue4ss\Mods\<Pack>\`; with the same version
+  that new copy won ZC Unlocked's pick and hid your working add-on. Fixed:
+  - Installing an add-on whose folder is already in the game never creates a
+    second copy. A copy Mod Command manages is updated in place (as before).
+    A copy you put there by hand (`ue4ss\Mods\<Pack>\` or
+    `ZCUnlocked\addons\<Pack>\`) is taken over in place and updated with the
+    new files — the copy that was there is kept in ⧗ versions; an older
+    incoming version only goes to ⧗ versions. While the game runs, or when
+    that copy can't be read, the install is refused, naming the copy and
+    pointing to Import, and nothing changes.
+  - Refused with a clear message (nothing changes): an add-on whose folder is
+    already in the game as a UE4SS Lua-mod pack (`Scripts\main.lua` beside
+    `addon.ini`), or a Lua-mod pack whose folder is already an add-on — the
+    same add-on as two mod types, keep one; a copy inside another mod's folder
+    (`ue4ss\Mods\<X>\<Pack>\`, `ue4ss\Mods\<X>\addons\<Pack>\`) — move it to
+    `ue4ss\Mods\<Pack>\` and Import it; a folder that is already in the game
+    more than once. A UE4SS mod never lands in a bare add-on pack's folder.
+  - `name=` in `addon.ini` no longer makes two different folders "the same
+    add-on" — they are different add-ons to ZC Unlocked and both load.
+    Diagnostics mentions them only as info.
+  - Switching an add-on on is no longer refused because another copy is on.
+    Switching it off while another copy of its folder is in the game takes
+    Mod Command's copy out (kept in the library) instead of leaving it there
+    with `enabled=0`. An add-on that was waiting for ZC Unlocked is simply
+    deployed on.
+  - Startup: a switched-off copy 1.0.12 left in `ZCUnlocked\addons\` beside
+    another copy of the same folder is taken out (only Mod Command's own
+    files), the entry stays in the library switched off, and a one-time
+    notice says so. Your copy is not touched. The old "would load both"
+    warnings are removed.
+- Mod Command now sees ZC Unlocked packs in all four places ZC Unlocked looks:
+  `ZCUnlocked\addons\<Pack>\`, `ue4ss\Mods\<Pack>\` (bare, or a Lua-mod
+  pack), `ue4ss\Mods\<X>\<Pack>\` and `ue4ss\Mods\<X>\addons\<Pack>\`.
+  Diagnostics lists every folder that is in the game more than once, with
+  each copy's version and on/off state, which copy ZC Unlocked uses and why,
+  and warns when that copy has `enabled=0` (the add-on is hidden). Import
+  marks a row as a duplicate only for the same folder.
+- The guide's recommended release layout — `ue4ss/Mods/<Pack>/` with
+  `addon.ini`, the `050_ZCA_*_P` paks beside it, a do-nothing
+  `Scripts/main.lua` and a `modinfo.json` — installs as a UE4SS mod into
+  `ue4ss\Mods\<Pack>\` under the pack's folder name (whatever the
+  `modinfo.json` title says), the paks beside `addon.ini`, never in `~mods`;
+  also when the zip nests it under `SWZeroCompany/Binaries/Win64/` or in a
+  wrapper folder (now covered by tests). README: add-on notes per the guide.
+
 ## v1.9.21 (2026-10-04)
 
 Released as public 1.0.12.
@@ -243,10 +296,10 @@ Released as public 1.0.11.
   stopped when the server allows it (Nexus does), otherwise starts again
   from the beginning, and the strip says so.
 
-**Nexus download panel: signing in is recognised again**
+**Nexus download panel: signing in is recognized again**
 - After signing in to Nexus in the built-in download panel, Mod Command kept
   showing "◈ Sign in to Nexus": Nexus changed how its pages show that you are
-  signed in, so the panel no longer recognised it. It now reads the page's own
+  signed in, so the panel no longer recognized it. It now reads the page's own
   signed-in flag, your account picture and name in the header, or a visible
   log-out button — and never mistakes the guest profile Nexus shows to
   signed-out visitors for an account.
@@ -382,7 +435,7 @@ Ships together with v1.9.19 and v1.9.18 above and v1.9.16 and v1.9.15 below as p
   with the Mod SDK is never replaced. Kept builds in ⧗ Versions carry that
   copy with them.
 - The runtime's signature files no longer make a stock UE4SS look like one
-  Mod Command cannot identify — it is still recognised as the stock build.
+  Mod Command cannot identify — it is still recognized as the stock build.
 
 ## v1.9.16 (2026-09-27)
 
@@ -607,7 +660,7 @@ Ships together with v1.9.13 below as public 1.0.9.
   into `~mods`. The result was a mod that half-worked — the files mounted, so
   replacements of existing things could show up, but the game never read the
   plugin's own registry, so everything the mod ADDS (new outfits, new weapons)
-  simply never appeared in the armoury. That is exactly the failure the mod's
+  simply never appeared in the armory. That is exactly the failure the mod's
   own readme warns about, and it was easy to mistake for a broken mod.
 - These now install as their own type, **PLUGIN**. The whole folder goes to
   `SWZeroCompany\Mods\<Name>\` exactly as shipped — nothing renamed, no load
@@ -887,7 +940,7 @@ Ships together with v1.9.13 below as public 1.0.9.
 ## v1.8.1 (2026-09-05)
 
 **Link mods now matches UE4SS mods, and lets you confirm every match**
-- The **Link mods** button (Command Deck toolbar) used to only recognise mods
+- The **Link mods** button (Command Deck toolbar) used to only recognize mods
   Nexus indexes by file hash — in practice loose-pak uploads — so it couldn't
   identify UE4SS mods at all. It now also searches Nexus by name, so mods like
   script and DLL tweaks get candidate sources too.

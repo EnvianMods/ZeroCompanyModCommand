@@ -83,13 +83,38 @@ automatically for IoStore package inspection; a different copy can be selected i
     bare add-on packs straight in `ue4ss/Mods/<Pack>/` (an `addon.ini`, no
     `Scripts/main.lua` or `dlls/main.dll`), which ZC Unlocked loads too: they
     stay in `ue4ss/Mods/<Pack>/` and switch with `enabled=` like any add-on,
-    and they are never treated as UE4SS mods (no `mods.txt` entry). ZC Unlocked
-    would load two copies of the same add-on (same folder name, compared the
-    way ZC Unlocked keys it, or the same `name=` in `addon.ini`): an add-on
-    installed while another copy is on goes in switched off with a warning
-    naming that copy, it can't be switched on until that copy is off or gone,
-    and Diagnostics lists every duplicate with both paths. Your own copy is
-    never changed.
+    and they are never treated as UE4SS mods (no `mods.txt` entry).
+    **One copy per pack folder.** ZC Unlocked 1.4.73+ finds a pack in
+    `ZCUnlocked/addons/<Pack>/`, `ue4ss/Mods/<Pack>/`,
+    `ue4ss/Mods/<X>/<Pack>/` and `ue4ss/Mods/<X>/addons/<Pack>/`, and knows a
+    pack only by its FOLDER name (`addon_<Folder>`; `name=` is just the menu
+    label — two folders with the same `name=` are two add-ons and both load).
+    The same folder twice is one add-on: ZC Unlocked uses one copy (the higher
+    `version=`, then the newer `addon.ini`, then the copy in `addons\`), and a
+    copy with `enabled=0` hides the pack completely. So installing an add-on
+    whose folder is already in the game never adds a second copy: a copy Mod
+    Command manages is updated in place; a copy you put there by hand is taken
+    over in place and updated (the copy that was there is kept in ⧗ versions;
+    an older incoming version only goes to ⧗ versions). The install is refused,
+    with nothing changed, while the game runs, when the existing copy is a
+    UE4SS Lua-mod pack (or the incoming one is and the folder is already an
+    add-on — keep one), when the copy sits inside another mod's folder
+    (`ue4ss/Mods/<X>/…` — move it to `ue4ss/Mods/<Pack>/` and Import it), or
+    when there are already several copies. Switching an add-on off while
+    another copy of its folder is in the game takes Mod Command's copy out
+    (kept in the library) instead of leaving it with `enabled=0`. Diagnostics
+    lists every folder that is in the game more than once, with the copy ZC
+    Unlocked uses.
+  - **Releasing an add-on** (per the ZC Unlocked add-on guide): ship
+    `ue4ss/Mods/<Pack>/` with `addon.ini`, the `050_ZCA_<Pack>_P`
+    `.pak/.utoc/.ucas` beside it, a do-nothing `Scripts/main.lua` and a
+    `modinfo.json` — never a bare top-level folder, never into
+    `ZCUnlocked/addons/`. Mod Command installs that as a UE4SS mod: the whole
+    folder lands in `ue4ss/Mods/<Pack>/` under the pack's folder name (whatever
+    the `modinfo.json` title says) with the paks beside `addon.ini` (never
+    `~mods`) — also when the zip nests it under `SWZeroCompany/Binaries/Win64/`
+    or in a wrapper folder. Say "needs ZC Unlocked 1.4.73 or newer" in the
+    readme.
   - UE4SS runtime archives (dwmapi.dll + ue4ss folder) → installed into `Binaries/Win64`,
     replacing only UE4SS's own files (your `ue4ss/Mods`, `mods.txt` and settings are kept).
   - `gamefolder` (GAMEFILES) — archives laid out against the game root
@@ -271,7 +296,7 @@ automatically for IoStore package inspection; a different copy can be selected i
   `install-ue4ss` with no payload installs mod 9's primary MAIN file,
   `{ nexusFileId }` one specific file of that page. Premium accounts download
   directly; free accounts get the embedded Nexus page, whose "Mod Manager
-  Download" comes back as nxm:// into `handleNxm`, which recognises the runtime;
+  Download" comes back as nxm:// into `handleNxm`, which recognizes the runtime;
   signed-out users get `{ needsSignIn }` — the card offers the sign-in (then
   installs) or shows the page. If the page cannot be read, the install says so
   and stops. The page is read anonymously via GraphQL (`refreshNexusLatest()`,
@@ -281,7 +306,7 @@ automatically for IoStore package inspection; a different copy can be selected i
     Settings card, the dashboard, a Settings nav badge and in Diagnostics):
     *nexus* — installed by Mod Command from mod 9 (`settings.ue4ssInstalled`,
     which records the file id, version, tested game build and UE4SS.dll's MD5),
-    or recognised by a UE4SS.dll MD5 this app installed from Nexus before;
+    or recognized by a UE4SS.dll MD5 this app installed from Nexus before;
     *stock* — recorded as a GitHub install by an older Mod Command, the old flat
     layout, or no `ue4ss\UE4SS_Signatures\*.lua` (the stock release zip has
     none); *unknown* — anything else, including a UE4SS.dll that no longer

@@ -44,7 +44,7 @@ Updates, handled
   banner, so you always know when a better build is out
 
 Two mod sources built in
-- Holonet browser — browse this game's entire Nexus catalogue inside
+- Holonet browser — browse this game's entire Nexus catalog inside
   the app: thumbnails, search, category filters, and sorting
 - GitHub — a second Holonet tab of curated GitHub mods, hand-vetted by
   Envian Mods (the list updates live). Installs come only from release
@@ -80,7 +80,7 @@ Load order
   targeted patches later) and tells you which conflicts it decides
 
 Nexus Mods built in
-- Holonet browser — browse this game's entire Nexus catalogue inside
+- Holonet browser — browse this game's entire Nexus catalog inside
   the app: thumbnails, search, category filters, and sorting by
   downloads / endorsements / newest / updated
 - nxm:// one-click downloads — press "Mod Manager Download" on the

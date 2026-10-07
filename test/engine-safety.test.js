@@ -213,3 +213,22 @@ test('updating a hand-placed add-on: a failed update that is put back keeps any 
     assert.ok(fs.existsSync(path.join(earlier, 'marker.txt')), 'earlier version history is not deleted');
   } finally { f.cleanup(); }
 });
+
+test('reinstall from stored copies refuses to overwrite a copy Mod Command does not manage', async () => {
+  const f = fixture();
+  try {
+    const { engine } = f;
+    await engine.install(f.src(zcuFiles));
+    const old = await engine.install(f.src({ '050_ZCA_Kit_P.pak': 'PAK-Kit' }));
+    assert.ok(engine.isZcaPakEntry(engine.store.getMod(old.id)));
+    fs.writeFileSync(path.join(engine.store.modLibraryDir(old.id), 'addon.ini'), '[addon]\r\nname=Kit\r\nversion=1.0\r\n');
+    const hand = f.abs(path.join(M.ZCU_ADDONS_REL, 'Kit', 'addon.ini'));
+    fs.mkdirSync(path.dirname(hand), { recursive: true });
+    fs.writeFileSync(hand, '[addon]\r\nname=Kit (mine)\r\nversion=7\r\n');
+    const count = engine.store.mods.length;
+    await assert.rejects(engine.reinstallAsAddon([old.id], null), /does not manage/);
+    assert.strictEqual(fs.readFileSync(hand, 'utf8'), '[addon]\r\nname=Kit (mine)\r\nversion=7\r\n');
+    assert.ok(engine.store.getMod(old.id), 'the old entry stays');
+    assert.strictEqual(engine.store.mods.length, count, 'no stray entry');
+  } finally { f.cleanup(); }
+});

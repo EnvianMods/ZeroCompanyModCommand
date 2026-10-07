@@ -544,6 +544,8 @@ function nexusSignIn() {
       log('info', `nexus sign-in: listening on ${server.redirectUri}, opening the authorization page in the browser`);
       await shell.openExternal(url);
       const { code } = await server.result;
+      // The browser step is done: a Cancel from here on would cancel nothing.
+      if (nexusSignInServer === server) nexusSignInServer = null;
       applyNexusTokens(await oauth.exchangeCode({ code, codeVerifier: verifier }));
       log('info', `nexus sign-in: signed in as ${nexusUser.name}${nexusUser.isPremium ? ' (premium)' : ''}`);
       return fullState();
@@ -644,8 +646,9 @@ function toastZcaReinstall(out) {
 // A free account's "Reinstall as ZC Unlocked add-on" from Nexus: the Files
 // page opens in the panel, the player presses "Mod Manager Download"
 // themselves, and the nxm:// link for that mod (handleNxm) finishes the
-// reinstall instead of a plain install. Keyed by Nexus mod id; stale after
-// an hour.
+// reinstall instead of a plain install. Keyed by Nexus mod id; taken by the
+// first nxm:// link for that mod (before its download starts), dropped when
+// the panel closes without one, stale after an hour.
 const pendingZcaReinstall = new Map();
 const PENDING_ZCA_MS = 60 * 60 * 1000;
 function takePendingZcaReinstall(modId) {
@@ -687,6 +690,9 @@ async function handleNxm(rawUrl) {
       return;
     }
     nxmInFlight.add(busyKey);
+    // Taken now, while the panel that asked for it is still open: closing the
+    // panel during the download must not turn this into a plain install.
+    const migrateIds = link.modId === ue4ssDl.NEXUS_MOD_ID ? null : takePendingZcaReinstall(link.modId);
     if (panelDiary.current) panelDiary.event('nxm', { modId: link.modId, fileId: link.fileId });
     const token = await nexusAccessToken();
     sendEvent({ type: 'toast', message: `Nexus download requested (mod ${link.modId})…` });
@@ -714,7 +720,6 @@ async function handleNxm(rawUrl) {
         assertGameClosedForUe4ss();
         keepCurrentUe4ss();
       }
-      const migrateIds = isUe4ssPage ? null : takePendingZcaReinstall(link.modId);
       if (migrateIds) {
         // "Reinstall as ZC Unlocked add-on" (free account): this download is
         // the add-on edition for entries installed as plain paks.
@@ -884,7 +889,12 @@ function runWindowLoadTasks() {
 
 // The saved theme, read synchronously by the preload so src/theme-boot.js can
 // set <html data-theme> before the first paint (lib/themes.js).
-ipcMain.on('theme-sync', (e) => { e.returnValue = themes.normalizeTheme(store.settings.theme); });
+// (Always answers: an unanswered sendSync would freeze the window.)
+ipcMain.on('theme-sync', (e) => {
+  let t = themes.DEFAULT_THEME;
+  try { t = themes.normalizeTheme(store.settings.theme); } catch (_) {}
+  e.returnValue = t;
+});
 
 function createWindow() {
   win = new BrowserWindow({
@@ -3479,6 +3489,10 @@ handlers['support-report'] = async () => ({ text: buildSupportReport() });
 const PANEL_EVENT_KINDS = new Set(['open', 'close', 'signed-in', 'challenge', 'challenge-passed', 'signin-page', 'oops', 'blocked']);
 handlers['nexus-panel-event'] = async (_e, { kind, url, state, signal, target, view, count } = {}) => {
   if (!PANEL_EVENT_KINDS.has(kind)) return false;
+  // A free-account "Reinstall as ZC Unlocked add-on" waits for a download
+  // from the panel; the panel closing without one ends that wait, so a later
+  // ordinary download of the same mod installs normally.
+  if (kind === 'close') pendingZcaReinstall.clear();
   const str = (v) => (typeof v === 'string' ? v.slice(0, 500) : undefined);
   panelDiary.event(kind, { url: str(url), state: str(state), signal: str(signal), target: str(target), view: !!view, count: Number(count) || undefined });
   return true;

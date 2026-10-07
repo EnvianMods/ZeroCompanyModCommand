@@ -1692,11 +1692,20 @@ $('#btn-browse-7z').addEventListener('click', async () => {
 // Sign-in runs in the user's own browser; the app just waits for the callback.
 // While it waits, the same button cancels the wait; after 30 seconds a hint
 // says where the missing step is.
-async function runNexusSignIn(btn, after) {
+// opts.join: called by code, not by a press of this button — a sign-in that
+// is already waiting is joined (its outcome returned), never canceled.
+let signInCanceledByUser = false;
+async function runNexusSignIn(btn, after, opts = {}) {
   if (btn.dataset.signinWaiting === '1') {
+    if (opts.join) {
+      const res = await window.zc.nexusSignIn();
+      return !!(res && res.ok);
+    }
+    signInCanceledByUser = true;
     window.zc.nexusSignInCancel();
     return false;
   }
+  signInCanceledByUser = false;
   const label = btn.textContent;
   btn.dataset.signinWaiting = '1';
   btn.textContent = '✕ Cancel sign-in';
@@ -1705,9 +1714,13 @@ async function runNexusSignIn(btn, after) {
     toast('Still waiting for Nexus Mods — finish the sign-in in your browser (approve Mod Command there), or press “Cancel sign-in”.', 'info', 9000);
   }, 30000);
   try {
-    const data = await call('nexusSignIn');
-    if (!data) return false;
-    state = data;
+    const res = await window.zc.nexusSignIn();
+    if (!res || !res.ok) {
+      // The user's own Cancel is not an error.
+      toast((res && res.error) || 'The Nexus Mods sign-in did not finish.', signInCanceledByUser ? 'info' : 'error', 6000);
+      return false;
+    }
+    state = res.data;
     render();
     if (after) after();
     toast(`Signed in to Nexus Mods — welcome, ${state.nexus.user.name}.`);
@@ -1876,7 +1889,7 @@ async function ue4ssSignInOrView(info) {
     toast('Sign in at Settings → Nexus Mods to install UE4SS for Star Wars Zero Company.', 'info', 9000);
     return null;
   }
-  const signedIn = await runNexusSignIn($('#btn-nexus-signin'));
+  const signedIn = await runNexusSignIn($('#btn-nexus-signin'), null, { join: true });
   if (!signedIn) return null;
   return runUe4ssInstall();
 }
@@ -3214,11 +3227,14 @@ async function refreshNexusAccount() {
     if (nexusDl.open) checkNexusPage(view);
   });
   // A new page in the panel starts a fresh count of refused subresources.
-  view.addEventListener('did-navigate', () => {
+  // (Nexus also changes pages in place — the same fresh count then.)
+  const freshPageCount = () => {
     let id = null;
     try { id = view.getWebContentsId(); } catch (_) {}
     if (id) panelCall('nexusPanelPageErrors', id, true);
-  });
+  };
+  view.addEventListener('did-navigate', freshPageCount);
+  view.addEventListener('did-navigate-in-page', (e) => { if (e.isMainFrame) freshPageCount(); });
   const tReload = $('#nexus-dl-trouble-reload');
   if (tReload) tReload.addEventListener('click', () => { showNexusTrouble(null); try { view.reload(); } catch (_) {} });
   const tExt = $('#nexus-dl-trouble-ext');

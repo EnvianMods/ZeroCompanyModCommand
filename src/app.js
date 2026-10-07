@@ -226,7 +226,7 @@ const TYPE_LABEL = {
 
 const TYPE_TITLE = {
   gfp: 'Game Feature plugin — installed as a folder in SWZeroCompany\\Mods',
-  'zcu-addon': 'ZC Unlocked add-on — installed as a folder in ue4ss\\Mods\\ZCUnlocked\\addons (needs ZC Unlocked; a pack adopted from ue4ss\\Mods stays there). Disabling sets enabled=0 in its addon.ini; the folder stays.',
+  'zcu-addon': 'ZC Unlocked add-on — installed as a folder in ue4ss\\Mods\\ZCUnlocked\\addons (needs ZC Unlocked; a pack adopted from ue4ss\\Mods stays there). Disabling sets enabled=0 in its addon.ini and the folder stays — unless another copy of the same pack folder is in the game: then its files are taken out (kept in the library), never left beside that copy with enabled=0.',
 };
 
 // Mods whose files the game records BY LOCATION in the save (a Game Feature
@@ -336,6 +336,37 @@ function buildFolderNotice(mod) {
   });
   box.append(text, use, keep);
   return box;
+}
+
+// ZC Unlocked add-on chip: waiting for ZC Unlocked; kept out of the game
+// because another copy of its pack folder is there (ZC Unlocked uses one copy
+// per folder); or on here but not loaded by ZC Unlocked because of its own
+// settings.ini (the add-on's Enabled row in the ZC Unlocked Menu, addons=0 /
+// addons_mods=0) or an older ZC Unlocked. null for anything else.
+function buildZcuChip(mod) {
+  if (mod.modType !== 'zcu-addon') return null;
+  let el = null;
+  const chip = (cls, text, title) => {
+    el = document.createElement('span');
+    el.className = `mod-badge zc-chip ${cls}`;
+    el.textContent = text;
+    el.title = title;
+  };
+  const outNote = !mod.enabled && (mod.warnings || []).find((w) => /^Not in the game: another copy of this add-on is at /.test(w));
+  if (mod.needsZcu) {
+    chip('zc-bad', '⚠ NEEDS ZC UNLOCKED', 'Install ZC Unlocked first. This add-on is kept in the library and is deployed to ue4ss\\Mods\\ZCUnlocked\\addons as soon as ZC Unlocked is in the game.');
+  } else if (outNote) {
+    chip('zc-note', '⧉ OTHER COPY IN USE', outNote);
+  } else if (mod.zcuLane === 'menu') {
+    chip('zc-note', '◌ OFF IN ZC UNLOCKED MENU', `On here, but its Enabled row in the ZC Unlocked Menu is off (addon_${mod.addonFolder}=0 in ZC Unlocked's settings.ini), so ZC Unlocked does not load it. Switch it on in the ZC Unlocked Menu in game.`);
+  } else if (mod.zcuLane === 'lane') {
+    chip('zc-bad', '◌ ZC UNLOCKED ADD-ONS OFF', 'On here, but ZC Unlocked\'s settings.ini (ue4ss\\Mods\\ZCUnlocked\\dlls) has addons=0 — no add-on pack is loaded at all. Set addons=1 there to use them.');
+  } else if (mod.zcuLane === 'mods') {
+    chip('zc-bad', '◌ NOT LOADED (addons_mods=0)', `On here, but ZC Unlocked's settings.ini has addons_mods=0, so it reads packs only from ue4ss\\Mods\\ZCUnlocked\\addons — this pack in ue4ss\\Mods\\${mod.addonFolder} is not loaded. Set addons_mods=1 to load it.`);
+  } else if (mod.zcuLane === 'old') {
+    chip('zc-bad', '⚠ NEEDS ZC UNLOCKED 1.4.73+', `On here, but ZC Unlocked ${mod.zcuVersion || ''} reads packs only from ue4ss\\Mods\\ZCUnlocked\\addons — this pack in ue4ss\\Mods\\${mod.addonFolder} needs ZC Unlocked 1.4.73 or newer. Update ZC Unlocked.`);
+  }
+  return el;
 }
 
 function renderMods() {
@@ -574,6 +605,8 @@ function renderMods() {
     row.append(badge, srcBadge, main, flag);
     if (eaChip) row.appendChild(eaChip);
     if (zcChip) row.appendChild(zcChip);
+    const zcuChip = buildZcuChip(mod);
+    if (zcuChip) row.appendChild(zcuChip);
     if (rtChip) row.appendChild(rtChip);
     if (buildChip) row.appendChild(buildChip);
     if (updateEl) row.appendChild(updateEl);

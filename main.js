@@ -61,7 +61,7 @@ checkRuntimeFiles();
 
 const { Store, SECRET_SETTINGS } = require('./lib/store');
 const steam = require('./lib/steam');
-const { ModEngine, GAME_UNKNOWN_MESSAGE, isZcsdkRuntimeRecord, compareVersions, MODS_REL, LOGIC_MODS_REL, WIN64_REL, UE4SS_MODS_REL, GAME_MODS_REL } = require('./lib/mods');
+const { ModEngine, GAME_UNKNOWN_MESSAGE, isZcsdkRuntimeRecord, compareVersions, addonKeyOf, MODS_REL, LOGIC_MODS_REL, WIN64_REL, UE4SS_MODS_REL, GAME_MODS_REL } = require('./lib/mods');
 const { findSevenZip, bundledSevenZip } = require('./lib/archive');
 const nexus = require('./lib/nexus');
 const nexusHttp = require('./lib/nexus-http');
@@ -1433,14 +1433,34 @@ function fullState() {
     mods: (() => {
       try { engine.migrateUe4ssFolders(); } catch (_) {}
       const deps = engine.runtimeDependents().map((m) => m.name);
-      return store.mods.map((m) => (m.modType === 'ue4ss-mod'
-        ? {
-          ...m,
-          ue4ssFolder: engine.ue4ssFolderOf(m),
-          ue4ssFolderNotice: engine.ue4ssFolderNotice(m),
-          ...(isZcsdkRuntimeRecord(m) ? { runtimePart: true, requiredBy: deps.length, requiredByNames: deps.slice(0, 8) } : {}),
+      // zcuLane: what ZC Unlocked's own settings.ini / version say about a
+      // switched-on add-on in the game — 'menu' (addon_<Folder>=0: off in the
+      // ZC Unlocked Menu), 'lane' (addons=0), 'mods' (addons_mods=0 and the
+      // pack is outside ZCUnlocked\addons), 'old' (ZC Unlocked older than
+      // 1.4.73 and the pack is outside ZCUnlocked\addons), or none.
+      const hasAddons = store.settings.gamePath && store.mods.some((m) => m.modType === 'zcu-addon');
+      let lane = null;
+      try { lane = hasAddons ? engine.zcuAddonLane() : null; } catch (_) {}
+      return store.mods.map((m) => {
+        let out = m;
+        if (m.modType === 'ue4ss-mod') {
+          out = {
+            ...m,
+            ue4ssFolder: engine.ue4ssFolderOf(m),
+            ue4ssFolderNotice: engine.ue4ssFolderNotice(m),
+            ...(isZcsdkRuntimeRecord(m) ? { runtimePart: true, requiredBy: deps.length, requiredByNames: deps.slice(0, 8) } : {}),
+          };
         }
-        : m));
+        if (m.modType === 'zcu-addon' && lane && lane.present && m.enabled && (m.deployed || []).length) {
+          const outside = engine._addonRoot(m) !== 'addons';
+          const why = lane.addonsOff ? 'lane'
+            : (outside && lane.oldVersion) ? 'old'
+              : (outside && lane.modsOff) ? 'mods'
+                : lane.menuOff.includes(addonKeyOf(engine.addonFolderName(m))) ? 'menu' : null;
+          if (why) out = { ...out, zcuLane: why, zcuVersion: lane.version || null };
+        }
+        return out;
+      });
     })(),
     conflicts,
     ue4ssHooks,
@@ -3095,7 +3115,7 @@ function diagnostics() {
         add('warning', 'ZC Unlocked add-ons', `${zcu.addons} add-on${zcu.addons === 1 ? ' is' : 's are'} installed, but ZC Unlocked is not in the game (ue4ss\\Mods\\ZCUnlocked) — install ZC Unlocked first.` +
           (zcu.waiting.length ? ` Waiting to be deployed: ${zcu.waiting.map((w) => w.name).join(', ')}.` : ''));
       } else {
-        add('good', 'ZC Unlocked add-ons', `${zcu.addons} add-on${zcu.addons === 1 ? '' : 's'} managed in ue4ss\\Mods\\ZCUnlocked\\addons${zcu.packs ? ` (${zcu.packs} as a pack in ue4ss\\Mods)` : ''} (disabled ones stay in place with enabled=0).`);
+        add('good', 'ZC Unlocked add-ons', `${zcu.addons} add-on${zcu.addons === 1 ? '' : 's'} managed in ue4ss\\Mods\\ZCUnlocked\\addons${zcu.packs ? ` (${zcu.packs} as a pack in ue4ss\\Mods)` : ''} (switched-off ones stay in place with enabled=0 — unless another copy of the same folder is in the game, then they are taken out).`);
       }
     }
     // The same pack FOLDER in more than one place ZC Unlocked looks
@@ -3121,6 +3141,29 @@ function diagnostics() {
       add('info', 'ZC Unlocked add-ons with the same name',
         `“${g.name}” is the name= of ${g.members.length} different add-on folders: ${g.members.map((c) => c.location).join(' and ')}. `
         + 'Same display name, different folders — both load (ZC Unlocked tells add-ons apart by folder name).');
+    }
+    // ZC Unlocked's own switches (its dlls\settings.ini) and its version
+    // decide which of those packs it reads at all.
+    let lane = null;
+    try { lane = store.settings.gamePath ? engine.zcuAddonLane() : null; } catch (_) {}
+    if (lane && lane.present && copies.length) {
+      const outside = copies.filter((c) => c.layout > 1);
+      if (lane.addonsOff) {
+        add('warning', 'ZC Unlocked add-ons switched off',
+          'ZC Unlocked’s settings.ini (ue4ss\\Mods\\ZCUnlocked\\dlls) has addons=0 — no add-on pack is loaded at all, whatever its own switch says. Set addons=1 there to use them.');
+      }
+      if (lane.oldVersion && outside.length) {
+        add('warning', 'ZC Unlocked too old for these add-ons',
+          `ZC Unlocked ${lane.version} reads add-on packs only from ue4ss\\Mods\\ZCUnlocked\\addons\\ — packs anywhere else need ZC Unlocked 1.4.73 or newer and are not loaded: ${outside.map((c) => c.location).join(', ')}. Update ZC Unlocked.`);
+      } else if (lane.modsOff && outside.length) {
+        add('warning', 'ZC Unlocked add-ons outside its addons folder',
+          `ZC Unlocked’s settings.ini has addons_mods=0, so it reads add-on packs only from ue4ss\\Mods\\ZCUnlocked\\addons\\ — these are not loaded: ${outside.map((c) => c.location).join(', ')}. Set addons_mods=1 there to load them.`);
+      }
+      const menuOff = copies.filter((c) => c.active && lane.menuOff.includes(addonKeyOf(c.folder)));
+      if (menuOff.length) {
+        add('info', 'ZC Unlocked add-ons off in its menu',
+          `Switched off in the ZC Unlocked Menu (addon_<Folder>=0 in its settings.ini — listed there, not loaded): ${[...new Set(menuOff.map((c) => c.folder))].join(', ')}. Switch them on again in the ZC Unlocked Menu in game.`);
+      }
     }
   }
   const retoc = engine.retocStatus();

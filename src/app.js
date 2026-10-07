@@ -226,7 +226,7 @@ const TYPE_LABEL = {
 
 const TYPE_TITLE = {
   gfp: 'Game Feature plugin — installed as a folder in SWZeroCompany\\Mods',
-  'zcu-addon': 'ZC Unlocked add-on — installed as a folder in ue4ss\\Mods\\ZCUnlocked\\addons (needs ZC Unlocked; a pack adopted from ue4ss\\Mods stays there). Disabling sets enabled=0 in its addon.ini; the folder stays.',
+  'zcu-addon': 'ZC Unlocked add-on — installed as a folder in ue4ss\\Mods\\ZCUnlocked\\addons (needs ZC Unlocked; a pack adopted from ue4ss\\Mods stays there). Disabling sets enabled=0 in its addon.ini and the folder stays — unless another copy of the same pack folder is in the game: then its files are taken out (kept in the library), never left beside that copy with enabled=0.',
 };
 
 // Mods whose files the game records BY LOCATION in the save (a Game Feature
@@ -338,9 +338,151 @@ function buildFolderNotice(mod) {
   return box;
 }
 
+// ZC Unlocked add-on chip: waiting for ZC Unlocked; kept out of the game
+// because another copy of its pack folder is there (ZC Unlocked uses one copy
+// per folder); or on here but not loaded by ZC Unlocked because of its own
+// settings.ini (the add-on's Enabled row in the ZC Unlocked Menu, addons=0 /
+// addons_mods=0) or an older ZC Unlocked. null for anything else.
+function buildZcuChip(mod) {
+  if (mod.modType !== 'zcu-addon') return null;
+  let el = null;
+  const chip = (cls, text, title) => {
+    el = document.createElement('span');
+    el.className = `mod-badge zc-chip ${cls}`;
+    el.textContent = text;
+    el.title = title;
+  };
+  const outNote = !mod.enabled && (mod.warnings || []).find((w) => /^Not in the game: another copy of this add-on is at /.test(w));
+  if (mod.needsZcu) {
+    chip('zc-bad', '⚠ NEEDS ZC UNLOCKED', 'Install ZC Unlocked first. This add-on is kept in the library and is deployed to ue4ss\\Mods\\ZCUnlocked\\addons as soon as ZC Unlocked is in the game.');
+  } else if (outNote) {
+    chip('zc-note', '⧉ OTHER COPY IN USE', outNote);
+  } else if (mod.zcuLane === 'menu') {
+    chip('zc-note', '◌ OFF IN ZC UNLOCKED MENU', `On here, but its Enabled row in the ZC Unlocked Menu is off (addon_${mod.addonFolder}=0 in ZC Unlocked's settings.ini), so ZC Unlocked does not load it. Switch it on in the ZC Unlocked Menu in game.`);
+  } else if (mod.zcuLane === 'lane') {
+    chip('zc-bad', '◌ ZC UNLOCKED ADD-ONS OFF', 'On here, but ZC Unlocked\'s settings.ini (ue4ss\\Mods\\ZCUnlocked\\dlls) has addons=0 — no add-on pack is loaded at all. Set addons=1 there to use them.');
+  } else if (mod.zcuLane === 'mods') {
+    chip('zc-bad', '◌ NOT LOADED (addons_mods=0)', `On here, but ZC Unlocked's settings.ini has addons_mods=0, so it reads packs only from ue4ss\\Mods\\ZCUnlocked\\addons — this pack in ue4ss\\Mods\\${mod.addonFolder} is not loaded. Set addons_mods=1 to load it.`);
+  } else if (mod.zcuLane === 'old') {
+    chip('zc-bad', '⚠ NEEDS ZC UNLOCKED 1.4.73+', `On here, but ZC Unlocked ${mod.zcuVersion || ''} reads packs only from ue4ss\\Mods\\ZCUnlocked\\addons — this pack in ue4ss\\Mods\\${mod.addonFolder} needs ZC Unlocked 1.4.73 or newer. Update ZC Unlocked.`);
+  }
+  return el;
+}
+
+// ZC Unlocked add-on paks (050_ZCA_…_P) installed as plain paks: the group
+// (one download) this entry belongs to in state.zcaMigration, or null.
+function zcaGroupOf(mod) {
+  return ((state && state.zcaMigration) || []).find((g) => g.ids.includes(mod.id)) || null;
+}
+// Which add-on an entry is: “HeavyArmor” (050_ZCA_HeavyArmor_P) — the key(s)
+// come from its pak names (zcaMigration's entries), never parsed here.
+function zcaLabel(e) {
+  if (!e) return '';
+  const keys = e.keys || [];
+  const name = /^[0-9a-f]{16}$/i.test(e.name || '') && keys.length ? keys.join(', ') : e.name;
+  return `“${name}”${(e.paks || []).length ? ` (${e.paks.join(', ')})` : ''}`;
+}
+function zcaLabels(g) {
+  return (g.entries || g.names.map((name) => ({ name }))).map(zcaLabel);
+}
+// A size for the banner: 0.00 GB says nothing, so small ones are in MB.
+function zcaSize(bytes) {
+  if (!bytes) return '';
+  const gb = bytes / 1073741824;
+  if (gb.toFixed(2) !== '0.00') return `${gb.toFixed(gb > 1 ? 1 : 2)} GB`;
+  return `${Math.max(0.1, bytes / 1048576).toFixed(1)} MB`;
+}
+function zcaSource(g) {
+  return g.fromLibrary ? 'library' : (g.origin && g.origin.type === 'nexus' ? 'nexus' : 'file');
+}
+function buildZcaChip(mod) {
+  const g = zcaGroupOf(mod);
+  if (!g) return null;
+  const el = document.createElement('button');
+  el.className = 'mod-conflict-flag build-chip zca-chip';
+  el.textContent = '⚠ NOT REGISTERED — reinstall as ZC Unlocked add-on';
+  const mine = (g.entries || []).find((e) => e.id === mod.id);
+  el.title = `${mine ? `${zcaLabel(mine)} is a ZC Unlocked add-on. ` : ''}These are ZC Unlocked add-on paks (050_ZCA_…_P) installed as plain paks: ZC Unlocked only registers an add-on from its folder with the addon.ini, so nothing they add shows up in game`
+    + ((mod.deployed || []).length ? ', and the copies in ~mods only take up space' : '') + '. Click to reinstall '
+    + (g.ids.length > 1 ? `all ${g.ids.length} entries from this download (${zcaLabels(g).join(', ')})` : 'it')
+    + ' as a ZC Unlocked add-on — the paks in ~mods are removed once the add-on is installed.';
+  el.addEventListener('click', () => reinstallZca(g, zcaSource(g)));
+  return el;
+}
+
+// Install notes worth seeing on the row (files the install did not take,
+// …) — not the states the chips already show.
+const NOTE_SKIP_RE = /^(Not in the game: another copy of this add-on is at |Needs ZC Unlocked — install it first|ZC Unlocked add-on pak without addon\.ini)/;
+function buildNotesChip(mod) {
+  const notes = (mod.warnings || []).filter((w) => !NOTE_SKIP_RE.test(w));
+  if (!notes.length) return null;
+  const el = document.createElement('span');
+  el.className = 'mod-badge notes-chip';
+  el.textContent = `ⓘ ${notes.length} note${notes.length === 1 ? '' : 's'}`;
+  el.title = notes.join('\n');
+  return el;
+}
+
+// "Reinstall as ZC Unlocked add-on" for one download's pak entries.
+//   source 'library' — the stored copies carry their addon.ini
+//   source 'nexus'   — download the add-on edition again from its Nexus page
+//                      (a free account: the Files page opens in the panel and
+//                      the player presses "Mod Manager Download" there)
+//   source 'file'    — pick the add-on edition's archive
+async function reinstallZca(g, source) {
+  const list = zcaLabels(g).join(', ');
+  const how = source === 'library' ? 'from the stored copies (they carry their addon.ini)'
+    : source === 'nexus' ? `by downloading it again from its Nexus page (mod ${g.origin.modId})`
+      : 'from the add-on edition’s archive you pick next (the one with addon.ini)';
+  if (!window.confirm(`Reinstall ${g.ids.length === 1 ? list : `these ${g.ids.length} entries (${list})`} as a ZC Unlocked add-on, ${how}?\n\n`
+    + 'The add-on is installed first; only then are the old pak entries and their copies in ~mods removed. Close the game first.')) return;
+  try {
+    const res = await call('reinstallZca', g.ids, source);
+    if (!res) return;
+    if (res.opened === 'embed') {
+      openNexusDownload(res.name || g.names[0], res.url);
+      toast('Press “Mod Manager Download” on the add-on edition’s file — the reinstall finishes when the download arrives.', 'info', 9000);
+    }
+    if (res.state) { state = res.state; render(); }
+  } finally {
+    progressToastIdle();
+  }
+}
+
+function renderZcaBanner() {
+  const box = $('#zca-banner');
+  if (!box) return;
+  const groups = (state && state.zcaMigration) || [];
+  box.innerHTML = '';
+  box.classList.toggle('hidden', !groups.length);
+  for (const g of groups) {
+    const row = document.createElement('div');
+    row.className = 'zca-banner-row';
+    const text = document.createElement('span');
+    text.className = 'zca-banner-text';
+    const size = g.bytes ? ` (${zcaSize(g.bytes)})` : '';
+    const labels = zcaLabels(g);
+    text.textContent = `⚠ ${g.ids.length === 1 ? `${labels[0]} is a ZC Unlocked add-on` : `${labels.join(', ')} are ZC Unlocked add-ons`} installed as plain paks${size} — ZC Unlocked never registers ${g.ids.length === 1 ? 'it' : 'them'} that way${g.inGame ? ', and the copies in ~mods only take up space' : ''}. Reinstall as a ZC Unlocked add-on:`;
+    row.appendChild(text);
+    const btn = (label, source, title) => {
+      const b = document.createElement('button');
+      b.className = 'btn tiny';
+      b.textContent = label;
+      b.title = title;
+      b.addEventListener('click', () => reinstallZca(g, source));
+      row.appendChild(b);
+    };
+    if (g.fromLibrary) btn('↻ From the stored copy', 'library', 'The stored copies carry their addon.ini — reinstall from them, nothing to download.');
+    if (g.origin && g.origin.type === 'nexus') btn('⇩ Download from Nexus', 'nexus', `Download the add-on edition again from Nexus mod ${g.origin.modId} and reinstall it.`);
+    btn('📂 Choose archive…', 'file', 'Pick the add-on edition’s archive (the one with addon.ini in each add-on folder).');
+    box.appendChild(row);
+  }
+}
+
 function renderMods() {
   const list = $('#mod-list');
   list.innerHTML = '';
+  renderZcaBanner();
   $('#mods-empty').classList.toggle('hidden', state.mods.length > 0);
 
   for (const mod of state.mods) {
@@ -576,8 +718,14 @@ function renderMods() {
     row.append(badge, srcBadge, main, flag);
     if (eaChip) row.appendChild(eaChip);
     if (zcChip) row.appendChild(zcChip);
+    const zcuChip = buildZcuChip(mod);
+    if (zcuChip) row.appendChild(zcuChip);
     if (rtChip) row.appendChild(rtChip);
     if (buildChip) row.appendChild(buildChip);
+    const zcaChip = buildZcaChip(mod);
+    if (zcaChip) row.appendChild(zcaChip);
+    const notesChip = buildNotesChip(mod);
+    if (notesChip) row.appendChild(notesChip);
     if (updateEl) row.appendChild(updateEl);
     row.append(toggle, actions);
     list.appendChild(row);

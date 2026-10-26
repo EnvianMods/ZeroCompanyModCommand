@@ -1,6 +1,8 @@
 # Zero Company Mod Command — Changelog
 
-## v1.9.23 (unreleased)
+## v1.9.23 (2026-10-26)
+
+Released as public 1.0.14.
 
 **Install lets you pick when a mod has more than one main file**
 - Some mods offer two current main files side by side (for example one build

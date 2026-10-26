@@ -2385,7 +2385,14 @@ function buildBrowseCard(m) {
     try {
       const res = await call('installRemote', m.modId, m.name);
       if (!res) return;
-      if (res.opened === 'embed') {
+      if (res.choose) {
+        // More than one current main file — the user picks which one.
+        openNexusVersionsModal(m, {
+          data: res,
+          sub: 'This mod has more than one main file. Pick the one you want.',
+          choice: true,
+        });
+      } else if (res.opened === 'embed') {
         openNexusDownload(m.name, res.url);
       } else if (res.opened === 'website') {
         toast(`Files page opened for “${m.name}” — press “Mod Manager Download” and it will install here automatically.`, 'info', 9000);
@@ -2425,10 +2432,12 @@ function makeHolonetVersionsBtn(m) {
   return btn;
 }
 
-async function openNexusVersionsModal(m) {
-  const data = await call('nexusFileVersions', m.modId);
+// opts.data / opts.sub / opts.choice: the Install button's main-file choice
+// (only the mod's current main files, each installed via nexusInstallFile).
+async function openNexusVersionsModal(m, opts = {}) {
+  const data = opts.data || await call('nexusFileVersions', m.modId);
   if (!data) return;
-  $('#nexus-versions-sub').textContent = `“${m.name}” — every file its Nexus page offers, newest first. ` +
+  $('#nexus-versions-sub').textContent = opts.sub ? `“${m.name}” — ${opts.sub}` : `“${m.name}” — every file its Nexus page offers, newest first. ` +
     (data.isPremium
       ? 'Installing a different version replaces the installed one (the old version goes to the vault).'
       : 'Free accounts: the site must start the download — open the files page, and the “Mod Manager Download” button of the file you pick installs exactly that version here.');
@@ -2455,8 +2464,8 @@ async function openNexusVersionsModal(m) {
     info.append(name, meta);
     const act = document.createElement('button');
     act.className = 'btn tiny primary';
-    if (data.isPremium) {
-      act.textContent = '⭳ Install this version';
+    if (data.isPremium || opts.choice) {
+      act.textContent = opts.choice ? '⭳ Install this file' : '⭳ Install this version';
       act.addEventListener('click', async () => {
         act.disabled = true;
         try {

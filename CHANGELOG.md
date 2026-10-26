@@ -1,5 +1,19 @@
 # Zero Company Mod Command — Changelog
 
+## v1.9.23 (unreleased)
+
+**Install lets you pick when a mod has more than one main file**
+- Some mods offer two current main files side by side (for example one build
+  with Aftermath support and one without). The holonet card's ⭳ Install
+  button always took the newest one, with no choice. Now, when a mod has two
+  or more main files, Install opens the version picker with just those files
+  ("This mod has more than one main file. Pick the one you want.") and
+  installs the one you choose. Free accounts get the usual embedded Nexus
+  files page for the file they pick.
+- A fresh install from the version picker is named after the mod, like the
+  Install button does, instead of after its pak.
+- Mods with a single main file install exactly as before.
+
 ## v1.9.22 (2026-10-07)
 
 Released as public 1.0.13.

@@ -2238,6 +2238,12 @@ const handlers = {
       };
     }
     const files = await nexus.filesList(modId, token);
+    // More than one current main file (e.g. one per game variant): let the
+    // user pick instead of silently taking the newest.
+    const mains = nexus.mainFileChoices(files);
+    if (mains.length >= 2) {
+      return { choose: true, files: mains.map(nexus.versionRow), isPremium: !!nexusUser.isPremium };
+    }
     const file = nexus.pickPrimaryFile(files);
     if (!file) throw new Error('That mod has no downloadable main file.');
     const uri = await nexus.downloadLink({ modId, fileId: file.file_id }, token);
@@ -2422,14 +2428,7 @@ const handlers = {
     const usable = files
       .filter((f) => !['ARCHIVED', 'DELETED'].includes(f.category_name || ''))
       .sort((a, b) => (b.uploaded_timestamp || 0) - (a.uploaded_timestamp || 0))
-      .map((f) => ({
-        fileId: f.file_id,
-        name: f.name,
-        version: f.version || null,
-        category: f.category_name || 'MAIN',
-        sizeKb: f.size_kb || f.size || 0,
-        uploaded: f.uploaded_timestamp ? new Date(f.uploaded_timestamp * 1000).toISOString() : null,
-      }));
+      .map(nexus.versionRow);
     if (!nexusUser) { try { mergeNexusUser(await nexus.validateToken(token)); } catch (_) {} }
     return { files: usable, isPremium: !!(nexusUser && nexusUser.isPremium) };
   },
@@ -2465,7 +2464,13 @@ const handlers = {
         return { pendingFomod: true, state: fullState() };
       }
       log('info', `installed version ${file.version || '?'} (file ${fileId}) of nexus mod ${modId}${existing ? ' (replaced installed version — old one vaulted)' : ''}`);
-      toastAddonAdopted(installedMods(res));
+      const mods = installedMods(res);
+      // A fresh install of one mod takes the card's name, as the Install
+      // button does — otherwise it would be named after the pak.
+      if (!existing && mods.length === 1 && mods[0].id && name) {
+        try { engine.rename(mods[0].id, name); } catch (_) {}
+      }
+      toastAddonAdopted(mods);
       return { installed: true, switched: existing, version: file.version || null, state: fullState() };
     } finally {
       fs.rmSync(dest, { force: true });

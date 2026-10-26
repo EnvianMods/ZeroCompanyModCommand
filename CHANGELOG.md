@@ -8,8 +8,8 @@
   button always took the newest one, with no choice. Now, when a mod has two
   or more main files, Install opens the version picker with just those files
   ("This mod has more than one main file. Pick the one you want.") and
-  installs the one you choose. Free accounts get the usual embedded Nexus
-  files page for the file they pick.
+  installs the one you choose. Free accounts keep the embedded Nexus files
+  page, where every file is listed.
 - A fresh install from the version picker is named after the mod, like the
   Install button does, instead of after its pak.
 - Mods with a single main file install exactly as before.

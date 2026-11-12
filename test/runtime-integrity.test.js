@@ -250,6 +250,11 @@ test('fallback over an installed runtime: a same-or-newer pinned bundle is used;
   const bundled015 = { source: 'bundled', zip: b.file, version: '0.15', bridge: '0.7.2', loader: '1.8.53', sha256: b.sha256, size: b.size };
   const same = await Z.prepareRuntimeZip(pkg, { download, bundled: bundled015, installed: INSTALLED_015 });
   assert.strictEqual(same.zipPath, b.file);
+  // A pinned bundle NEWER than the installed runtime that verifies → installed.
+  const newer = await Z.prepareRuntimeZip(pkg, { download, bundled: bundled015, installed: { installed: true, version: null, bridge: '0.6.0', loader: '1.8.32' } });
+  assert.strictEqual(newer.zipPath, b.file);
+  assert.strictEqual(newer.pinned, true);
+  assert.strictEqual(newer.integrityFailed, true);
   // Installed parts with no version info (hand-deployed): a fallback cannot rule out a downgrade.
   await assert.rejects(Z.prepareRuntimeZip(pkg, { download, bundled: bundled015, installed: { installed: true } }),
     (e) => e.kept === true && /Your installed runtime was kept\./.test(e.message));

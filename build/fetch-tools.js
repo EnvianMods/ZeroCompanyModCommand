@@ -14,7 +14,9 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const crypto = require('crypto');
 const { spawnSync } = require('child_process');
+const zcsdk = require('../lib/zcsdk');
 
 const ROOT = path.resolve(__dirname, '..');
 const TOOLS = path.join(ROOT, 'tools');
@@ -82,39 +84,73 @@ async function retoc() {
 
 // Re-downloaded whenever latest.json names a different version than the one
 // recorded in zcsdk-runtime.json; an unreachable latest.json keeps the copy
-// already in tools/.
-async function zcsdkRuntime() {
-  const zip = path.join(TOOLS, 'ZCSDKRuntime.zip');
-  const info = path.join(TOOLS, 'zcsdk-runtime.json');
+// already in tools/. latest.json goes through the app's own checks
+// (lib/zcsdk.js parseLatest: pinned URL, asset name, sha256 + size required
+// from Runtime 0.15.1 on). The download is verified against that sha256/size
+// before it replaces tools/ZCSDKRuntime.zip, and the SHA-256 and size of the
+// final file are written into zcsdk-runtime.json as the bundled copy's pin.
+async function zcsdkRuntime(tools = TOOLS) {
+  const zip = path.join(tools, 'ZCSDKRuntime.zip');
+  const info = path.join(tools, 'zcsdk-runtime.json');
   let have = null;
+  let havePin = false;
   if (fs.existsSync(zip)) {
-    try { have = JSON.parse(fs.readFileSync(info, 'utf8')).version || null; } catch (_) {}
+    try {
+      const cur = JSON.parse(fs.readFileSync(info, 'utf8'));
+      have = cur.version || null;
+      havePin = /^[0-9a-f]{64}$/.test(cur.sha256 || '') && Number.isSafeInteger(cur.size);
+    } catch (_) {}
   }
   log('ZCSDK Runtime: reading latest.json…');
   let j;
   try {
     const res = await fetch(ZCSDK_LATEST, { headers: { 'User-Agent': 'zero-company-mod-command-build' } });
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-    j = await res.json();
-    if (!j || !j.version || !/^https:\/\/github\.com\/EnvianMods\/ZCSDK-Runtime-Release\/releases\/download\/.+\.zip$/i.test(j.url || '')) throw new Error('unexpected latest.json');
+    j = zcsdk.parseLatest(await res.json(), { seen: false });
+    if (!j) throw new Error('unexpected latest.json');
   } catch (e) {
     if (fs.existsSync(zip)) return log(`ZCSDK Runtime: kept the copy in tools/ (${have || 'unknown version'}); latest.json unreadable: ${e.message}`);
     throw e;
   }
-  if (have && have === String(j.version)) return log(`ZCSDK Runtime: already present (${have})`);
+  const writeInfo = async () => {
+    const st = fs.statSync(zip);
+    const sha256 = await sha256File(zip);
+    fs.writeFileSync(info, JSON.stringify({
+      version: j.version, bridge: j.bridge || null, loader: j.loader || null, file: 'ZCSDKRuntime.zip',
+      sha256, size: st.size,
+      source: `EnvianMods/ZCSDK-Runtime-Release v${j.version} asset ${j.asset} (offline fallback, fetched by build/fetch-tools.js; the app installs the newest release from that repo when online)`,
+    }, null, 2) + '\n');
+  };
+  if (have && have === String(j.version)) {
+    if (havePin) return log(`ZCSDK Runtime: already present (${have})`);
+    if (!j.sha256) return log(`ZCSDK Runtime: already present (${have}, no pin: latest.json publishes no sha256 for it)`);
+    try {
+      await zcsdk.verifyRuntimeZip(zip, j);
+      await writeInfo();
+      return log(`ZCSDK Runtime: already present (${have}); pinned to the published sha256`);
+    } catch (e) {
+      log(`ZCSDK Runtime: the copy in tools/ does not match the published sha256 (${e.message}); downloading it again`);
+    }
+  }
   log(`ZCSDK Runtime: downloading ${j.version}${have ? ` (replacing ${have})` : ''}…`);
   const part = zip + '.part';
   try {
     await download(j.url, part);
+    // Checked before the rename: a bad download never replaces the good copy.
+    if (j.sha256) await zcsdk.verifyRuntimeZip(part, j);
     fs.renameSync(part, zip);
   } finally {
     fs.rmSync(part, { force: true });
   }
-  fs.writeFileSync(info, JSON.stringify({
-    version: j.version, bridge: j.bridge || null, loader: j.loader || null, file: 'ZCSDKRuntime.zip',
-    source: `EnvianMods/ZCSDK-Runtime-Release v${j.version} asset ${j.asset || path.basename(j.url)} (offline fallback, fetched by build/fetch-tools.js; the app installs the newest release from that repo when online)`,
-  }, null, 2) + '\n');
-  log(`ZCSDK Runtime: ok (${j.version})`);
+  await writeInfo();
+  log(`ZCSDK Runtime: ok (${j.version}${j.sha256 ? ', sha256 verified' : ', no published sha256; pinned to the downloaded file'})`);
+}
+
+function sha256File(file) {
+  return new Promise((resolve, reject) => {
+    const h = crypto.createHash('sha256');
+    fs.createReadStream(file).on('error', reject).on('data', (c) => h.update(c)).on('end', () => resolve(h.digest('hex')));
+  });
 }
 
 // Keeps tools/licenses/ complete: 7-Zip's own License.txt is copied (it also
@@ -140,11 +176,15 @@ function licenses() {
   log(missing.length ? `licenses: missing ${missing.join(', ')}` : 'licenses: ok');
 }
 
-(async () => {
+async function main() {
   if (process.platform !== 'win32') { console.log('fetch-tools: Windows only, nothing to do.'); return; }
   fs.mkdirSync(TOOLS, { recursive: true });
   console.log('Fetching the bundled tools that are not shipped in the source package…');
   for (const [name, step] of [['7-Zip', sevenZip], ['retoc', retoc], ['ZCSDK Runtime', zcsdkRuntime], ['licenses', licenses]]) {
     try { await step(); } catch (e) { log(`${name}: skipped (${e.message}) — the app still works without it`); }
   }
-})();
+}
+
+if (require.main === module) main();
+
+module.exports = { zcsdkRuntime };

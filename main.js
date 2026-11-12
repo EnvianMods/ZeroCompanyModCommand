@@ -109,6 +109,13 @@ function resolveDataDir() {
 
 const store = new Store(resolveDataDir());
 const engine = new ModEngine(store);
+// ZCSDK Runtime integrity: once a latest.json with a SHA-256 was seen,
+// hashless entries are refused from then on (anti-downgrade).
+zcsdkRt.configure({
+  hashSeen: !!store.settings.zcsdkHashSeen,
+  onHashSeen: () => { store.settings.zcsdkHashSeen = true; try { store.save(); } catch (_) {} },
+  warn: (m) => log('warn', m),
+});
 // Records written before v1.9.20 get their UE4SS deploy folder recorded (the
 // folder they are in now — nothing moves). fullState() repeats it for
 // records an archive restore brings back later.
@@ -1319,7 +1326,9 @@ async function healZcsdkRuntime(reason) {
       sendEvent({ type: 'zcsdk-heal-ask', version: pkg.version, reason: plan.reason, dependents: plan.dependents, sigsMissing: !!plan.sigsMissing });
       return { asked: true };
     }
-    const res = await engine.installZcsdkRuntime(pkg.zip, pkg.version);
+    // The bundled zip is checked against its zcsdk-runtime.json pin first.
+    const prep = await zcsdkRt.prepareRuntimeZip(pkg, { log });
+    const res = await engine.installZcsdkRuntime(prep.zipPath, prep.version);
     store.settings.zcsdkRuntimeWanted = true;
     store.save();
     log('warn', `ZCSDK Runtime self-heal (${reason}): reinstalled the bundled ${pkg.version || 'copy'} (${res.replaced} previous part(s) replaced) — ${plan.reason}`);
@@ -2770,26 +2779,22 @@ const handlers = {
     await zcsdkRt.latestRuntime(); // cached for an hour; makes the pick below current
     const pkg = zcsdkRt.availableRuntime();
     if (!pkg) throw new Error('No ZCSDK Runtime package is available — GitHub is unreachable and this build ships without tools/ZCSDKRuntime.zip.');
-    let zipPath = pkg.zip || null;
-    let version = pkg.version;
-    let source = pkg.source;
-    let downloaded = null;
-    if (pkg.source === 'github') {
-      try {
-        sendEvent({ type: 'toast', message: `Downloading ZCSDK Runtime ${pkg.version} from GitHub…` });
-        downloaded = await nexus.downloadToFile(pkg.url, store.stagingDir, pkg.asset, (got, total, dl) => {
-          sendEvent({ type: 'progress', label: 'ZCSDK Runtime', received: got, total, ...dl });
-        });
-        zipPath = downloaded;
-      } catch (e) {
-        const bundled = zcsdkRt.bundledRuntime();
-        if (!bundled) throw new Error(`Could not download ZCSDK Runtime ${pkg.version} from GitHub: ${e.message}`);
-        log('warn', `ZCSDK Runtime ${pkg.version} download failed (${e.message}) — installing the bundled ${bundled.version || 'copy'} instead`);
-        sendEvent({ type: 'toast', kind: 'warn', message: `GitHub download failed — installing the bundled ZCSDK Runtime ${bundled.version || ''} instead.` });
-        zipPath = bundled.zip;
-        version = bundled.version;
-        source = 'bundled';
-      }
+    // Download (GitHub) and verify the zip's SHA-256 + size before anything is
+    // extracted; a mismatch deletes the download and falls back only to a
+    // bundled copy that passes its own pin (lib/zcsdk.js prepareRuntimeZip).
+    // A refused download with no verified bundled copy throws; the renderer
+    // shows that message ("…failed its integrity check and was not installed.").
+    if (pkg.source === 'github') sendEvent({ type: 'toast', message: `Downloading ZCSDK Runtime ${pkg.version} from GitHub…` });
+    const prep = await zcsdkRt.prepareRuntimeZip(pkg, {
+      download: (p) => nexus.downloadToFile(p.url, store.stagingDir, p.asset, (got, total, dl) => {
+        sendEvent({ type: 'progress', label: 'ZCSDK Runtime', received: got, total, ...dl });
+      }),
+      log,
+    });
+    const { zipPath, version, source, downloaded } = prep;
+    if (prep.fallback && !prep.integrityFailed) {
+      log('warn', `ZCSDK Runtime ${pkg.version} download failed (${prep.reason}) — installing the bundled ${version || 'copy'} instead`);
+      sendEvent({ type: 'toast', kind: 'warn', message: `GitHub download failed — installing the bundled ZCSDK Runtime ${version || ''} instead.` });
     }
     let res;
     try {
@@ -2797,6 +2802,7 @@ const handlers = {
     } finally {
       if (downloaded) fs.rmSync(downloaded, { force: true });
     }
+    if (prep.integrityFailed) sendEvent({ type: 'toast', kind: 'warn', message: 'The ZCSDK Runtime download from GitHub failed its integrity check and was not installed. Installed the bundled copy instead.' });
     store.settings.zcsdkNoticedVersion = version || null;
     // Wanted from now on: self-heal keeps it in place while SDK mods need it.
     store.settings.zcsdkRuntimeWanted = true;

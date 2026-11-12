@@ -1,7 +1,9 @@
 {
-  "version": "0.13",
-  "bridge": "0.6.0",
-  "loader": "1.8.32",
+  "version": "0.15.1",
+  "bridge": "0.7.3",
+  "loader": "1.8.54",
   "file": "ZCSDKRuntime.zip",
-  "source": "EnvianMods/ZCSDK-Runtime-Release v0.13 asset ZCSDKRuntime_v0.13.zip (offline fallback, fetched by build/fetch-tools.js; the app installs the newest release from that repo when online)"
+  "sha256": "8b9117c68c5a43cfe5707e5e615b3fab7b56f0cd0ae5a11dd70ad41c42752d97",
+  "size": 387645,
+  "source": "EnvianMods/ZCSDK-Runtime-Release v0.15.1 asset ZCSDKRuntime_v0.15.1.zip (offline fallback, fetched by build/fetch-tools.js; the app installs the newest release from that repo when online)"
 }

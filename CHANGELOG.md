@@ -1,5 +1,29 @@
 # Zero Company Mod Command — Changelog
 
+## v1.9.24 (2026-11-12)
+
+Released as public 1.0.15.
+
+**Nexus Mods sign-in uses Mod Command's approved app id**
+- Signing in with Nexus Mods now uses the app id Nexus Mods registered for
+  Mod Command.
+
+**The ZCSDK Runtime is checked before it's installed**
+- The runtime is a DLL that runs inside the game, so Mod Command now checks
+  every copy before unpacking it. The download must match the SHA-256 and
+  size published with the release, or it's deleted and nothing is installed.
+- Downloads come only from the official ZCSDK Runtime release on GitHub.
+  Links that try to point elsewhere are ignored.
+- If a download fails or doesn't pass the check, Mod Command keeps the
+  runtime you already have. It never swaps in an older copy, and it only
+  falls back to its bundled copy when that copy passes its own check.
+- Downloaded files always land in Mod Command's download folder, whatever
+  name the server sends.
+
+**Bundled ZCSDK Runtime 0.15.1**
+- The offline copy that ships with Mod Command is now ZCSDK Runtime 0.15.1
+  (ZCSDKBridge 0.7.3, ZCSDKLoader 1.8.54), with its checksum recorded.
+
 ## v1.9.23 (2026-10-26)
 
 Released as public 1.0.14.

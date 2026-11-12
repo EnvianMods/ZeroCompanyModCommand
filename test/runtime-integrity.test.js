@@ -190,6 +190,83 @@ test('a failed download (not an integrity failure) falls back to a verified bund
   assert.strictEqual(prep.zipPath, b.file);
 });
 
+// ---- (a) QA 11-12: a fallback never downgrades the installed runtime --------
+
+const INSTALLED_015 = { installed: true, version: '0.15', bridge: '0.7.2', loader: '1.8.53' };
+const bundled013 = (z, pin) => ({ source: 'bundled', zip: z.file, version: '0.13', bridge: '0.6.0', loader: '1.8.32', ...(pin ? { sha256: z.sha256, size: z.size } : { sha256: null, size: null }) });
+
+test('installed 0.15 + 0.15.1 hash mismatch + bundled 0.13 → nothing installed, 0.15 kept (pinned or not)', async () => {
+  const d = tmp();
+  const b = zipFile(d, 'bundled.zip');
+  const pkg = { source: 'github', ...entry('0.15.1', { sha256: 'b'.repeat(64), size: 99 }) };
+  for (const pin of [false, true]) {
+    let dl = null;
+    const installs = [];
+    const download = async () => { dl = zipFile(d, 'ZCSDKRuntime_v0.15.1.zip', Buffer.from('tampered')).file; return dl; };
+    await assert.rejects(
+      Z.prepareRuntimeZip(pkg, { download, bundled: bundled013(b, pin), installed: INSTALLED_015 }).then((p) => installs.push(p.zipPath)),
+      (e) => e.kept === true && e.code === 'ZCSDK_INTEGRITY' && e.message === 'The ZCSDK Runtime download failed its integrity check. Your installed 0.15 was kept.');
+    assert.deepStrictEqual(installs, [], `pinned=${pin}`);
+    assert.strictEqual(fs.existsSync(dl), false);
+  }
+});
+
+test('installed 0.15 + a plain download failure + bundled 0.13 → nothing installed, 0.15 kept', async () => {
+  const d = tmp();
+  const b = zipFile(d, 'bundled.zip');
+  const pkg = { source: 'github', ...entry('0.15.1', H) };
+  const installs = [];
+  await assert.rejects(
+    Z.prepareRuntimeZip(pkg, { download: async () => { throw new Error('ECONNRESET'); }, bundled: bundled013(b, true), installed: INSTALLED_015 })
+      .then((p) => installs.push(p.zipPath)),
+    (e) => e.kept === true && /^Could not download ZCSDK Runtime 0\.15\.1 from GitHub: ECONNRESET\. Your installed 0\.15 was kept\.$/.test(e.message));
+  assert.deepStrictEqual(installs, []);
+});
+
+test('nothing installed + hash mismatch + pinned bundled → the bundled copy installs; unpinned → refused', async () => {
+  const d = tmp();
+  const b = zipFile(d, 'bundled.zip');
+  const pkg = { source: 'github', ...entry('0.15.1', { sha256: 'b'.repeat(64), size: 99 }) };
+  const download = async () => zipFile(d, 'ZCSDKRuntime_v0.15.1.zip', Buffer.from('tampered')).file;
+  const none = { installed: false, version: null, bridge: null, loader: null };
+  const prep = await Z.prepareRuntimeZip(pkg, { download, bundled: bundled013(b, true), installed: none });
+  assert.strictEqual(prep.zipPath, b.file);
+  assert.strictEqual(prep.integrityFailed, true);
+  assert.strictEqual(prep.pinned, true);
+  // After an integrity failure an unpinned bundle is never used, even with nothing installed.
+  await assert.rejects(Z.prepareRuntimeZip(pkg, { download, bundled: bundled013(b, false), installed: none }),
+    /The ZCSDK Runtime download from GitHub failed its integrity check and was not installed\./);
+  // A plain download failure with nothing installed may still use the unpinned bundle (offline path).
+  const off = await Z.prepareRuntimeZip(pkg, { download: async () => { throw new Error('offline'); }, bundled: bundled013(b, false), installed: none });
+  assert.strictEqual(off.zipPath, b.file);
+  assert.strictEqual(off.pinned, false);
+});
+
+test('fallback over an installed runtime: a same-or-newer pinned bundle is used; unknown installed versions are kept', async () => {
+  const d = tmp();
+  const b = zipFile(d, 'bundled.zip');
+  const pkg = { source: 'github', ...entry('0.15.1', { sha256: 'b'.repeat(64), size: 99 }) };
+  const download = async () => zipFile(d, 'ZCSDKRuntime_v0.15.1.zip', Buffer.from('tampered')).file;
+  const bundled015 = { source: 'bundled', zip: b.file, version: '0.15', bridge: '0.7.2', loader: '1.8.53', sha256: b.sha256, size: b.size };
+  const same = await Z.prepareRuntimeZip(pkg, { download, bundled: bundled015, installed: INSTALLED_015 });
+  assert.strictEqual(same.zipPath, b.file);
+  // Installed parts with no version info (hand-deployed): a fallback cannot rule out a downgrade.
+  await assert.rejects(Z.prepareRuntimeZip(pkg, { download, bundled: bundled015, installed: { installed: true } }),
+    (e) => e.kept === true && /Your installed runtime was kept\./.test(e.message));
+  // A newer loader on disk than the bundle's, with an older-looking record: still a downgrade.
+  await assert.rejects(Z.prepareRuntimeZip(pkg, { download, bundled: bundled015, installed: { installed: true, version: '0.14', loader: '1.8.54' } }),
+    (e) => e.kept === true);
+  // Direct bundled install (offline): a proven downgrade is refused, an unknown one is allowed (repairs a dev copy).
+  await assert.rejects(Z.prepareRuntimeZip(bundled013(b, false), { installed: INSTALLED_015 }),
+    (e) => e.kept === true && e.code === 'ZCSDK_DOWNGRADE' && /older than your installed 0\.15, which was kept/.test(e.message));
+  assert.strictEqual((await Z.prepareRuntimeZip(bundled013(b, false), { installed: { installed: true } })).zipPath, b.file);
+  // The shape main.js passes (the runtime version is not on disk; parts' versions are).
+  await assert.rejects(Z.prepareRuntimeZip(pkg, { download, bundled: bundled013(b, true), installed: { installed: true, version: null, bridge: '0.7.2', loader: '1.8.53' } }),
+    (e) => e.kept === true && e.message === 'The ZCSDK Runtime download failed its integrity check. Your installed runtime (ZCSDKLoader 1.8.53) was kept.');
+  assert.strictEqual(Z.isRuntimeDowngrade(bundled015, INSTALLED_015, true), false);
+  assert.strictEqual(Z.isRuntimeDowngrade({ version: '0.13' }, null, true), false);
+});
+
 // ---- (b) L8: the pinned URL -------------------------------------------------
 
 test('runtimeUrl: dot segments, %2e%2e, other hosts, credentials, query/fragment and http are refused', () => {

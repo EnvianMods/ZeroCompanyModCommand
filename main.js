@@ -1261,6 +1261,22 @@ function zcsdkHealLeftAlone(names) {
   zcsdkHealLeftNoted = key;
   sendEvent({ type: 'toast', kind: 'warn', message: `ZCSDK Runtime not restored: the files of ${names.join(' and ')} in the game were changed outside Mod Command (e.g. a newer runtime build), so they were left as they are. To have Mod Command manage the runtime again, use Settings → ZCSDK Runtime → Update / Reinstall.` });
 }
+// The ZCSDK Runtime in the game now ({ installed, version, bridge, loader }),
+// for prepareRuntimeZip's rule that a fallback never installs an older
+// bundled copy over it. Either part on disk counts; bridge/loader come from
+// the parts' modinfo.json. The runtime version itself is not recorded on disk
+// (each part's record carries that part's own version), so it stays null and
+// messages name the loader version instead.
+function installedZcsdkRuntime() {
+  try {
+    const parts = engine.zcsdkStatus().parts || {};
+    const b = parts.ZCSDKBridge || {};
+    const l = parts.ZCSDKLoader || {};
+    return { installed: !!(b.present || l.present), version: null, bridge: b.version || null, loader: l.version || null };
+  } catch (_) {
+    return { installed: true, version: null, bridge: null, loader: null }; // unknown: keep what is there
+  }
+}
 async function healZcsdkRuntime(reason) {
   if (zcsdkHealBusy || !store.settings.gamePath || store.settings.zcsdkRemovedByUser) return null;
   zcsdkHealBusy = true;
@@ -2789,6 +2805,7 @@ const handlers = {
       download: (p) => nexus.downloadToFile(p.url, store.stagingDir, p.asset, (got, total, dl) => {
         sendEvent({ type: 'progress', label: 'ZCSDK Runtime', received: got, total, ...dl });
       }),
+      installed: installedZcsdkRuntime(),
       log,
     });
     const { zipPath, version, source, downloaded } = prep;

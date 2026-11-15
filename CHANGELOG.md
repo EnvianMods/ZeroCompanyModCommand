@@ -24,6 +24,11 @@ Released as public 1.0.15.
 - The offline copy that ships with Mod Command is now ZCSDK Runtime 0.15.1
   (ZCSDKBridge 0.7.3, ZCSDKLoader 1.8.54), with its checksum recorded.
 
+**The install note names the files it left out**
+- When a UE4SS mod's archive has files beside the mod folder, the note after
+  installing used to say only how many were ignored. It now lists them, like
+  the other install notes do.
+
 ## v1.9.23 (2026-10-26)
 
 Released as public 1.0.14.
